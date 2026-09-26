@@ -445,6 +445,12 @@ function M:GetFrame(key) return frames[key] end
 --  there is always a unit to draw. Casts, auras, pips and icons show samples,
 --  so everything you might place is on screen at once.
 --------------------------------------------------------------------------------
+local PREVIEW_HEALTH = {
+    curpercent = "12.3k  87%", percent = "87%", current = "12.3k",
+    curmax = "12.3k / 14.1k", deficit = "-1.8k",
+}
+local PREVIEW_POWER = { current = "4,210", percent = "60%", curmax = "4.2k / 5k" }
+
 function M:BuildPreview(key, parent)
     local f = CreateFrame("Frame", nil, parent)
     UF.Dress(f, key, "player", true)
@@ -466,6 +472,18 @@ function M:LayoutPreview(f)
     ns.UnitAuras.Layout(f, cfg)
     ns.ClassPower.Preview(f, cfg)
     UF.UpdateAll(f, cfg)
+    -- Plain samples over whatever the unit gave us. Health, power and even
+    -- your name can come back secret, and anything showing a secret reports
+    -- secret geometry, which the designer can't measure or drag.
+    f.health:SetMinMaxValues(0, 1); f.health:SetValue(0.87)
+    f.power:SetMinMaxValues(0, 1); f.power:SetValue(0.6)
+    f.heal:Hide()
+    f.statusText:Hide()
+    local okN, name = pcall(UnitName, "player")
+    if not okN or type(name) ~= "string" or (issecretvalue and issecretvalue(name)) then name = L["Name"] end
+    f.nameText:SetText((cfg.showLevel and "60 " or "") .. name)
+    f.healthText:SetText(PREVIEW_HEALTH[cfg.healthText] or "")
+    f.powerText:SetText(PREVIEW_POWER[cfg.powerText] or "")
     ns.CastBar.Preview(f.castbar, true)
     -- Every icon you can place, shown whether or not it applies to you now.
     f.raidIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")

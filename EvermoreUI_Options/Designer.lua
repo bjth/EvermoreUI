@@ -181,10 +181,23 @@ end
 --------------------------------------------------------------------------------
 --  Geometry: boxes in the preview's own units
 --------------------------------------------------------------------------------
+local issecret = issecretvalue or function() return false end
+
+--- Plain numbers only. A region whose size or place depends on a secret
+--- value (a font string showing one, a bar fill) reports secret geometry,
+--- and arithmetic on it throws; such a region just has no box.
+local function Plain(...)
+    for i = 1, select("#", ...) do
+        local v = select(i, ...)
+        if type(v) ~= "number" or issecret(v) then return false end
+    end
+    return true
+end
+
 local function Box(r)
     if not r or not r.GetLeft then return nil end
     local l, rt, t, b = r:GetLeft(), r:GetRight(), r:GetTop(), r:GetBottom()
-    if not (l and rt and t and b) then return nil end
+    if not Plain(l, rt, t, b) then return nil end
     -- Regions report in their own effective scale; bring them to the
     -- preview's so every box on the canvas is in one space.
     local k = (r.GetEffectiveScale and r:GetEffectiveScale() or 1) / preview:GetEffectiveScale()
@@ -199,7 +212,7 @@ local function TextBox(r)
     local b = Box(r)
     if not b then return nil end
     local sw = (r.GetUnboundedStringWidth and r:GetUnboundedStringWidth()) or (r.GetStringWidth and r:GetStringWidth())
-    if type(sw) ~= "number" or sw <= 0 then return b end
+    if not Plain(sw) or sw <= 0 then return b end
     local w = min(sw * b.k + 2, b.w)
     local j = r.GetJustifyH and r:GetJustifyH() or "LEFT"
     if j == "RIGHT" then b.l = b.r - w

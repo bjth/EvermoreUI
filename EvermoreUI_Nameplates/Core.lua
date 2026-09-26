@@ -1457,6 +1457,9 @@ function ns.LayoutPreviewPlate(f)
         if SetRaidTargetIconTexture then SetRaidTargetIconTexture(f.raidMark, 8) end
         f.raidMark:Show()
     end
+    -- Plain values over the unit's: a bar showing a secret has secret
+    -- geometry, which the designer can't measure.
+    if f.health then f.health:SetMinMaxValues(0, 1); f.health:SetValue(0.8) end
     if f.questText then
         f.questText:SetText("3/8")
         f.questText:SetShown(cfg.showQuest)
