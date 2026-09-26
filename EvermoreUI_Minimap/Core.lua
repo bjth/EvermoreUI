@@ -44,6 +44,7 @@ local M = EV:NewModule("Minimap", {
     buttons    = true,
     difficulty = true,    -- instance size / difficulty badge on the map
     diel       = true,    -- sun / moon on the zone plate for Forever's day and night
+    weather    = true,    -- weather density button next to it (needs Quality of Life)
     group      = true,    -- gather other addons' minimap buttons into one pop-out
     groupColumns = 5,
     fontSize   = 12,
@@ -360,6 +361,7 @@ function M:OnEnable()
         SquareHybrid()
     end)
     self:RegisterMessage("EV_PIXEL_CHANGED", function() self:Refresh() end)
+    self:RegisterMessage("EV_WEATHER_CHANGED", function() if ns.UpdateWeather then ns.UpdateWeather() end end)
 end
 
 function M:OnProfileChanged() self:Refresh() end

@@ -56,8 +56,13 @@ local M = EV:NewModule("QoL", {
     easyDelete      = false,   -- fill in DELETE for you when destroying an item
     maxCamera       = false,   -- furthest camera distance the client allows
     quietErrors     = false,   -- drop the repeated "not ready yet" style errors
+    weather         = false,   -- set the weather density ourselves
+    weatherDensity  = 1,       -- 0 low, 1 medium, 2 high, 3 very high
 })
 ns.module = M
+-- For other EvermoreUI addons (the minimap's weather button).
+function M:GetWeather() if ns.GetWeather then return ns.GetWeather() end end
+function M:SetWeather(level) if ns.SetWeather then ns.SetWeather(level) end end
 M.title = "Quality of Life"
 M.description = "Auto repair, sell greys, fast loot, and quest accept and hand-in. Hold Shift to skip."
 

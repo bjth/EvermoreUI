@@ -328,7 +328,7 @@ end
 
 function M:OnEnable()
     ns.Safe("microadopt", Adopt)
-    self:RegisterMessage("EV_TRAINING_CHANGED", function(_, _, count) ns.Safe("training badge", ShowBadge, count) end)
+    self:RegisterMessage("EV_TRAINING_CHANGED", function(_, _, count) ns.Safe("training badge", function() ShowBadge(count) end) end)
     UpdateShown()
     self:RegisterEvent("PET_BATTLE_OPENING_START", UpdateShown)
     self:RegisterEvent("PET_BATTLE_CLOSE", UpdateShown)

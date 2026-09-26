@@ -20,3 +20,6 @@ LootRolls.lua
 ReadyCheck.lua
 LootStats.lua
 LootLuck.lua
+Windows.lua
+MapData.lua
+MapReveal.lua

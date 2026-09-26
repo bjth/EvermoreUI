@@ -95,6 +95,24 @@ local function Stop(f)
 end
 ns.StopCast = Stop
 
+--- The designer's copy: a cast two thirds through, so the bar, its icon and
+--- its text can be placed.
+function ns.PreviewCast(f)
+    local bar = f.cast
+    if not bar then return end
+    local cfg = ns.module.db
+    if not (cfg.showCast and cfg.castHeight > 0) then bar:Hide(); if bar.iconFrame then bar.iconFrame:Hide() end return end
+    bar:SetScript("OnUpdate", nil)
+    bar:SetMinMaxValues(0, 1)
+    bar:SetValue(0.66)
+    bar:SetStatusBarColor(CAST[1], CAST[2], CAST[3], 1)
+    if bar.icon then bar.icon:SetTexture(135812); bar.iconFrame:Show() end
+    if bar.text then bar.text:SetText(EV.L["Fireball"]) end
+    if bar.timer then bar.timer:SetText("1.2") end
+    if bar.target then bar.target:SetText(UnitName("player") or "") end
+    bar:Show()
+end
+
 local function Start(f, channel)
     local bar = f.cast
     local unit = f.unit
@@ -108,6 +126,7 @@ local function Start(f, channel)
     -- Reading them with one destructure paints every channel as shielded,
     -- because a spellID is a truthy number.
     local ok, name, texture, startAt, endAt, notInterruptible
+    local _   -- the skipped returns; a bare _ would write the global, which taints
     if channel then
         if type(UnitChannelInfo) ~= "function" then return end
         ok, name, _, texture, startAt, endAt, _, notInterruptible = pcall(UnitChannelInfo, unit)

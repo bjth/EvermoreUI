@@ -37,15 +37,19 @@ Core\Palette.lua
 Core\FontObjects.xml
 Core\Fonts.lua
 Core\Movers.lua
+Core\AuraContainer.lua
+Core\Combo.lua
 
 # Probes that need the game world (secure snippets)
 Core\Probes.lua
 
 # Slash commands
 Core\Durability.lua
+Core\BagMoves.lua
 Core\Alts.lua
 Core\Report.lua
 Core\Slash.lua
+Core\Designers.lua
 Core\Perf.lua
 Core\GameMenu.lua
 Core\Experimental.lua

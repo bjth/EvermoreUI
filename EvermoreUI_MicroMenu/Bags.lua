@@ -6,6 +6,9 @@ if EV_BLOCKED then return end
 --  while that bag is open, flat hover and pressed states, our font for the
 --  free-slot count, and a chevron for Blizzard's expand toggle.
 --
+--  Alt + click a bag to empty it into the others (EV.Bags:Empty), so it can
+--  be swapped for a bigger one. Blizzard's own bag click does nothing on Alt.
+--
 --  Blizzard re-sets the slot art in UpdateTextures (every bag change); that
 --  is post-hooked. BagsBar:Layout still runs when bags are expanded or
 --  collapsed; the buttons are pinned, so it can't move them.
@@ -310,6 +313,36 @@ local function Genesis()
     if x and not core.movers.BagBar then core.movers.BagBar = { "CENTER", "CENTER", x, y } end
 end
 
+--------------------------------------------------------------------------------
+--  Alt + click: empty this bag
+--------------------------------------------------------------------------------
+local function BagIDOf(b)
+    local ok, id = pcall(b.GetBagID, b)
+    return ok and type(id) == "number" and id or nil
+end
+
+local function Emptyable(b)
+    local id = b.GetBagID and BagIDOf(b)
+    return id and id >= 1 and C_Container.GetContainerNumSlots(id) > 0 and id or nil
+end
+
+local function AddEmptyHook(b)
+    if not (EV.Bags and b.GetBagID) then return end
+    b:HookScript("OnClick", function(self, button)
+        if button ~= "LeftButton" or not IsAltKeyDown() or IsShiftKeyDown() or IsControlKeyDown() then return end
+        local id = Emptyable(self)
+        if not id then return end
+        local ok, why = EV.Bags:Empty(id)
+        if not ok and why then EV:Print(why) end
+    end)
+    b:HookScript("OnEnter", function(self)
+        if Emptyable(self) and GameTooltip:IsOwned(self) then
+            GameTooltip:AddLine(L["<Alt click to empty this bag into the others>"], 0, 1, 0)
+            GameTooltip:Show()
+        end
+    end)
+end
+
 local adopted = false
 local function Adopt()
     if adopted or not BagsBar or not MainMenuBarBackpackButton then return end
@@ -330,6 +363,7 @@ local function Adopt()
         b:HookScript("OnShow", Reflow)
         b:HookScript("OnHide", Reflow)
         fader.Watch(b)
+        AddEmptyHook(b)
     end
     Layout()
     ns.Park(BagsBar)

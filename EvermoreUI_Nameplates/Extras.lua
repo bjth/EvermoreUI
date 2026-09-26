@@ -820,7 +820,9 @@ ns.Widget{
         ns.SetText(fs, cfg.fontSize, true)
         fs:SetTextColor(1, 0.82, 0)
         fs:ClearAllPoints()
-        fs:SetPoint("BOTTOMRIGHT", f.health, "TOPRIGHT", 0, 3)
+        if not ns.PlaceAt(fs, f.health, cfg.questPos) then
+            fs:SetPoint("BOTTOMRIGHT", f.health, "TOPRIGHT", 0, 3)
+        end
         fs:SetShown(cfg.showQuest)
         -- Restyle runs Layout and SetUnit, never Late, so a plate already on
         -- screen would show an empty slot until the next QUEST_LOG_UPDATE.
@@ -897,10 +899,15 @@ ns.Widget{
         f.raidMark = t
     end,
 
+    -- Off the left edge by default; anywhere you put it in the designer
+    -- (cfg.raidMarkPos, nil until you do, so the default path is unchanged).
     Layout = function(f, cfg)
+        local size = (cfg.raidMarkSize or 0) > 0 and cfg.raidMarkSize or (cfg.height + 4)
         f.raidMark:ClearAllPoints()
-        f.raidMark:SetPoint("RIGHT", f.health, "LEFT", -4, 0)
-        EV.Pixel:SetSize(f.raidMark, cfg.height + 4, cfg.height + 4)
+        if not ns.PlaceAt(f.raidMark, f.health, cfg.raidMarkPos) then
+            f.raidMark:SetPoint("RIGHT", f.health, "LEFT", -4, 0)
+        end
+        EV.Pixel:SetSize(f.raidMark, size, size)
     end,
 
     SetUnit = function(f) Mark(f) end,

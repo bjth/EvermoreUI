@@ -123,6 +123,40 @@ EV.Options:RegisterPage{
                  L["Some NPCs ask for their menu to be shown on purpose. This overrides that. It is where most of the remaining clicks are, and also the only place this can skip something you wanted to read."],
                  { disabled = function() return not M.db.autoGossip end }))
 
+        local Map = EV:GetModule("MapReveal", true)
+        if Map then
+            p:Section(L["World map"])
+            p:Dual({ type = "toggle", text = L["Reveal the whole map"],
+                     tooltip = L["Show the parts of each zone you haven't explored yet, as if you had."],
+                     get = function() return Map.db.enabled end,
+                     set = function(v) Map.db.enabled = v; Map:Refresh() end }, nil)
+            p:Dual({ type = "toggle", text = L["Tint unexplored areas"],
+                     tooltip = L["Draw the parts you haven't explored darker, so you can still tell them apart."],
+                     disabled = function() return not Map.db.enabled end,
+                     get = function() return Map.db.tint end,
+                     set = function(v) Map.db.tint = v; Map:Refresh() end },
+                   { type = "slider", text = L["Tint brightness"], min = 0.2, max = 0.95, step = 0.05,
+                     fmt = function(v) return math.floor(v * 100 + 0.5) .. "%" end,
+                     disabled = function() return not (Map.db.enabled and Map.db.tint) end,
+                     get = function() return Map.db.shade end,
+                     set = function(v) Map.db.shade = v; Map:Refresh() end })
+        end
+
+        local Win = EV:GetModule("Windows", true)
+        if Win then
+            p:Section(L["Windows"])
+            if not Win:IsEnabled() then
+                p:Note(L["Switched off on the Modules page."], 0.7)
+            else
+                p:Note(L["Drag Blizzard's windows (character, spellbook, merchant, quest log and the rest) by their title bar. They open where you left them."], 0.7)
+                p:Dual({ type = "toggle", text = L["Remember where they go"],
+                         tooltip = L["Off: windows go back to Blizzard's places at your next login."],
+                         get = function() return Win.db.remember end, set = function(v) Win.db.remember = v end },
+                       { type = "button", text = L["Put every window back"], label = L["Reset"], width = 100,
+                         onClick = function() Win:ResetAll() end })
+            end
+        end
+
         p:Note(L["Holding Shift as a vendor, loot or quest window opens skips everything here for that one interaction."])
 
         local ns = EV._ModuleNS and EV._ModuleNS["EvermoreUI_QoL"]
@@ -155,5 +189,16 @@ EV.Options:RegisterPage{
         p:Dual(T("quietErrors", L["Quieter error messages"],
                  L["Stops the red lines that repeat while you press a key too early: not ready yet, not enough energy or mana, out of range, no target. Other errors still show."],
                  { set = function(v) M.db.quietErrors = v; Apply() end }), nil)
+
+        local WEATHER = { [0] = L["Low"], L["Medium"], L["High"], L["Very high"] }
+        p:Section(L["Weather"])
+        p:Dual(T("weather", L["Set weather density"],
+                 L["Choose how much rain, snow and dust the game draws, from low to very high. Switching this off puts your old setting back."],
+                 { set = function(v) M.db.weather = v; Apply() end }),
+               { type = "slider", text = L["Density"], min = 0, max = 3, step = 1,
+                 fmt = function(v) return WEATHER[math.floor(v + 0.5)] or tostring(v) end,
+                 disabled = function() return not M.db.weather end,
+                 get = Get("weatherDensity"),
+                 set = function(v) M.db.weatherDensity = v; Apply() end })
     end,
 }

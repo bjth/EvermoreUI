@@ -1,7 +1,7 @@
 ## Interface: 16001, 120100
 ## Title: |cffd4924eEvermoreUI|r Unit Frames
 ## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
-## Notes: Clean, resizable unit frames: player, target, target of target, focus, pet
+## Notes: Clean, resizable unit frames: player, target, target of target, focus, pet, with cast bars, auras, combo points and totems
 ## Author: Ben
 ## Version: @project-version@
 ## Dependencies: EvermoreUI
@@ -10,8 +10,16 @@
 
 Values.lua
 Frame.lua
+CastBar.lua
+UnitAuras.lua
+ClassPower.lua
+Fader.lua
 UnitFrames.lua
 Classic.lua
 ClickCast.lua
 AuraBox.lua
 GroupFrames.lua
+Settings.lua
+GroupSettings.lua
+Designer.lua
+GroupDesigner.lua

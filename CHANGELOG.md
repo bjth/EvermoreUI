@@ -1,5 +1,120 @@
 # EvermoreUI
 
+## 0.12.0
+
+The unit frames catch up with the rest of the suite: everything Blizzard's
+target and player frames used to carry, and the settings you'd expect from a
+full frames addon.
+
+### New
+- **Cast bars** on the player, target, focus and pet frames. Under the
+  frame, or anywhere you like in edit mode. Spell icon, name, time left,
+  a spark on the leading edge, grey when the cast can't be interrupted and a
+  red "Interrupted" when it's cut off. Your own bar shows your latency, and
+  replaces Blizzard's (switch that off on the Player tab).
+- **Buffs and debuffs on your target**: everyone's debuffs above the frame,
+  so you can see who has Sunder or a curse up and whether it's sheeped, and
+  its buffs below, for Purge, Tranquilizing Shot or checking a friend's
+  buffs before you rebuff. "Only mine" narrows either to yours. Focus,
+  player and pet can show them too.
+- **Combo points** above the player frame for rogues, and druids in Cat
+  Form, and across the edge of your target's nameplate so you can read them
+  without looking away from the mob. Size, spot and colour on the
+  Nameplates page.
+- **Totems** under the player frame for shamans, with the time left. Right
+  click one to destroy it.
+- **Fade out of combat**: the player and pet frames can fade away until
+  you're fighting, targeting, casting, hurt, short of power or hovering
+  them.
+- **Copy settings** from one frame onto another.
+- **The designer**: drag the name, health and power text, icons, portrait,
+  cast bar, buffs and debuffs, combo points and totems into place on a live
+  copy of any unit frame, resize them by their corner, nudge with the arrow
+  keys. Save, Discard and undo, as in edit mode. `/evui design`, or Open
+  designer on the Unit Frames page.
+- **Arrange your cooldowns**: the designer's Cooldowns tab shows each bar
+  as a row of icons. Drag to reorder, move a cooldown between the Essential
+  and Utility bars, or drop it in the tray to hide it from our bars. Saved
+  per class and spec; which spells are tracked stays in the game's own
+  Cooldown Manager settings, a button away.
+- **Design your nameplates**: the designer's Nameplates tab has a plate with
+  a sample cast, auras, raid mark and quest count. Drag the raid mark, the
+  quest count and each row of auras anywhere around the bar, move the mana
+  strip and cast bar up or down, flip combo points between edges, and
+  resize by the corner. Nothing moves until you move it.
+- **Design your party and raid frames**: the designer's Party & Raid tab
+  shows a sample party, or three raid groups, laid out as yours will be.
+  Drag the name, health text, role, leader, ready check and raid mark
+  anywhere on the first frame, and the debuff and buff rows around it, and
+  every frame follows. Resize by the corner. Texture, border, font and
+  colours are there too.
+- **Everything in the designer**: every Unit Frames, Nameplates, Cooldowns
+  and Party & Raid setting now lives in the designer, with the part it
+  belongs to. The frame or plate as a whole (size, colours, fading, the
+  aggro glow, threat, target highlighting, how plates move) is under Frame
+  or Plate behaviour in its list; click a cooldown bar for its size and
+  text, or a cooldown for its linked timer. Their options pages open the
+  designer, and so does Frame settings in edit mode.
+
+### Changed
+- **More ways to style a frame**: border from 0 to 8 pixels in any colour,
+  background colour, your own health and power colours (or power in your
+  class colour), a font per frame, name colour and width, where the name,
+  health and power text sit with offsets, and the size and spot of the raid
+  mark, leader and PvP icons and your combat and resting icons.
+- **Target of target and pet** sit a little lower by default, clear of the
+  new cast bars and your target's buffs. Frames you've already placed stay
+  where you put them.
+
+## 0.11.5
+
+Small comforts while the bag addon is built.
+
+### New
+- **Bags**: all your bags in one window, split into sections: new items,
+  gear sets, equipment, consumables, quest items, herbs, ore, leather and
+  cloth for gatherers, trade goods and the rest, junk last. Search, sort,
+  your gold and free space at a glance. Replaces Blizzard's bag windows.
+- **Your own sections**: make sections with rules (item type, quality,
+  name, tooltip text, soulbound, slot, item level, gear sets, can't be
+  sold, item IDs), matching every rule or any. Drop an item on a section's
+  title to keep it there. Reorder, fold and switch sections off; sort by
+  quality, item level, name or ID; item level on gear. Interface > Bags.
+- **Ready-made sets**: add a Gatherer, Dungeons and raids or Levelling set
+  of sections in one click, and share your whole setup as a line of text.
+- **Search terms**: `#herb` for a type, `ilvl>20`, `q>=rare`, `boe`, `bop`,
+  `set`, `junk`, `new`, `quest`, `tip:use` for tooltip text, `in:gathering`
+  for a section, `|` for or and `!` for not. Hover the search box for the
+  list. Searching hides what doesn't match (or dims it, if you prefer).
+- **Bank**: your bank in the same style when you visit one, with the same
+  sections, search and sort, and your account bank alongside where the game
+  allows. Right-click items in your bags to put them in whichever bank is
+  showing, or use Deposit all. Buy bank tabs and move gold in and out of
+  the account bank from the same window. The game's own bank window is a
+  button away.
+- **Empty a bag**: Alt + click a bag on the bag bar to move everything in
+  it into free space in your other bags, topping up part stacks first and
+  keeping arrows, shards and herbs in their own bags. Then swap it out.
+- **Move Blizzard's windows**: drag the character sheet, spellbook,
+  merchant, quest log and the rest by their title bar, and they open where
+  you left them. Reset them all on the Quality of Life page.
+- **The whole world map**: the parts of each zone you haven't explored yet
+  are revealed too, as if you had. Switch it on or off on the Quality of
+  Life page, and tint them darker there if you want to tell them apart.
+- **Weather density**: choose how much rain, snow and dust the game draws,
+  from low to very high, on the Quality of Life page or from the cloud next to
+  the sun and moon on the minimap. Switching it off puts your old setting
+  back.
+
+### Changed
+- **Up/Down in the chat box** remembers what you've sent through a reload
+  or relog: your last 50 lines per window, for this character. Forget kept
+  history on the Chat page clears them too.
+
+### Fixes
+- The minimap clock's tooltip shows realm and local time in your theme's
+  text colour, not red.
+
 ## 0.11.0
 
 Party and raid frames, just in time for dungeons.

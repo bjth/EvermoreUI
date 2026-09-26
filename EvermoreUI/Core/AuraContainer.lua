@@ -1,7 +1,9 @@
 if EV_BLOCKED then return end
 --------------------------------------------------------------------------------
---  Container.lua
---  Thin wrapper over Blizzard's AuraContainer engine (12.1+).
+--  AuraContainer.lua
+--  Thin wrapper over Blizzard's AuraContainer engine (12.1+), shared by every
+--  module that shows auras: the Auras module's own buffs and debuffs, and the
+--  buffs and debuffs on the unit frames.
 --
 --  The engine does the filtering, sorting, layout, timers and stacks in C,
 --  so secret aura values never reach our Lua and everything keeps working in
@@ -16,13 +18,13 @@ if EV_BLOCKED then return end
 --   * never anchor our frames to engine buttons; anchor to our own holder
 --   * an empty includeSpellIDs list means "no filter": never build a
 --     container meant to show a few spells with an empty list
+--   * a container follows its unit TOKEN, not who the token points at. When
+--     "target" changes to someone else, call C.UpdateAll so it re-reads.
 --------------------------------------------------------------------------------
-local ADDON_NAME, ns = ...
-if not (EvermoreUI and EvermoreUI.NewModule) then return end
 local EV = EvermoreUI
 
 local C = {}
-ns.Container = C
+EV.AuraContainer = C
 
 --------------------------------------------------------------------------------
 --  Support probe
@@ -133,7 +135,7 @@ local function InitButton(b, cfg, spec)
         Try(b, "SetMouseClickEnabled", false)
     end
     if spec.tooltip then
-        Try(b, "SetTooltipAnchorPoint", "ANCHOR_BOTTOMLEFT")
+        Try(b, "SetTooltipAnchorPoint", spec.tooltipAnchor or "ANCHOR_BOTTOMLEFT")
     else
         Try(b, "SetMouseMotionEnabled", false)
     end
@@ -159,7 +161,7 @@ end
 local function Signature(cfg, spec)
     local parts = {}
     for _, f in ipairs(SIG_FIELDS) do parts[#parts + 1] = tostring(cfg[f]) end
-    for _, f in ipairs({ "unit", "filter", "cancel", "tooltip", "dispel", "sort", "maxDuration" }) do
+    for _, f in ipairs({ "unit", "filter", "cancel", "tooltip", "tooltipAnchor", "dispel", "sort", "maxDuration" }) do
         parts[#parts + 1] = tostring(spec[f])
     end
     parts[#parts + 1] = IdList(spec.include)
@@ -219,7 +221,7 @@ function C.Build(holder, cfg, spec)
         },
     })
     if not ok then
-        geterrorhandler()("EvermoreUI Auras: AddAuraGroup failed: " .. tostring(err))
+        geterrorhandler()("EvermoreUI: AddAuraGroup failed: " .. tostring(err))
         c:Hide()
         return false
     end
@@ -229,4 +231,17 @@ function C.Build(holder, cfg, spec)
     Try(c, "UpdateAllAuras")
     holder.container = c
     return true
+end
+
+--- Re-read the auras on a holder's container. Needed when the unit token
+--- stays the same but now means someone else (a new target or focus).
+function C.UpdateAll(holder)
+    local c = holder and holder.container
+    if c then Try(c, "UpdateAllAuras") end
+end
+
+--- Hide a holder's container without forgetting it, so switching the
+--- feature back on with the same settings reuses it.
+function C.Hide(holder)
+    if holder and holder.container then holder.container:Hide() end
 end

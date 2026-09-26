@@ -165,6 +165,19 @@ local function Refresh(f)
 end
 ns.RefreshPower = Refresh
 
+--- The designer's copy: the strip open with a sample of mana in it, whatever
+--- the copy's unit has, so it can be placed.
+function ns.PreviewPower(f)
+    local bar = f.power
+    if not bar then return end
+    local cfg = ns.module.db
+    if not (cfg.showPower and (cfg.powerHeight or 0) > 0) then SetStrip(f, cfg, false) return end
+    bar:SetStatusBarColor(PowerColour(MANA, "MANA"))
+    bar:SetMinMaxValues(0, 1)
+    bar:SetValue(0.7)
+    SetStrip(f, cfg, true)
+end
+
 --------------------------------------------------------------------------------
 --  The widget
 --------------------------------------------------------------------------------

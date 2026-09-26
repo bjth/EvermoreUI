@@ -78,10 +78,13 @@ end
 local BG_RGB   = { 0.031, 0.031, 0.031 }
 local BG_ALPHA = 0.85
 
---- Colour the unit's health bar should be in this mode.
-function UF.HealthColour(unit, mode, shade)
+--- Colour the unit's health bar should be in this mode. custom is the
+--- frame's own { r, g, b } for mode "custom": a constant of ours, so it is
+--- used as it is (not shaded; you picked it).
+function UF.HealthColour(unit, mode, shade, custom)
     if mode == "green" then return Shaded("friendly", shade) end
     if mode == "dark" then return DARK end
+    if mode == "custom" and type(custom) == "table" then return custom end
     local okP, isPlayer = pcall(UnitIsPlayer, unit)
     if okP and isPlayer == true then return ClassColour(unit) or Shaded("friendly", shade) end
     return ReactionColour(unit, shade)
@@ -93,7 +96,18 @@ end
 -- brightness. Blizzard's table is constants, never secret; the token is
 -- guarded in case UnitPowerType ever is.
 local fallbackPower = setmetatable({}, { __mode = "k" })
-local function PowerColour(unit, shade)
+local function PowerColour(unit, shade, cfg)
+    -- Your own choice first: a fixed colour, or the unit's class colour
+    -- (players only; anything else keeps its resource's colour).
+    local mode = cfg and cfg.powerColour
+    if mode == "custom" and type(cfg.powerCustom) == "table" then return cfg.powerCustom end
+    if mode == "class" then
+        local okP, isPlayer = pcall(UnitIsPlayer, unit)
+        if okP and isPlayer == true then
+            local c = ClassColour(unit)
+            if c then return c end
+        end
+    end
     local ok, pType, token = pcall(UnitPowerType, unit)
     if not ok or V.IsSecret(pType) or V.IsSecret(token) then token, pType = "MANA", nil end
     local src = token and PAL.POWER[token]
@@ -314,7 +328,11 @@ local function Text(parent, justify)
     local fs = parent:CreateFontString(nil, "OVERLAY")
     fs:SetJustifyH(justify or "LEFT")
     fs:SetWordWrap(false)
-    return fs   -- face, size and edge are set in Layout (EV.Fonts:StyleText)
+    -- A font from birth. Layout sets the real face, size and edge (EV.Fonts:
+    -- StyleText), but a frame can be shown (and so updated) before its first
+    -- layout, and SetText on a font string with no font throws.
+    EV.Fonts:StyleText(fs, 12, "both", true)
+    return fs
 end
 
 function UF.Create(key, unit)
@@ -322,13 +340,26 @@ function UF.Create(key, unit)
     local f = CreateFrame("Button", name, UIParent, "SecureUnitButtonTemplate")
     f:SetFrameStrata("LOW")
     f:SetAttribute("unit", unit)
-    return UF.Dress(f, key, unit)
+    UF.Dress(f, key, unit)
+    UF.AddSingleExtras(f)
+    return f
+end
+
+--- The single frames' own icons (group frames carry theirs in
+--- GroupFrames.lua): group leader or assistant, and PvP flag.
+function UF.AddSingleExtras(f)
+    f.leaderIcon = f.overlay:CreateTexture(nil, "OVERLAY", nil, 2)
+    f.leaderIcon:Hide()
+    f.pvpIcon = f.overlay:CreateTexture(nil, "OVERLAY", nil, 2)
+    f.pvpIcon:Hide()
 end
 
 --- Build the frame's parts onto a button that already exists: ours from
 --- UF.Create, or one a group header made (GroupFrames.lua). Out of combat.
-function UF.Dress(f, key, unit)
-    f.key, f.unit = key, unit
+--- preview: the designer's copy, a plain frame that must not be offered to
+--- click-casting addons.
+function UF.Dress(f, key, unit, preview)
+    f.key, f.unit, f.isPreview = key, unit, preview and true or nil
     if f.GetAttribute and f:IsProtected() then
         f:SetAttribute("*type1", "target")
         f:SetAttribute("*type2", "togglemenu")
@@ -336,8 +367,10 @@ function UF.Dress(f, key, unit)
     end
 
     -- Click-casting addons (Clique and friends) look here.
-    ClickCastFrames = ClickCastFrames or {}
-    ClickCastFrames[f] = true
+    if not preview then
+        ClickCastFrames = ClickCastFrames or {}
+        ClickCastFrames[f] = true
+    end
 
     f:SetScript("OnEnter", function(self)
         if GameTooltip_SetDefaultAnchor then GameTooltip_SetDefaultAnchor(GameTooltip, self)
@@ -460,15 +493,36 @@ local function InsetShade(top, bottom, bar, h, on, one)
     bottom:SetHeight(max(one * floor(h * 0.10 + 0.5), one))
     pcall(bottom.SetGradient, bottom, "VERTICAL", CreateColor(0, 0, 0, 0.4), CreateColor(0, 0, 0, 0))
 end
+--- A saved { r, g, b } colour, or the fallback when it is missing or bad.
+local function RGB(c, fallback)
+    if type(c) == "table" and type(c[1]) == "number" and type(c[2]) == "number" and type(c[3]) == "number" then
+        return c
+    end
+    return fallback
+end
+UF.RGB = RGB
+local BLACK = { 0, 0, 0 }
+
+--- The unfilled part of a bar: your background colour if you set one.
+local function BarBG(cfg) return RGB(cfg.bgColour, BG_RGB) end
+
 function UF.Layout(f, cfg)
     local w, h = cfg.width, cfg.height
     EV.Pixel:SetSize(f, w, h)
     local one = EV.Pixel:One(f)
     local bpx = cfg.borderSize or 2
     local b = one * bpx
-    f.bg:SetColorTexture(BG_RGB[1], BG_RGB[2], BG_RGB[3], cfg.bgAlpha)
-    EV.Pixel:CreateBorder(f, bpx, 0, 0, 0, 1)
-    f.portrait.bg:SetColorTexture(BG_RGB[1], BG_RGB[2], BG_RGB[3], BG_ALPHA)
+    local bg = BarBG(cfg)
+    f.bg:SetColorTexture(bg[1], bg[2], bg[3], cfg.bgAlpha)
+    -- Thickness 0 is no border: the strips stay (a border is built once and
+    -- kept) but are drawn one pixel wide and fully transparent.
+    local bc = RGB(cfg.borderColour, BLACK)
+    if bpx > 0 then
+        EV.Pixel:CreateBorder(f, bpx, bc[1], bc[2], bc[3], 1)
+    else
+        EV.Pixel:CreateBorder(f, 1, 0, 0, 0, 0)
+    end
+    f.portrait.bg:SetColorTexture(bg[1], bg[2], bg[3], BG_ALPHA)
     LayoutGlow(f, cfg)
 
     local tex = EV.Media:Fetch("statusbar", cfg.texture)
@@ -476,7 +530,7 @@ function UF.Layout(f, cfg)
     f.health.bg:SetTexture(tex)
     f.power:SetStatusBarTexture(tex)
     f.power.bg:SetTexture(tex)
-    f.power.bg:SetVertexColor(BG_RGB[1], BG_RGB[2], BG_RGB[3], BG_ALPHA)
+    f.power.bg:SetVertexColor(bg[1], bg[2], bg[3], BG_ALPHA)
 
     -- Everything sits inside the border. Portrait: a square the height of
     -- that inner box, then a one pixel black hairline, then the bars.
@@ -499,6 +553,7 @@ function UF.Layout(f, cfg)
             edge:SetPoint("BOTTOMLEFT", p, "BOTTOMRIGHT", 0, 0)
         end
         edge:SetWidth(one)
+        edge:SetColorTexture(bc[1], bc[2], bc[3], 1)
         edge:Show()
         p:Show()
     else
@@ -544,6 +599,7 @@ function UF.Layout(f, cfg)
         f.divider:SetPoint("TOPLEFT", f.health, "BOTTOMLEFT", 0, 0)
         f.divider:SetPoint("TOPRIGHT", f.health, "BOTTOMRIGHT", 0, 0)
         f.divider:SetHeight(gap)
+        f.divider:SetColorTexture(bc[1], bc[2], bc[3], 1)
         f.divider:Show()
         f.power:ClearAllPoints()
         f.power:SetPoint("TOPLEFT", f.health, "BOTTOMLEFT", 0, -gap)
@@ -558,39 +614,90 @@ function UF.Layout(f, cfg)
     -- Text
     -- Same face, slug objects and text edge as the nameplates
     -- (EV.Fonts:StyleText). Unit frames sit still, so slug is not fixing a
-    -- bounce here; it is so the two render the same glyphs.
-    local size, style = cfg.fontSize, cfg.textStyle
-    EV.Fonts:StyleText(f.nameText, size, style, true)
-    EV.Fonts:StyleText(f.healthText, size, style, true)
-    EV.Fonts:StyleText(f.statusText, size, style, true)
-    EV.Fonts:StyleText(f.powerText, max(size - 2, 8), style, true)
+    -- bounce here; it is so the two render the same glyphs. A frame can pick
+    -- its own face (cfg.font); "" follows General > Font.
+    local size, style, face = cfg.fontSize, cfg.textStyle, cfg.font
+    local psize = (cfg.powerFontSize and cfg.powerFontSize > 0) and cfg.powerFontSize or max(size - 2, 8)
+    EV.Fonts:StyleText(f.nameText, size, style, true, face)
+    EV.Fonts:StyleText(f.healthText, size, style, true, face)
+    EV.Fonts:StyleText(f.statusText, size, style, true, face)
+    EV.Fonts:StyleText(f.powerText, psize, style, true, face)
     f.nameText:SetTextColor(1, 1, 1)
 
-    f.healthText:ClearAllPoints()
-    f.healthText:SetPoint("RIGHT", f.health, "RIGHT", -5, 0)
-    f.nameText:ClearAllPoints()
-    f.nameText:SetPoint("LEFT", f.health, "LEFT", 5, 0)
-    f.nameText:SetPoint("RIGHT", f.healthText, "LEFT", -6, 0)
+    -- Where each text sits on its bar: LEFT, CENTER or RIGHT, nudged by an
+    -- offset. Offsets are in the frame's own units, as the fixed insets
+    -- always were, so group frames (which have no offsets saved) keep their
+    -- layout exactly; at the default UI size a unit is a pixel.
+    -- Which part a text sits on: the health bar, the power bar or the
+    -- whole frame. A power bar switched off (height 0) hands its text to
+    -- the health bar rather than to a hidden parent.
+    local function Host(which, fallback)
+        if which == "frame" then return f end
+        if which == "power" then return ph > 0 and f.power or f.health end
+        if which == "health" then return f.health end
+        return fallback
+    end
+    local function Place(fs, bar, point, x, y)
+        point = (point == "CENTER" or point == "RIGHT") and point or "LEFT"
+        fs:ClearAllPoints()
+        fs:SetPoint(point, bar, point, x or 0, y or 0)
+        fs:SetJustifyH(point)
+        return point
+    end
+    local healthHost = Host(cfg.healthParent, f.health)
+    local nameHost = Host(cfg.nameParent, f.health)
+    local powerHost = Host(cfg.powerParent, f.power)
+    local hp = Place(f.healthText, healthHost, cfg.healthPoint or "RIGHT", cfg.healthX or -5, cfg.healthY or 0)
+    local np = Place(f.nameText, nameHost, cfg.namePoint or "LEFT", cfg.nameX or 5, cfg.nameY or 0)
+    -- Stop a long name running into the health text. The usual layout (name
+    -- left, health right, same line) ends the name where the health text
+    -- starts, as it always has. Any other arrangement uses a width: your
+    -- own (percent of the bar), or the whole bar less the edges.
+    local barW = max(w - b * 2 - pw, 1)
+    local share = cfg.nameWidth or 0
+    if share <= 0 and np == "LEFT" and hp == "RIGHT" and (cfg.nameY or 0) == (cfg.healthY or 0)
+       and nameHost == healthHost and cfg.healthText ~= "none" then
+        f.nameText:SetPoint("RIGHT", f.healthText, "LEFT", -6, 0)
+    else
+        local pct = share > 0 and share or 100
+        f.nameText:SetWidth(max(barW * pct / 100 - one * 10, one))
+    end
     f.statusText:ClearAllPoints()
     f.statusText:SetPoint("CENTER", f.health, "CENTER", 0, 0)
-    f.powerText:ClearAllPoints()
-    f.powerText:SetPoint("RIGHT", f.power, "RIGHT", -5, 0)
-    f.powerText:SetShown(ph >= 9 and cfg.powerText ~= "none")
+    Place(f.powerText, powerHost, cfg.powerPoint or "RIGHT", cfg.powerX or -5, cfg.powerY or 0)
+    -- On the power bar it needs room (9 tall). Moved to the health bar or the
+    -- frame on purpose, it always fits; left on a power bar that's switched
+    -- off, it goes with the bar, as it always has.
+    local moved = cfg.powerParent == "health" or cfg.powerParent == "frame"
+    local roomy = moved or (powerHost == f.power and ph >= 9)
+    f.powerText:SetShown(roomy and cfg.powerText ~= "none")
     f.nameText:SetShown(cfg.showName)
+
+    -- Raid target mark: size and spot are yours; top centre by default.
+    local ri = f.raidIcon
+    if ri then
+        local rs = cfg.raidIconSize or 18
+        ri:SetSize(rs, rs)
+        ri:ClearAllPoints()
+        local rp = cfg.raidIconPoint or "TOP"
+        ri:SetPoint("CENTER", f, rp, cfg.raidIconX or 0, cfg.raidIconY or 0)
+    end
+    if UF.LayoutIndicators then UF.LayoutIndicators(f, cfg) end
 end
 
 --------------------------------------------------------------------------------
 --  Updates
 --------------------------------------------------------------------------------
 function UF.UpdateHealthColour(f, cfg)
-    local c = UF.HealthColour(f.unit, cfg.healthColour, cfg.barShade)
+    local c = UF.HealthColour(f.unit, cfg.healthColour, cfg.barShade, RGB(cfg.healthCustom, nil))
     f.health:SetStatusBarColor(c[1], c[2], c[3], 1)
     if cfg.healthColour == "dark" then
         -- Dark bars: the missing health shows in the unit's colour.
         local u = UF.HealthColour(f.unit, "class", cfg.barShade)
         f.health.bg:SetVertexColor(u[1], u[2], u[3], 0.55)
     else
-        f.health.bg:SetVertexColor(BG_RGB[1], BG_RGB[2], BG_RGB[3], BG_ALPHA)
+        local bg = BarBG(cfg)
+        f.health.bg:SetVertexColor(bg[1], bg[2], bg[3], BG_ALPHA)
     end
 end
 
@@ -636,7 +743,7 @@ function UF.UpdatePower(f, cfg)
     local unit = f.unit
     local pType = UnitPowerType(unit)
     local cur, maxP = UnitPower(unit, pType), UnitPowerMax(unit, pType)
-    local c = PowerColour(unit, cfg.barShade)
+    local c = PowerColour(unit, cfg.barShade, cfg)
     f.power:SetStatusBarColor(c[1], c[2], c[3], 1)
     f.power:SetMinMaxValues(0, maxP)
     f.power:SetValue(cur)
@@ -666,6 +773,14 @@ end
 function UF.UpdateName(f, cfg)
     if not cfg.showName then return end
     local unit = f.unit
+    -- Name in the unit's class or hostility colour, for dark bars or anyone
+    -- who reads the name before the bar. Unshaded: it is text, not a fill.
+    if cfg.nameColour == "class" then
+        local c = UF.HealthColour(unit, "class", 1)
+        if c then f.nameText:SetTextColor(c[1], c[2], c[3]) end
+    else
+        f.nameText:SetTextColor(1, 1, 1)
+    end
     local level = cfg.showLevel and LevelString(unit) or ""
     local ok = pcall(f.nameText.SetFormattedText, f.nameText, "%s%s", level, UnitName(unit) or "")
     if not ok then f.nameText:SetText("") end
@@ -729,13 +844,81 @@ function UF.UpdateRaidIcon(f)
     end
 end
 
-function UF.UpdateState(f)
+--------------------------------------------------------------------------------
+--  Indicators: leader, PvP, and the player's combat or resting icon
+--------------------------------------------------------------------------------
+local CORNERS = { TOPLEFT = true, TOPRIGHT = true, BOTTOMLEFT = true, BOTTOMRIGHT = true,
+                  TOP = true, BOTTOM = true, LEFT = true, RIGHT = true, CENTER = true }
+local function Corner(v, fallback) return CORNERS[v] and v or fallback end
+
+--- Sizes and spots for the icons that sit on a frame's edge. Each sits
+--- centred ON the chosen point of the frame, the way Blizzard's do, so it
+--- breaks the border rather than hiding the name.
+function UF.LayoutIndicators(f, cfg)
+    local one = EV.Pixel:One(f)
+    local function At(icon, size, point, fallback, x, y)
+        if not icon then return end
+        icon:SetSize(size, size)
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", f, Corner(point, fallback), x or 0, y or 0)
+    end
+    At(f.leaderIcon, cfg.leaderIconSize or 14, cfg.leaderIconPoint, "TOPLEFT", cfg.leaderIconX or 8, cfg.leaderIconY or 0)
+    At(f.pvpIcon, cfg.pvpIconSize or 24, cfg.pvpIconPoint, "BOTTOMLEFT", cfg.pvpIconX or 0, cfg.pvpIconY or 0)
+    At(f.stateIcon, cfg.stateIconSize or 18, cfg.stateIconPoint, "TOPLEFT", cfg.stateIconX or 2, cfg.stateIconY or -2)
+end
+
+-- UnitIsGroupLeader and friends are plain booleans about group roles, never
+-- secret, but every read is still guarded in case a unit is odd.
+local function Flag(fn, unit)
+    if type(fn) ~= "function" then return false end
+    local ok, v = pcall(fn, unit)
+    return ok and not V.IsSecret(v) and v == true
+end
+
+function UF.UpdateIndicators(f, cfg)
+    local unit = f.unit
+    local li = f.leaderIcon
+    if li then
+        if cfg.leaderIcon and Flag(UnitIsGroupLeader, unit) then
+            li:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
+            li:Show()
+        elseif cfg.leaderIcon and Flag(UnitIsGroupAssistant, unit) then
+            li:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
+            li:Show()
+        else
+            li:Hide()
+        end
+    end
+    local pi = f.pvpIcon
+    if pi then
+        local shown = false
+        if cfg.pvpIcon then
+            if Flag(UnitIsPVPFreeForAll, unit) then
+                pi:SetTexture("Interface\\TargetingFrame\\UI-PVP-FFA")
+                shown = true
+            elseif Flag(UnitIsPVP, unit) then
+                local okF, faction = pcall(UnitFactionGroup, unit)
+                if okF and type(faction) == "string" and not V.IsSecret(faction)
+                   and (faction == "Horde" or faction == "Alliance") then
+                    pi:SetTexture("Interface\\TargetingFrame\\UI-PVP-" .. faction)
+                    shown = true
+                end
+            end
+        end
+        if shown then pi:SetTexCoord(0, 0.62, 0, 0.62) end
+        pi:SetShown(shown)
+    end
+end
+
+function UF.UpdateState(f, cfg)
     local icon = f.stateIcon
     if not icon then return end
-    if UnitAffectingCombat("player") then
+    local combatOn = not cfg or cfg.combatIcon ~= false
+    local restOn = not cfg or cfg.restingIcon ~= false
+    if combatOn and UnitAffectingCombat("player") then
         icon:SetTexCoord(0.5, 1, 0, 0.49)
         icon:Show()
-    elseif IsResting() then
+    elseif restOn and IsResting() then
         icon:SetTexCoord(0, 0.5, 0, 0.421875)
         icon:Show()
     else
@@ -752,5 +935,6 @@ function UF.UpdateAll(f, cfg)
     UF.UpdatePortrait(f, cfg)
     UF.UpdateRaidIcon(f)
     UF.UpdateAggro(f, cfg)
-    UF.UpdateState(f)
+    UF.UpdateState(f, cfg)
+    UF.UpdateIndicators(f, cfg)
 end
