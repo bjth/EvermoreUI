@@ -16,3 +16,4 @@ Cast.lua
 Auras.lua
 Extras.lua
 Combo.lua
+Designer.lua

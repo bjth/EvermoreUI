@@ -37,6 +37,11 @@ full frames addon.
   and Utility bars, or drop it in the tray to hide it from our bars. Saved
   per class and spec; which spells are tracked stays in the game's own
   Cooldown Manager settings, a button away.
+- **Design your nameplates**: the designer's Nameplates tab has a plate with
+  a sample cast, auras, raid mark and quest count. Drag the raid mark, the
+  quest count and each row of auras anywhere around the bar, move the mana
+  strip and cast bar up or down, flip combo points between edges, and
+  resize by the corner. Nothing moves until you move it.
 
 ### Changed
 - **More ways to style a frame**: border from 0 to 8 pixels in any colour,

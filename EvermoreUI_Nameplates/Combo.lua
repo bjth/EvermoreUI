@@ -89,6 +89,19 @@ local function Apply(f)
     end
 end
 
+--- The designer's copy: the row shown with three points lit.
+function ns.PreviewCombo(f)
+    local row = f.combo
+    if not row then return end
+    if not On(ns.module.db) then row:Hide() return end
+    row:SetAlpha(1)
+    for i = 1, pipCount do
+        local p = row.pips[i]
+        if p then p:SetValue(3) end
+    end
+    row:Show()
+end
+
 local function ApplyAll()
     for _, f in pairs(ns.plates) do ns.Safe("combo", Apply, f) end
 end

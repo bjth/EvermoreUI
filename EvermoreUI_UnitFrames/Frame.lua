@@ -661,8 +661,11 @@ function UF.Layout(f, cfg)
     f.statusText:ClearAllPoints()
     f.statusText:SetPoint("CENTER", f.health, "CENTER", 0, 0)
     Place(f.powerText, powerHost, cfg.powerPoint or "RIGHT", cfg.powerX or -5, cfg.powerY or 0)
-    -- On the power bar it needs room (9 tall); anywhere else it always fits.
-    local roomy = powerHost ~= f.power or ph >= 9
+    -- On the power bar it needs room (9 tall). Moved to the health bar or the
+    -- frame on purpose, it always fits; left on a power bar that's switched
+    -- off, it goes with the bar, as it always has.
+    local moved = cfg.powerParent == "health" or cfg.powerParent == "frame"
+    local roomy = moved or (powerHost == f.power and ph >= 9)
     f.powerText:SetShown(roomy and cfg.powerText ~= "none")
     f.nameText:SetShown(cfg.showName)
 

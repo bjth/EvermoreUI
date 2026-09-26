@@ -39,12 +39,15 @@ if EV_BLOCKED then return end
 --      free   a point on a parent plus an offset:
 --               parent(preview) -> region, points = "three" | "nine",
 --               anchor = "same" (element's own point, text) | "center" (icons)
---               get() -> point, x, y ; set(point, x, y)   in frame units
+--                        | "auto" (the facing edge when outside the parent)
+--               get() -> point, x, y ; set(point, x, y, own)   frame units
 --      slot   a side of the frame, picked by where you drop it:
 --               slots = "sides" | "vertical" | "horizontal", aligned = bool
 --               getSlot() -> side, align ; setSlot(side, align)
 --      nudge  an offset dragged directly:
---               get() -> x, y ; set(x, y)   in PIXELS
+--               get() -> x, y ; set(x, y)   in PIXELS, or frame units
+--               with units = "frame"
+--    text = true              the box is the words at the justified edge
 --    Nudge(dx, dy)            arrow keys, in the element's own units
 --    getSize() -> w, h ; setSize(w, h)   frame units; gives it a grip
 --    Options(p)               inspector rows, with the options page builder
@@ -76,8 +79,10 @@ local lastState                   -- settings after the last commit, per tabKey
 local inspectorCache = {}         -- tabKey .. element key -> { frame, builder }
 local suspended = false
 local quiet = false               -- our own inspector refreshes, not a user change
+local pending                     -- an inspector commit waiting for the control to settle
 
 local SNAP = 3                    -- snap distance, frame units
+local OwnPoint                    -- below
 
 local function TabKey() return surface and (surface.key .. ":" .. tostring(tab)) or "" end
 
@@ -127,7 +132,20 @@ local function Relayout()
     if preview and surface.Layout then surface.Layout(preview, tab) end
 end
 
+--- An inspector commit still waiting: do it now (before undo, save, discard).
+local function Flush()
+    if pending then
+        pending = false
+        UI:Commit()
+    end
+end
+
+function UI:SchedulePaint()
+    C_Timer.After(0, function() if win and win:IsShown() then UI:PaintHandles() end end)
+end
+
 function UI:Undo()
+    Flush()
     local u = table.remove(undo)
     if not u then return end
     if u.surface ~= surface or u.tab ~= tab then
@@ -141,15 +159,17 @@ function UI:Undo()
     RefreshAll()
 end
 
-local function Dirty() return next(snapshots) ~= nil end
+local function Dirty() return pending or next(snapshots) ~= nil end
 
 function UI:Save()
+    Flush()
     wipe(snapshots); wipe(undo)
     lastState = nil
     win:Hide()
 end
 
 function UI:Discard()
+    Flush()
     for _, s in pairs(snapshots) do
         s.surface.Restore(s.tab, s.snap)
     end
@@ -169,8 +189,27 @@ local function Box(r)
     -- preview's so every box on the canvas is in one space.
     local k = (r.GetEffectiveScale and r:GetEffectiveScale() or 1) / preview:GetEffectiveScale()
     l, rt, t, b = l * k, rt * k, t * k, b * k
-    return { l = l, r = rt, t = t, b = b, cx = (l + rt) / 2, cy = (t + b) / 2, w = rt - l, h = t - b }
+    return { l = l, r = rt, t = t, b = b, cx = (l + rt) / 2, cy = (t + b) / 2, w = rt - l, h = t - b, k = k }
 end
+
+--- A text's box is the words, not the font string: a name anchored across
+--- the whole bar would otherwise be "in the middle" the moment you touched
+--- it. The words sit at the string's justified edge.
+local function TextBox(r)
+    local b = Box(r)
+    if not b then return nil end
+    local sw = (r.GetUnboundedStringWidth and r:GetUnboundedStringWidth()) or (r.GetStringWidth and r:GetStringWidth())
+    if type(sw) ~= "number" or sw <= 0 then return b end
+    local w = min(sw * b.k + 2, b.w)
+    local j = r.GetJustifyH and r:GetJustifyH() or "LEFT"
+    if j == "RIGHT" then b.l = b.r - w
+    elseif j == "CENTER" then b.l, b.r = b.cx - w / 2, b.cx + w / 2
+    else b.r = b.l + w end
+    b.w, b.cx, b.j = w, (b.l + b.r) / 2, j
+    return b
+end
+
+local function ElementBox(e, r) return e.text and TextBox(r) or Box(r) end
 
 local function Cursor()
     local x, y = GetCursorPosition()
@@ -202,6 +241,18 @@ local function PointOf(box, point)
 end
 
 local function Round(v) return floor(v + 0.5) end
+
+--- For anchor = "auto": the element's own point to pin by. Outside the
+--- parent on a side, the facing edge (a mark left of the bar hangs by its
+--- right edge); overlapping it, the same point as the parent's.
+OwnPoint = function(box, parent, point)
+    local h = point:find("LEFT") and "LEFT" or (point:find("RIGHT") and "RIGHT" or "")
+    local v = point:find("TOP") and "TOP" or (point:find("BOTTOM") and "BOTTOM" or "")
+    if box.r <= parent.l + 0.5 then h = "RIGHT" elseif box.l >= parent.r - 0.5 then h = "LEFT" end
+    if box.b >= parent.t - 0.5 then v = "BOTTOM" elseif box.t <= parent.b + 0.5 then v = "TOP" end
+    local p = v .. h
+    return p == "" and "CENTER" or p
+end
 
 local function Snapped(v, targets)
     if IsAltKeyDown() then return v end
@@ -242,7 +293,7 @@ end
 --------------------------------------------------------------------------------
 local function StartDrag(e, grip)
     local r = e.region and e.region(preview)
-    local box = Box(r)
+    local box = ElementBox(e, r)
     if not box then return end
     local cx, cy = Cursor()
     drag = { e = e, x0 = cx, y0 = cy, box = box, moved = false, grip = grip }
@@ -278,13 +329,20 @@ function UI.DragUpdate()
                       cx = b.cx + dx, cy = b.cy + dy, w = b.w, h = b.h }
         local point = PickPoint(box, parent, e.points == "nine")
         local px, py = PointOf(parent, point)
-        local ex, ey
-        if e.anchor == "same" then ex, ey = PointOf(box, point) else ex, ey = box.cx, box.cy end
+        local ex, ey, own
+        if e.anchor == "same" then
+            ex, ey = PointOf(box, point)
+        elseif e.anchor == "auto" then
+            own = OwnPoint(box, parent, point)
+            ex, ey = PointOf(box, own)
+        else
+            ex, ey = box.cx, box.cy
+        end
         local ox, oy = Round(ex - px), Round(ey - py)
         local tx, ty = { 0 }, { 0 }
         if e.snapX then for _, v in ipairs(e.snapX) do tx[#tx + 1] = v end end
         if e.snapY then for _, v in ipairs(e.snapY) do ty[#ty + 1] = v end end
-        e.set(point, Snapped(ox, tx), Snapped(oy, ty))
+        e.set(point, Snapped(ox, tx), Snapped(oy, ty), own)
     elseif e.move == "slot" then
         local fb = Box(preview)
         if not fb then return end
@@ -292,7 +350,8 @@ function UI.DragUpdate()
         local curSide, curAlign = e.getSlot()
         if side ~= curSide or (e.aligned and align ~= curAlign) then e.setSlot(side, align) end
     elseif e.move == "nudge" then
-        local one = EV.Pixel:One(preview)
+        -- Pixels unless the element says its offsets are frame units.
+        local one = (e.units == "frame") and 1 or EV.Pixel:One(preview)
         local px, py = Round(dx / one), Round(dy / one)
         e.set(drag.ox + Snapped(px, { -drag.ox }), drag.oy + Snapped(py, { -drag.oy }))
     end
@@ -396,8 +455,8 @@ local function SyncHandles()
     local list = {}
     for _, e in ipairs(elements) do
         local r = Shown(e) and e.region and e.region(preview)
-        local box = r and r.IsShown and r:IsShown() and Box(r)
-        if box and box.w > 0 and box.h > 0 then list[#list + 1] = { e = e, r = r, area = box.w * box.h } end
+        local box = r and r.IsShown and r:IsShown() and ElementBox(e, r)
+        if box and box.w > 0 and box.h > 0 then list[#list + 1] = { e = e, r = r, box = box, area = box.w * box.h } end
     end
     table.sort(list, function(a, b) return a.area > b.area end)
     for _, it in ipairs(list) do
@@ -407,7 +466,16 @@ local function SyncHandles()
         h.key = it.e.key
         h.label:SetText(it.e.label)
         h:ClearAllPoints()
-        h:SetAllPoints(it.r)
+        if it.e.text and it.box.j then
+            -- Over the words: pinned at the justified edge, as wide as they are.
+            local j = it.box.j == "RIGHT" and "RIGHT" or (it.box.j == "CENTER" and "" or "LEFT")
+            local ratio = preview:GetEffectiveScale() / h:GetEffectiveScale()
+            h:SetPoint("TOP" .. j, it.r, "TOP" .. j)
+            h:SetPoint("BOTTOM" .. j, it.r, "BOTTOM" .. j)
+            h:SetWidth(it.box.w * ratio)
+        else
+            h:SetAllPoints(it.r)
+        end
         h:SetFrameLevel(stage:GetFrameLevel() + 20 + i)
         h.grip:SetFrameLevel(h:GetFrameLevel() + 1)
         h.hasGrip = it.e.getSize ~= nil
@@ -484,10 +552,20 @@ local function SyncInspector()
         f:SetWidth(width)
         -- The builder calls this after a control changes AND at the end of
         -- every Refresh, including ours; only the first is an edit.
+        -- A slider fires on every step of a drag. The copy follows each step;
+        -- the commit (an undo step, and the real frames) waits until the
+        -- control has been still for a moment, so one drag is one undo.
         local b = EV.Options_NewBuilder(f, width - 16, function()
             if quiet then return end
             Relayout()
-            UI:Commit()
+            UI:SchedulePaint()
+            if pending then return end
+            pending = true
+            C_Timer.After(0.35, function()
+                if not pending then return end
+                pending = false
+                UI:Commit()
+            end)
         end)
         if e.Options then e.Options(b) end
         quiet = true
@@ -513,22 +591,34 @@ local function SurfaceTabs()
     return list
 end
 
+local tabsBySurface = {}
+
+--- One row of tabs per surface, made once and kept.
 local function BuildUnitTabs()
     if unitTabs then unitTabs:Hide() end
     unitTabs = nil
     if not (surface and surface.Tabs) then return end
-    local list = surface.Tabs()
-    unitTabs = W.Tabs(win.body, list, function() return tab end, function(v) UI:Show(surface.key, v) end,
-                      { height = 28 })
-    unitTabs:SetPoint("TOPLEFT", win.body, "TOPLEFT", 196, -44)
+    unitTabs = tabsBySurface[surface.key]
+    if not unitTabs then
+        local key = surface.key
+        unitTabs = W.Tabs(win.body, surface.Tabs(), function() return tab end, function(v) UI:Show(key, v) end,
+                          { height = 28 })
+        unitTabs:SetPoint("TOPLEFT", win.body, "TOPLEFT", 196, -44)
+        tabsBySurface[key] = unitTabs
+    end
+    unitTabs:Show()
+    unitTabs:Refresh()
 end
 
+--- The zoom lives on a holder the copy sits in, not on the copy: a surface's
+--- own layout may set the copy's scale (a nameplate does), and it must not
+--- undo the zoom or be undone by it.
 local function Place()
     if not preview then return end
-    preview:SetScale(zoom)
+    stage.zoom:SetScale(zoom)
     preview:ClearAllPoints()
     -- Centred, a little high: most of what hangs off a frame hangs below it.
-    preview:SetPoint("CENTER", stage, "CENTER", 0, 30 / zoom)
+    preview:SetPoint("CENTER", stage.zoom, "CENTER", 0, 30 / zoom)
 end
 
 function RefreshAll()
@@ -574,10 +664,10 @@ function UI:Show(key, which)
         end
         preview = previews[pk]
         if not preview then
-            preview = s.Build(stage, tab)
+            preview = s.Build(stage.zoom, tab)
             previews[pk] = preview
         end
-        preview:SetParent(stage)
+        preview:SetParent(stage.zoom)
         preview:SetFrameLevel(stage:GetFrameLevel() + 2)
         Place()
         s.Layout(preview, tab)
@@ -735,6 +825,10 @@ local function Build()
     stage = CreateFrame("Frame", nil, canvas)
     stage:SetAllPoints()
     stage:SetFrameLevel(canvas:GetFrameLevel() + 2)
+    stage.zoom = CreateFrame("Frame", nil, stage)
+    stage.zoom:SetSize(2, 2)
+    stage.zoom:SetPoint("CENTER")
+    stage.zoom:SetFrameLevel(stage:GetFrameLevel() + 1)
 
     hint = Txt(body, 12, "textMuted")
     hint:SetPoint("TOPLEFT", canvas, "BOTTOMLEFT", 2, -8)
@@ -758,14 +852,20 @@ local function Build()
         zoom = zoom == 1 and 1.5 or (zoom == 1.5 and 2 or 1)
         zoomBtn:SetText(L["Zoom"] .. ": " .. zoom .. "x")
         Place()
+        -- Pixel-snapped sizes were worked out at the old scale.
+        Relayout()
         C_Timer.After(0, RefreshAll)
     end, "ghost")
     zoomBtn:SetPoint("RIGHT", win.undo, "LEFT", -16, 0)
     zoomBtn:SetTooltip(L["Zoom"], L["Bigger to grab small things. Borders stay one screen pixel thick at any zoom, so 1x is the one that looks exactly like the real frame."])
     local opts = W.Button(body, L["All settings"], 110, function()
         if surface and surface.page then
+            -- Kept, as edit mode keeps them on its way to the options: the
+            -- two must not both be editing the same settings.
+            local page, pageTab = surface.page, surface.PageTab and surface.PageTab(tab)
+            UI:Save()
             EV:OpenOptions()
-            if EV.Options.ShowPage then EV.Options:ShowPage(surface.page, surface.PageTab and surface.PageTab(tab)) end
+            if EV.Options.ShowPage then EV.Options:ShowPage(page, pageTab) end
         end
     end, "ghost")
     opts:SetPoint("RIGHT", zoomBtn, "LEFT", -8, 0)
@@ -786,7 +886,13 @@ function UI:Open(key, which)
     if not win then Build() end
     local list = D:List()
     if #list == 0 then EV:Print(L["Nothing to design: the modules that use the designer are switched off."]) return end
-    if not key or not D:Get(key) then key = (surface and surface.key) or list[1].key end
+    local ok = {}
+    for _, s in ipairs(list) do ok[s.key] = true end
+    if key and not ok[key] then
+        EV:Print(L["That part of the UI is switched off, so there's nothing of it to design."])
+        key = nil
+    end
+    if not key then key = (surface and ok[surface.key] and surface.key) or list[1].key end
     win:Show()
     win:Raise()
     self:Show(key, which)

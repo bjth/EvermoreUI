@@ -289,6 +289,13 @@ local M = EV:NewModule("Nameplates", {
     comboY         = 0,
     comboColour    = { 1, 0.86, 0.1 },
 
+    -- Positions you've set in the designer. Absent until you move something,
+    -- and every widget keeps its own measured placement while they are.
+    -- Each is { own, rel, x, y }: the element's own point on the health bar's
+    -- point, plus an offset.
+    raidMarkSize   = 0,             -- 0: the bar's height plus four
+    auraPos        = {},            -- [row key] = { own, rel, x, y }
+
     -- Friendly plates: the reference uses a name-only design for these, so ours
     -- stay out of the way and Blizzard's are left alone.
     doFriendly     = false,
@@ -776,7 +783,43 @@ local function Extent(cfg)
         above = 2 + cfg.auraSize * (cfg.auraRatio or 1)    -- LIFT + icon height
     end
     if cfg.showQuest and cfg.fontSize > above then above = cfg.fontSize end
+    -- Whatever you've moved in the designer, and only that: with nothing
+    -- moved this adds nothing and the box is exactly what it always was.
+    local function Claim(a, b)
+        if a > above then above = a end
+        if b > below then below = b end
+    end
+    if type(cfg.raidMarkPos) == "table" then
+        local size = (cfg.raidMarkSize or 0) > 0 and cfg.raidMarkSize or (cfg.height + 4)
+        Claim(ns.ExtentOf(cfg.raidMarkPos, size, cfg.height))
+    end
+    if cfg.showQuest and type(cfg.questPos) == "table" then
+        Claim(ns.ExtentOf(cfg.questPos, cfg.fontSize, cfg.height))
+    end
+    if ns.AuraRowsExtent then Claim(ns.AuraRowsExtent(cfg, cfg.height)) end
     return above, below
+end
+
+--- Place a region by a designer position ({ own, rel, x, y }) on a parent.
+--- Returns false when there's no position, so the caller keeps its own.
+function ns.PlaceAt(region, parent, pos)
+    if type(pos) ~= "table" or type(pos.rel) ~= "string" then return false end
+    region:SetPoint(pos.own or pos.rel, parent, pos.rel, pos.x or 0, pos.y or 0)
+    return true
+end
+
+--- How far above and below the health bar an element of height h placed at
+--- pos reaches, for a bar `height` tall.
+function ns.ExtentOf(pos, h, height)
+    local half = height / 2
+    local relY = pos.rel:find("TOP") and half or (pos.rel:find("BOTTOM") and -half or 0)
+    local y0 = relY + (pos.y or 0)
+    local own = pos.own or pos.rel
+    local top, bottom
+    if own:find("TOP") then top, bottom = y0, y0 - h
+    elseif own:find("BOTTOM") then top, bottom = y0 + h, y0
+    else top, bottom = y0 + h / 2, y0 - h / 2 end
+    return math.max(0, top - half), math.max(0, -half - bottom)
 end
 
 --- Read back, never assumed. SetNamePlateSize is HasRestrictions
@@ -1384,6 +1427,43 @@ local function Layout(f)
     f.styleGen = ns.styleGen
 end
 ns.Layout = Layout
+
+--------------------------------------------------------------------------------
+--  The designer's copy
+--
+--  A plate built by the same widgets as every real one, bound to you so there
+--  is a unit to draw, with no Blizzard plate under it, no events and no place
+--  in ns.plates, so nothing that drives real plates ever reaches it. Samples
+--  fill what you'd otherwise only see mid-fight: a cast, a full row of each
+--  kind of aura, a raid mark, a quest count, the mana strip, combo points.
+--------------------------------------------------------------------------------
+function ns.BuildPreviewPlate(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    f.isPreview = true
+    ForEachWidget("Build", f)
+    f.unit = "player"
+    return f
+end
+
+function ns.LayoutPreviewPlate(f)
+    local cfg = M.db
+    Layout(f)
+    ForEachWidget("SetUnit", f)
+    ForEachWidget("Late", f)
+    if ns.PreviewCast then ns.PreviewCast(f) end
+    if ns.PreviewPower then ns.PreviewPower(f) end
+    if ns.PreviewCombo then ns.PreviewCombo(f) end
+    if f.raidMark then
+        if SetRaidTargetIconTexture then SetRaidTargetIconTexture(f.raidMark, 8) end
+        f.raidMark:Show()
+    end
+    if f.questText then
+        f.questText:SetText("3/8")
+        f.questText:SetShown(cfg.showQuest)
+    end
+    f:SetAlpha(1)
+    f:Show()
+end
 
 --- Register only what the ACTIVE configuration needs, filtered to this unit
 --- in the C layer so another unit's health change never enters Lua here.

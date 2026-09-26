@@ -177,7 +177,10 @@ function M.BarOf(f, src)
     local id = IdOf(f)
     if a and id then
         if a.hidden[id] then return nil end
-        if not src.buff and a.bar[id] then return a.bar[id] end
+        local to = not src.buff and a.bar[id]
+        -- Moved to a bar you've since switched off: it goes home rather
+        -- than being left where nobody places it.
+        if to and M.db.bars[to] and M.db.bars[to].enabled then return to end
     end
     return src.key
 end

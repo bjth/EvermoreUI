@@ -53,6 +53,9 @@ local POWER_TEXT = {
 }
 
 local function Round(v) return floor(v + 0.5) end
+--- Keep a dragged value inside what the inspector's slider can show, so the
+--- two never disagree and a wheel tick can't snap it somewhere else.
+local function Clamp(v, lo, hi) return max(lo, min(hi, v)) end
 
 --- Controls over one unit's settings, the same shapes the options page uses.
 --- Paths are "width" or "castbar.height".
@@ -117,18 +120,18 @@ local function TextElement(tab, key, label, prefix, field, parentDefault, shown,
         key = key, label = label,
         region = function(pf) return pf[field] end,
         shown = shown,
-        move = "free", points = "three", anchor = "same",
+        move = "free", points = "three", anchor = "same", text = true,
         parent = Host,
         snapX = { d[prefix .. "X"] or 0, -(d[prefix .. "X"] or 0) },
         get = function() return C()[prefix .. "Point"], C()[prefix .. "X"] or 0, C()[prefix .. "Y"] or 0 end,
         set = function(point, x, y)
             local c = C()
-            c[prefix .. "Point"], c[prefix .. "X"], c[prefix .. "Y"] = point, x, y
+            c[prefix .. "Point"], c[prefix .. "X"], c[prefix .. "Y"] = point, Clamp(x, -150, 150), Clamp(y, -60, 60)
         end,
         Nudge = function(dx, dy)
             local c = C()
-            c[prefix .. "X"] = (c[prefix .. "X"] or 0) + dx
-            c[prefix .. "Y"] = (c[prefix .. "Y"] or 0) + dy
+            c[prefix .. "X"] = Clamp((c[prefix .. "X"] or 0) + dx, -150, 150)
+            c[prefix .. "Y"] = Clamp((c[prefix .. "Y"] or 0) + dy, -60, 60)
         end,
         Reset = function() ResetKeys(tab, { prefix .. "Point", prefix .. "X", prefix .. "Y", prefix .. "Parent" }) end,
         Options = function(p)
@@ -156,12 +159,12 @@ local function IconElement(tab, key, label, prefix, field, fallbackPoint, shown,
         end,
         set = function(point, x, y)
             local c = C()
-            c[prefix .. "Point"], c[prefix .. "X"], c[prefix .. "Y"] = point, x, y
+            c[prefix .. "Point"], c[prefix .. "X"], c[prefix .. "Y"] = point, Clamp(x, -150, 150), Clamp(y, -150, 150)
         end,
         Nudge = function(dx, dy)
             local c = C()
-            c[prefix .. "X"] = (c[prefix .. "X"] or 0) + dx
-            c[prefix .. "Y"] = (c[prefix .. "Y"] or 0) + dy
+            c[prefix .. "X"] = Clamp((c[prefix .. "X"] or 0) + dx, -150, 150)
+            c[prefix .. "Y"] = Clamp((c[prefix .. "Y"] or 0) + dy, -150, 150)
         end,
         getSize = function() local s = C()[prefix .. "Size"] or 16; return s, s end,
         setSize = function(w, h) C()[prefix .. "Size"] = max(8, min(64, Round(max(w, h)))) end,
@@ -187,7 +190,10 @@ local function AuraElement(tab, kind, label)
         move = "slot", slots = "sides", aligned = true,
         getSlot = function() return A().side or "TOP", A().align or "START" end,
         setSlot = function(side, align) A().side, A().align = side, align end,
-        Nudge = function(dx, dy) A().x = (A().x or 0) + dx; A().y = (A().y or 0) + dy end,
+        Nudge = function(dx, dy)
+            A().x = Clamp((A().x or 0) + dx, -200, 200)
+            A().y = Clamp((A().y or 0) + dy, -200, 200)
+        end,
         -- The grip sets the icon size: the box it would draw at that size.
         getSize = function()
             local a = A()
@@ -298,10 +304,10 @@ local function Elements(tab)
             shown = function() return CC().enabled and C().enabled end,
             move = "nudge",
             get = function() return CC().x or 0, -(CC().gap or 4) end,
-            set = function(x, y) CC().x = x; CC().gap = max(0, -y) end,
+            set = function(x, y) CC().x = Clamp(x, -300, 300); CC().gap = Clamp(-y, 0, 60) end,
             Nudge = function(dx, dy)
-                CC().x = (CC().x or 0) + dx
-                CC().gap = max(0, (CC().gap or 4) - dy)
+                CC().x = Clamp((CC().x or 0) + dx, -300, 300)
+                CC().gap = Clamp((CC().gap or 4) - dy, 0, 60)
             end,
             getSize = function()
                 local c = CC()

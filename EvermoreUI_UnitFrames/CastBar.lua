@@ -348,7 +348,9 @@ function CB.Layout(f, cfg)
             h:SetHeight(EV.Pixel:Snap(h, ht))
         end
     end
-    h:SetFrameStrata("MEDIUM")
+    -- The designer's copy keeps its window's strata; MEDIUM would put it
+    -- under the canvas.
+    if not h.isPreview then h:SetFrameStrata("MEDIUM") end
     h:SetFrameLevel(max(f:GetFrameLevel(), 2) + 8)
     h.over:SetFrameLevel(h.bar:GetFrameLevel() + 3)
 

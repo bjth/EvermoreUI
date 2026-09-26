@@ -606,8 +606,11 @@ end
 --- Late because Restyle() does NOT call Late: it runs Layout and SetUnit, so
 --- a settings change would otherwise retire every row and leave the plates on
 --- screen bare until each one respawned.
+local PreviewRows -- below
+
 local function Attach(f)
     local cfg = ns.module.db
+    if f.isPreview then PreviewRows(f, cfg) return end
     if not (f.unit and Supported()) then return end
 
     local rows = f.auraRows
@@ -634,8 +637,7 @@ local function Attach(f)
             if h then
                 -- Reparent the HOLDER. Never the container.
                 h:SetParent(f)
-                h:ClearAllPoints()
-                row.Place(h, f, cfg, h.iconW, h.iconH)
+                ns.PlaceAuraRow(h, f, cfg, row, h.iconW, h.iconH)
                 h:Show()
                 -- Rounded HERE, not by Layout. Layout's pass runs before this
                 -- one: the holders are created in Attach, which arrives from
@@ -658,6 +660,107 @@ local function Attach(f)
     end
     f.auraRows = rows
 end
+
+--------------------------------------------------------------------------------
+--  Placing a row
+--
+--  By default each row goes where its own Place puts it, on a 1x1 holder
+--  pinned by the corner its flow starts from, exactly as it always has.
+--  A row you've moved in the designer (cfg.auraPos[key]) gets a holder the
+--  size of the row, still with the container pinned inside it by that same
+--  corner, and is placed by the point you chose. The designer's copy always
+--  uses a sized holder, so it has a box to drag.
+--------------------------------------------------------------------------------
+local function RowBox(row, w, ih)
+    return row.count * w + (row.count - 1) * GAP, ih
+end
+
+function ns.PlaceAuraRow(h, f, cfg, row, w, ih, sized)
+    local pos = cfg.auraPos and cfg.auraPos[row.key]
+    h:ClearAllPoints()
+    if pos or sized then
+        local bw, bh = RowBox(row, w, ih)
+        h:SetSize(bw, bh)
+    else
+        h:SetSize(1, 1)
+    end
+    if not ns.PlaceAt(h, f.health, pos) then
+        row.Place(h, f, cfg, w, ih)
+    end
+end
+
+--- The rows' outer box relative to the bar, for the plate's size (Core.lua,
+--- Extent): only rows you've moved change it.
+function ns.AuraRowsExtent(cfg, height)
+    local above, below = 0, 0
+    if not cfg.auraPos then return 0, 0 end
+    for _, row in ipairs(ROWS) do
+        local pos = cfg[row.setting] and cfg.auraPos[row.key]
+        if pos then
+            local w, ih = IconSize(row, cfg)
+            local a, b = ns.ExtentOf(pos, ih, height)
+            above, below = max(above, a), max(below, b)
+        end
+    end
+    return above, below
+end
+
+--- The designer's copy: plain frames with sample icons, laid out like the
+--- real rows, so each row has a box to drag.
+local SAMPLE = {
+    mine = { 136207, 135817, 132337, 136118, 136139, 135849 },
+    cc   = { 136071, 132310 },
+    buff = { 135987, 136078, 135932 },
+}
+
+PreviewRows = function(f, cfg)
+    f.pvRows = f.pvRows or {}
+    for _, row in ipairs(ROWS) do
+        local h = f.pvRows[row.key]
+        if cfg[row.setting] then
+            local w, ih = IconSize(row, cfg)
+            if not h then
+                h = CreateFrame("Frame", nil, f)
+                h.icons = {}
+                f.pvRows[row.key] = h
+            end
+            ns.PlaceAuraRow(h, f, cfg, row, w, ih, true)
+            local list = SAMPLE[row.key] or SAMPLE.mine
+            for i = 1, row.count do
+                local t = h.icons[i]
+                if not t then
+                    t = CreateFrame("Frame", nil, h)
+                    t.back = t:CreateTexture(nil, "BACKGROUND")
+                    t.back:SetAllPoints()
+                    t.back:SetColorTexture(0, 0, 0, 1)
+                    t.icon = t:CreateTexture(nil, "ARTWORK")
+                    t.icon:SetPoint("TOPLEFT", 1, -1)
+                    t.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+                    t.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                    h.icons[i] = t
+                end
+                t:ClearAllPoints()
+                t:SetSize(w, ih)
+                local x = (i - 1) * (w + GAP)
+                if row.grow == "LEFT" then
+                    t:SetPoint("BOTTOMRIGHT", h, "BOTTOMRIGHT", -x, 0)
+                else
+                    t:SetPoint("BOTTOMLEFT", h, "BOTTOMLEFT", x, 0)
+                end
+                t.icon:SetTexture(list[(i - 1) % #list + 1])
+                t:Show()
+            end
+            h:Show()
+        elseif h then
+            h:Hide()
+        end
+    end
+end
+
+--- The designer's regions and facts for each row.
+ns.AURA_ROWS = ROWS
+ns.AuraIconSize = function(row, cfg) return IconSize(row, cfg) end
+ns.AURA_GAP, ns.AURA_FLANK, ns.AURA_LIFT = GAP, FLANK, LIFT
 
 ns.Widget{
     name = "auras",

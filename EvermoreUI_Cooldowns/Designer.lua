@@ -172,6 +172,18 @@ local function Build(stage)
     grid.ghost.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     grid.ghost:SetAlpha(0.85)
     grid.ghost:Hide()
+    -- Hidden mid-drag (combat, or the window closing): drop nothing. An
+    -- OnUpdate left running would fire the drop wherever the cursor happened
+    -- to be when the grid came back.
+    grid:SetScript("OnHide", function()
+        if dragging then
+            dragging.tile:SetAlpha(1)
+            dragging = nil
+        end
+        grid:SetScript("OnUpdate", nil)
+        grid.ghost:Hide()
+        grid.marker:Hide()
+    end)
     grid.marker = grid:CreateTexture(nil, "OVERLAY", nil, 7)
     grid.marker:SetColorTexture(T.RGBA("accent", 1))
     grid.marker:SetSize(3, ICON + 8)
@@ -359,12 +371,15 @@ EV.Designers:Register{
     Elements = function() return {} end,
     -- An untouched spec has no entry, and a restore to that state removes
     -- it again rather than leaving an empty one in your settings.
+    -- Each snapshot remembers whose it is, so switching spec with the window
+    -- open can't pour one spec's arrangement into another.
     Snapshot = function()
         local a = M:Arrangement(false)
-        return a and EV.CopyTable(a) or { none = true }
+        return { spec = M.SpecKey(), data = a and EV.CopyTable(a) or nil }
     end,
     Restore = function(_, snap)
-        M.db.arrange[M.SpecKey()] = (snap and not snap.none) and EV.CopyTable(snap) or nil
+        if not snap then return end
+        M.db.arrange[snap.spec or M.SpecKey()] = snap.data and EV.CopyTable(snap.data) or nil
         M:LayoutAll()
     end,
     Apply = function() M:LayoutAll() end,
