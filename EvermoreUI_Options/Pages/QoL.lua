@@ -123,6 +123,21 @@ EV.Options:RegisterPage{
                  L["Some NPCs ask for their menu to be shown on purpose. This overrides that. It is where most of the remaining clicks are, and also the only place this can skip something you wanted to read."],
                  { disabled = function() return not M.db.autoGossip end }))
 
+        local Win = EV:GetModule("Windows", true)
+        if Win then
+            p:Section(L["Windows"])
+            if not Win:IsEnabled() then
+                p:Note(L["Switched off on the Modules page."], 0.7)
+            else
+                p:Note(L["Drag Blizzard's windows (character, spellbook, merchant, quest log and the rest) by their title bar. They open where you left them."], 0.7)
+                p:Dual({ type = "toggle", text = L["Remember where they go"],
+                         tooltip = L["Off: windows go back to Blizzard's places at your next login."],
+                         get = function() return Win.db.remember end, set = function(v) Win.db.remember = v end },
+                       { type = "button", text = L["Put every window back"], label = L["Reset"], width = 100,
+                         onClick = function() Win:ResetAll() end })
+            end
+        end
+
         p:Note(L["Holding Shift as a vendor, loot or quest window opens skips everything here for that one interaction."])
 
         local ns = EV._ModuleNS and EV._ModuleNS["EvermoreUI_QoL"]

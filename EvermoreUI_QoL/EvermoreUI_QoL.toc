@@ -20,3 +20,4 @@ LootRolls.lua
 ReadyCheck.lua
 LootStats.lua
 LootLuck.lua
+Windows.lua

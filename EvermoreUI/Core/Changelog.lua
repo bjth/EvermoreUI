@@ -8,6 +8,7 @@ EvermoreUI.CHANGELOG = {
         sections = {
             { title = "New", items = {
                 "**Empty a bag**: Alt + click a bag on the bag bar to move everything in it into free space in your other bags, topping up part stacks first and keeping arrows, shards and herbs in their own bags. Then swap it out.",
+                "**Move Blizzard's windows**: drag the character sheet, spellbook, merchant, quest log and the rest by their title bar, and they open where you left them. Reset them all on the Quality of Life page.",
             } },
         },
     },
