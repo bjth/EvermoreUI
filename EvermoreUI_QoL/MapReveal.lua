@@ -2,7 +2,7 @@ if EV_BLOCKED then return end
 --------------------------------------------------------------------------------
 --  MapReveal.lua
 --  Show the whole world map: the parts of each zone you haven't explored are
---  drawn too, a little darker so you can still tell them apart.
+--  drawn as if you had. Optionally tinted darker so you can tell them apart.
 --
 --  The game only hands out the overlays you've explored
 --  (C_MapExplorationInfo.GetExploredMapTextures). Every overlay a map has is
@@ -22,10 +22,11 @@ local L = EV.L
 local ceil, max = math.ceil, math.max
 
 local M = EV:NewModule("MapReveal", {
-    shade = 0.55,   -- brightness of unexplored areas, 1 = as if explored
+    tint = false,   -- draw unexplored areas darker
+    shade = 0.6,    -- their brightness when tinted
 })
 M.title = "Whole Map"
-M.description = "Shows the parts of the world map you haven't explored yet, a little darker."
+M.description = "Reveals the whole world map, including the parts you haven't explored yet."
 ns.mapReveal = M
 
 local overlays = setmetatable({}, { __mode = "k" })   -- pin -> our frame
@@ -90,7 +91,7 @@ local function Draw(pin)
     local TW, TH = info.tileWidth, info.tileHeight
     local layer, sub = "ARTWORK", 0
     if pin.dataProvider and pin.dataProvider.GetDrawLayer then layer, sub = pin.dataProvider:GetDrawLayer() end
-    local shade = M.db.shade or 1
+    local shade = M.db.tint and (M.db.shade or 1) or 1
 
     for _, e in ipairs(list) do
         if not have[e[5]] then
