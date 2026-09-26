@@ -42,6 +42,11 @@ full frames addon.
   quest count and each row of auras anywhere around the bar, move the mana
   strip and cast bar up or down, flip combo points between edges, and
   resize by the corner. Nothing moves until you move it.
+- **Everything in the designer**: every Unit Frames and Nameplates setting
+  now lives in the designer, with the part it belongs to. The frame or
+  plate as a whole (size, colours, fading, the aggro glow, threat, target
+  highlighting, how plates move) is under Frame or Plate behaviour in its
+  list. Their options pages open the designer.
 
 ### Changed
 - **More ways to style a frame**: border from 0 to 8 pixels in any colour,

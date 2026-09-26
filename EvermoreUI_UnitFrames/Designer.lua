@@ -254,22 +254,7 @@ local function AuraElement(tab, kind, label)
             A().enabled = keep
         end,
         Options = function(p)
-            local X = Controls(tab)
-            local b = kind .. "."
-            p:Row(X.T(b .. "enabled", kind == "debuffs" and L["Show debuffs"] or L["Show buffs"]))
-            p:Row(X.T(b .. "onlyMine", L["Only mine"]))
-            p:Row(X.D(b .. "side", L["Side"], SIDES4, 120))
-            p:Row(X.D(b .. "align", L["Start from"], STARTS, 130))
-            p:Row(X.S(b .. "size", L["Icon size"], 10, 60, 1))
-            p:Row(X.S(b .. "perRow", L["Per row"], 1, 20, 1))
-            p:Row(X.S(b .. "max", L["Most shown"], 1, 40, 1))
-            p:Row(X.S(b .. "spacing", L["Spacing"], 0, 12, 1))
-            p:Row(X.S(b .. "x", L["Nudge across"], -200, 200, 1))
-            p:Row(X.S(b .. "y", L["Nudge up and down"], -200, 200, 1))
-            p:Row(X.T(b .. "showTimer", L["Time left"]))
-            if not (C and C.Supported()) then
-                p:Note(L["This client has no aura containers, so these only show here."])
-            end
+            ns.Settings(p, tab, { sections = { [label] = true } })
         end,
     }
 end
@@ -290,35 +275,21 @@ local function Elements(tab)
             C().width = max(60, min(500, w))
             C().height = max(12, min(100, h))
         end,
-        Reset = function() ResetKeys(tab, { "width", "height", "powerHeight", "borderSize" }) end,
+        -- The whole frame back to its defaults. Where it sits on screen is
+        -- edit mode's and stays.
+        Reset = function()
+            local c = M.db[tab]
+            wipe(c)
+            EV.DB.Merge(c, M.DEFAULTS[tab])
+        end,
         Options = function(p)
-            local X = Controls(tab)
-            p:Row(X.T("enabled", L["Show this frame"]))
-            p:Section(L["Size"])
-            p:Row(X.S("width", L["Width"], 60, 500, 1))
-            p:Row(X.S("height", L["Height"], 12, 100, 1))
-            p:Row(X.S("powerHeight", L["Power bar height"], 0, 30, 1, L["0 hides the power bar."]))
-            p:Section(L["Bars"])
-            p:Row(X.D("texture", L["Texture"], TEXTURES, 170,
-                      L["Includes textures from other addons that share them through LibSharedMedia."]))
-            p:Row(X.D("healthColour", L["Health colour"], HEALTH_COLOURS, 170))
-            p:Row(X.C("healthCustom", L["Your health colour"], X.Off("healthColour", "custom")))
-            p:Row(X.D("powerColour", L["Power colour"], POWER_COLOURS, 170))
-            p:Row(X.C("powerCustom", L["Your power colour"], X.Off("powerColour", "custom")))
-            p:Row(X.S("barShade", L["Bar brightness"], 0.5, 1, 0.05))
-            p:Row(X.T("healPrediction", L["Incoming heals"]))
-            p:Section(L["Border and background"])
-            p:Row(X.S("borderSize", L["Border thickness"], 0, 8, 1, L["In pixels. 0 is no border."]))
-            p:Row(X.C("borderColour", L["Border colour"]))
-            p:Row(X.C("bgColour", L["Background colour"]))
-            p:Row(X.S("bgAlpha", L["Background opacity"], 0, 1, 0.05))
-            p:Row(X.T("innerShadow", L["Inset shading"]))
-            p:Section(L["Text"])
-            p:Row(X.D("font", L["Font"], FONTS, 190))
-            p:Row(X.S("fontSize", L["Font size"], 8, 24, 1))
-            p:Row(X.S("powerFontSize", L["Power text size"], 0, 24, 1, L["0 is two points under the font size."]))
-            p:Row(X.D("textStyle", L["Text edge"], TEXT_STYLE, 190))
-            p:Note(L["Where the frame sits on your screen is edit mode's job: /evui edit. The aggro glow, fading and click casting are on the Unit Frames page."])
+            ns.Settings(p, tab, { sections = {
+                [L["Frame"]] = true, [L["Position"]] = true, [L["Colours and texture"]] = true,
+                [L["Text"]] = { font = true, textStyle = true, fontSize = true, powerFontSize = true },
+                [L["Classic"]] = true, [L["Fade out of combat"]] = true, [L["Aggro glow"]] = true,
+                [L["Cast bar, buffs and debuffs"]] = true,
+            } })
+            p:Note(L["Reset (top right) puts this whole frame back to its defaults; where it sits on screen stays."])
         end,
     }
     Add{
@@ -329,11 +300,7 @@ local function Elements(tab)
         getSlot = function() return C().portraitSide == "right" and "RIGHT" or "LEFT" end,
         setSlot = function(side) C().portraitSide = side == "RIGHT" and "right" or "left" end,
         Reset = function() ResetKeys(tab, { "portrait", "portraitSide" }) end,
-        Options = function(p)
-            local X = Controls(tab)
-            p:Row(X.D("portrait", L["Style"], PORTRAITS, 150))
-            p:Row(X.D("portraitSide", L["Side"], { { value = "left", text = L["Left"] }, { value = "right", text = L["Right"] } }, 120))
-        end,
+        Options = function(p) ns.Settings(p, tab, { sections = { [L["Portrait"]] = true } }) end,
     }
     local name = TextElement(tab, "name", L["Name"], "name", "nameText", "health",
         function() return C().showName end)
@@ -396,27 +363,7 @@ local function Elements(tab)
                 ResetKeys(tab, { "width", "height", "gap", "x", "icon", "iconSide" }, "castbar")
                 CC().enabled = keep
             end,
-            Options = function(p)
-                local X = Controls(tab)
-                p:Row(X.T("castbar.enabled", L["Show a cast bar"]))
-                p:Row(X.T("castbar.detached", L["Place it in edit mode instead"],
-                          L["Off: it hangs under the frame and moves with it. On: it's an element of its own in edit mode, and shows under the frame here only so you can style it."]))
-                p:Row(X.S("castbar.height", L["Height"], 4, 60, 1))
-                p:Row(X.S("castbar.width", L["Width"], 0, 600, 1, L["0 matches the frame's width."]))
-                p:Row(X.S("castbar.gap", L["Gap under the frame"], 0, 60, 1))
-                p:Row(X.S("castbar.x", L["Nudge sideways"], -300, 300, 1))
-                p:Row(X.T("castbar.icon", L["Spell icon"]))
-                p:Row(X.D("castbar.iconSide", L["Icon side"], { { value = "LEFT", text = L["Left"] }, { value = "RIGHT", text = L["Right"] } }, 120))
-                p:Row(X.T("castbar.showName", L["Spell name"]))
-                p:Row(X.T("castbar.showTime", L["Time left"]))
-                p:Row(X.S("castbar.fontSize", L["Font size"], 7, 24, 1))
-                p:Row(X.T("castbar.spark", L["Spark"]))
-                p:Row(X.D("castbar.texture", L["Texture"], function()
-                    local list = { { value = "", text = L["Same as the frame"] } }
-                    for _, t in ipairs(TEXTURES()) do list[#list + 1] = t end
-                    return list
-                end, 170))
-            end,
+            Options = function(p) ns.Settings(p, tab, { sections = { [L["Cast bar"]] = true } }) end,
         }
         Add(AuraElement(tab, "debuffs", L["Debuffs"]))
         Add(AuraElement(tab, "buffs", L["Buffs"]))
@@ -446,16 +393,7 @@ local function Elements(tab)
                 ResetKeys(tab, { "side", "height", "spacing", "width", "x", "y" }, "classPower")
                 CP().enabled = keep
             end,
-            Options = function(p)
-                local X = Controls(tab)
-                p:Row(X.T("classPower.enabled", L["Show combo points"]))
-                p:Row(X.D("classPower.side", L["Side"], SIDES2, 120))
-                p:Row(X.S("classPower.height", L["Height"], 2, 30, 1))
-                p:Row(X.S("classPower.width", L["Width"], 0, 500, 1, L["0 matches the frame's width."]))
-                p:Row(X.S("classPower.spacing", L["Spacing"], 0, 12, 1))
-                p:Row(X.C("classPower.colour", L["Colour"]))
-                p:Row(X.T("classPower.hideEmpty", L["Hide when empty out of combat"]))
-            end,
+            Options = function(p) ns.Settings(p, tab, { sections = { [L["Combo points"]] = true } }) end,
         }
     end
 
@@ -479,15 +417,7 @@ local function Elements(tab)
                 ResetKeys(tab, { "size", "spacing", "side", "align", "x", "y" }, "totems")
                 TT().enabled = keep
             end,
-            Options = function(p)
-                local X = Controls(tab)
-                p:Row(X.T("totems.enabled", L["Show totems"]))
-                p:Row(X.D("totems.side", L["Side"], SIDES2, 120))
-                p:Row(X.D("totems.align", L["Start from"], STARTS, 130))
-                p:Row(X.S("totems.size", L["Size"], 12, 60, 1))
-                p:Row(X.S("totems.spacing", L["Spacing"], 0, 20, 1))
-                p:Row(X.T("totems.showTimer", L["Time left"]))
-            end,
+            Options = function(p) ns.Settings(p, tab, { sections = { [L["Totems"]] = true } }) end,
         }
     end
     return list

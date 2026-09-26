@@ -911,6 +911,15 @@ function UI:Open(key, which)
     self:Show(key, which)
 end
 
+-- Edit mode (the Position section's Open button, or /evui edit) places whole
+-- frames on the screen; the two don't share the screen. Keep what's been done
+-- here and step out of its way.
+local listener = EV:NewModule("Designer")
+listener.internal = true
+listener:RegisterMessage("EV_UNLOCK", function()
+    if win and win:IsShown() then UI:Save() end
+end)
+
 -- Combat: step aside and keep the session.
 local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_REGEN_DISABLED")

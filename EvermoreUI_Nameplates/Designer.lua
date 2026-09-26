@@ -127,26 +127,12 @@ local function Elements()
         end,
         Reset = function() C().width, C().height = 196, 26 end,
         Options = function(p)
-            local X = Controls()
-            p:Section(L["Size"])
-            p:Row(X.S("width", L["Width"], 60, 320, 2))
-            p:Row(X.S("height", L["Height"], 8, 48, 2))
-            p:Row(X.S("scale", L["Overall scale"], 0.6, 2, 0.05))
-            p:Section(L["Look"])
-            p:Row(X.D("texture", L["Texture"], Textures, 170,
-                      L["Includes textures from other addons that share them through LibSharedMedia."]))
-            p:Row(X.D("healthColour", L["Health colour"], HEALTH_COLOURS, 170))
-            p:Row(X.S("barShade", L["Bar brightness"], 0.5, 1, 0.05))
-            p:Row(X.S("borderSize", L["Border thickness"], 1, 3, 1))
-            p:Row(X.T("innerShadow", L["Inset shading"]))
-            p:Section(L["Text"])
-            p:Row(X.D("textLeft", L["Left of the bar"], SLOT_SIDE, 170))
-            p:Row(X.D("textCentre", L["Middle of the bar"], SLOT_CENTRE, 170))
-            p:Row(X.D("textRight", L["Right of the bar"], SLOT_SIDE, 170))
-            p:Row(X.D("healthText", L["Health format"], HEALTH_TEXT, 170))
-            p:Row(X.S("fontSize", L["Font size"], 8, 20, 1))
-            p:Row(X.D("textStyle", L["Text edge"], TEXT_STYLE, 190))
-            p:Note(L["Width and height move in steps of two: the plate is centred on the game's, and an odd size puts its edges on half pixels. Threat, target highlighting and movement are on the Nameplates page: they're about behaviour rather than where things sit."])
+            ns.Settings(p, { sections = {
+                [L["Plate"]] = { scale = true, targetScale = true, width = true, height = true, texture = true,
+                                 healthColour = true, barShade = true, typeColour = true, typeInInstancesOnly = true },
+                [L["Text"]] = true,
+            } })
+            p:Note(L["Width and height move in steps of two: the plate is centred on the game's, and an odd size puts its edges on half pixels."])
         end,
     }
 
@@ -172,7 +158,7 @@ local function Elements()
         function(v) C().questPos = v end,
         function() return { own = "BOTTOMRIGHT", rel = "TOPRIGHT", x = 0, y = 3 } end,
         function() return C().showQuest end, nil,
-        function(p) p:Row(Controls().T("showQuest", L["Quest objective count"])) end)
+        function(p) ns.Settings(p, { sections = { [L["Text"]] = { showQuest = true, fontSize = true } } }) end)
     quest.text = true
     Add(quest)
 
@@ -192,12 +178,7 @@ local function Elements()
             function(v) C().auraPos = C().auraPos or {}; C().auraPos[key] = v end,
             Fallback,
             function() return C()[row.setting] end, nil,
-            function(p)
-                local X = Controls()
-                p:Row(X.T(row.setting, LABEL[key] or key))
-                p:Row(X.S("auraSize", L["Icon size"], 12, 32, 1))
-                p:Note(L["A change of icon size rebuilds the icon pools: the client fixes an aura group's element size when the group is created."])
-            end))
+            function(p) ns.Settings(p, { sections = { [L["Auras"]] = true } }) end))
     end
 
     Add{
@@ -212,11 +193,7 @@ local function Elements()
         setSize = function(_, h) C().powerHeight = max(2, min(16, Round(h))) end,
         Reset = function() C().powerGap, C().powerHeight = 0, 8 end,
         Options = function(p)
-            local X = Controls()
-            p:Row(X.T("showPower", L["Show the mob's resource"]))
-            p:Row(X.D("powerMode", L["Which units"], POWER_MODE, 190))
-            p:Row(X.S("powerHeight", L["Strip height"], 2, 16, 1))
-            p:Row(X.S("powerGap", L["Gap below the plate"], 0, 10, 1))
+            ns.Settings(p, { sections = { [L["Power"]] = true } })
             p:Note(L["Shown with a sample of mana here; on real plates only units with the resource have it."])
         end,
     }
@@ -233,12 +210,7 @@ local function Elements()
         setSize = function(_, h) C().castHeight = max(4, min(20, Round(h))) end,
         Reset = function() C().castGap, C().castHeight = 0, 14 end,
         Options = function(p)
-            local X = Controls()
-            p:Row(X.T("showCast", L["Show cast bar"]))
-            p:Row(X.S("castHeight", L["Cast bar height"], 0, 20, 1))
-            p:Row(X.S("castGap", L["Gap above the cast bar"], 0, 10, 1))
-            p:Row(X.T("showCastText", L["Spell name and time"]))
-            p:Row(X.T("showCastTarget", L["Who it is aimed at"]))
+            ns.Settings(p, { sections = { [L["Cast bar"]] = true } })
         end,
     }
 
@@ -266,16 +238,23 @@ local function Elements()
                 c.comboWidth, c.comboHeight, c.comboSpacing, c.comboSpot, c.comboY = 12, 6, 2, "bottom", 0
             end,
             Options = function(p)
-                local X = Controls()
-                p:Row(X.T("comboPoints", L["On your target's plate"]))
-                p:Row(X.S("comboWidth", L["Pip width"], 4, 30, 1))
-                p:Row(X.S("comboHeight", L["Pip height"], 2, 16, 1))
-                p:Row(X.S("comboSpacing", L["Spacing"], 0, 10, 1))
-                p:Row(X.S("comboY", L["Nudge up or down"], -30, 30, 1))
-                p:Row(X.C("comboColour", L["Colour"], { 1, 0.86, 0.1 }))
+                ns.Settings(p, { sections = { [L["Combo points"]] = true } })
             end,
         }
     end
+    -- Not a part of the plate you can point at: how plates behave. Listed,
+    -- not drawn.
+    Add{
+        key = "behaviour", label = L["Plate behaviour"],
+        Options = function(p)
+            ns.Settings(p, { sections = {
+                [L["Plate"]] = { offscreenPlates = true, stackPlates = true, plateMotionSpeed = true, pixelMode = true,
+                                 pinPlateScale = true, verticalOffset = true, friendlyVerticalOffset = true,
+                                 doFriendly = true },
+                [L["Aggro"]] = true, [L["Threat"]] = true, [L["Target"]] = true, [L["Execute range"]] = true,
+            } })
+        end,
+    }
     return list
 end
 
