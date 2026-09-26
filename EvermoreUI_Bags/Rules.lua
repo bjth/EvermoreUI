@@ -117,12 +117,32 @@ local TESTS = {
     end,
     set = function(_, i) return i.inSet and true or false end,
     novalue = function(_, i) return i.noValue and true or false end,
+    -- Used by search terms.
+    typename = function(r, i)
+        local v = tostring(r.value or ""):lower()
+        if v == "" then return false end
+        local _, itype, isub = C_Item.GetItemInfoInstant(i.id)
+        return (type(itype) == "string" and itype:lower():find(v, 1, true) ~= nil)
+            or (type(isub) == "string" and isub:lower():find(v, 1, true) ~= nil)
+    end,
+    boe = function(_, i)
+        local text = ITEM_BIND_ON_EQUIP and ITEM_BIND_ON_EQUIP:lower()
+        return not i.bound and text ~= nil and Tooltip(i):find(text, 1, true) ~= nil
+    end,
+    new = function(_, i) return i.new and true or false end,
+    junk = function(_, i) return i.quality == 0 and not i.noValue end,
+    quest = function(_, i) return i.class == 12 or i.quest and true or false end,
     ids = function(r, i)
         local set = idCache[r]
         if not set then set = IDs(r.value); idCache[r] = set end
         return set[i.id] or false
     end,
 }
+
+function R.Test(r, i)
+    local test = TESTS[r.kind]
+    return test and test(r, i) or false
+end
 
 --- Does this section take the item? Items put in it by hand always match.
 function R.Matches(section, i)
@@ -226,3 +246,109 @@ function R.New(kind)
     else r.value = "" end
     return r
 end
+
+--------------------------------------------------------------------------------
+--  Search terms
+--
+--  Words are ANDed; "|" separates alternatives; "!" or "-" in front negates.
+--    potion            name contains potion
+--    #herb             type or subtype contains herb
+--    ilvl>20 ilvl<=30  item level (gear)
+--    q>=rare  q:epic   quality by name or number (poor 0 ... legendary 5)
+--    boe  bop  set  junk  new  quest  novalue
+--    tip:use           tooltip contains "use"
+--    in:gathering      the section's name contains "gathering"
+--------------------------------------------------------------------------------
+local QUALITY = { poor = 0, grey = 0, gray = 0, common = 1, white = 1, uncommon = 2, green = 2,
+                  rare = 3, blue = 3, epic = 4, purple = 4, legendary = 5, orange = 5, artifact = 6, heirloom = 7 }
+
+local function Op(sym)
+    if sym == ">=" then return "atleast", 0 end
+    if sym == ">" then return "atleast", 1 end
+    if sym == "<=" then return "atmost", 0 end
+    if sym == "<" then return "atmost", -1 end
+    return "is", 0
+end
+
+local function Term(word)
+    local neg = false
+    local first = word:sub(1, 1)
+    if (first == "!" or first == "-") and #word > 1 then neg, word = true, word:sub(2) end
+    local lw = word:lower()
+    local t
+
+    local field, sym, val = lw:match("^(%a+)([<>=:]+)(.+)$")
+    if field == "ilvl" or field == "il" then
+        local op, shift = Op(sym)
+        local n = tonumber(val)
+        if n then t = { kind = "ilvl", op = op, value = n + shift } end
+    elseif field == "q" or field == "quality" then
+        local op, shift = Op(sym == ":" and "=" or sym)
+        local n = tonumber(val) or QUALITY[val]
+        if n then t = { kind = "quality", op = op, value = n + shift } end
+    elseif field == "tip" or field == "tt" then
+        t = { kind = "tooltip", value = val }
+    elseif field == "in" or field == "s" then
+        t = { kind = "section", value = val }
+    elseif field == "id" then
+        t = { kind = "ids", value = val }
+    end
+    if not t then
+        if lw:sub(1, 1) == "#" and #lw > 1 then t = { kind = "typename", value = lw:sub(2) }
+        elseif lw == "boe" then t = { kind = "boe" }
+        elseif lw == "bop" or lw == "soulbound" then t = { kind = "bound", value = "yes" }
+        elseif lw == "set" or lw == "sets" then t = { kind = "set" }
+        elseif lw == "junk" then t = { kind = "junk" }
+        elseif lw == "new" then t = { kind = "new" }
+        elseif lw == "quest" then t = { kind = "quest" }
+        elseif lw == "novalue" then t = { kind = "novalue" }
+        else t = { kind = "text", value = lw } end
+    end
+    t.neg = neg
+    return t
+end
+
+--- Parse what's typed into the search box; nil for nothing.
+function R.ParseSearch(text)
+    text = strtrim(text or "")
+    if text == "" then return nil end
+    local q = {}
+    for alt in (text .. "|"):gmatch("([^|]*)|") do
+        local terms = {}
+        for word in alt:gmatch("%S+") do terms[#terms + 1] = Term(word) end
+        if #terms > 0 then q[#q + 1] = terms end
+    end
+    return #q > 0 and q or nil
+end
+
+local function TermMatches(t, i, sectionLabel)
+    if t.kind == "text" then
+        return Name(i):find(t.value, 1, true) ~= nil or TESTS.typename({ value = t.value }, i)
+    elseif t.kind == "section" then
+        return type(sectionLabel) == "string" and sectionLabel:lower():find(t.value, 1, true) ~= nil
+    end
+    return R.Test(t, i)
+end
+
+function R.SearchMatches(q, i, sectionLabel)
+    for _, terms in ipairs(q) do
+        local all = true
+        for _, t in ipairs(terms) do
+            local ok = TermMatches(t, i, sectionLabel) and true or false
+            if ok == t.neg then all = false; break end
+        end
+        if all then return true end
+    end
+    return false
+end
+
+R.SEARCH_HELP = {
+    L["Words must all match; | means or; ! or - in front means not."],
+    L["potion - name contains it"],
+    L["#herb - type or subtype contains it"],
+    L["ilvl>20, ilvl<=30 - item level of gear"],
+    L["q>=rare, q:epic - quality"],
+    L["boe, bop, set, junk, new, quest, novalue"],
+    L["tip:use - tooltip contains it"],
+    L["in:gathering - section name contains it"],
+}

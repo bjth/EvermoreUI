@@ -14,6 +14,12 @@ Small comforts while the bag addon is built.
   sold, item IDs), matching every rule or any. Drop an item on a section's
   title to keep it there. Reorder, fold and switch sections off; sort by
   quality, item level, name or ID; item level on gear. Interface > Bags.
+- **Ready-made sets**: add a Gatherer, Dungeons and raids or Levelling set
+  of sections in one click, and share your whole setup as a line of text.
+- **Search terms**: `#herb` for a type, `ilvl>20`, `q>=rare`, `boe`, `bop`,
+  `set`, `junk`, `new`, `quest`, `tip:use` for tooltip text, `in:gathering`
+  for a section, `|` for or and `!` for not. Hover the search box for the
+  list. Searching hides what doesn't match (or dims it, if you prefer).
 - **Empty a bag**: Alt + click a bag on the bag bar to move everything in
   it into free space in your other bags, topping up part stacks first and
   keeping arrows, shards and herbs in their own bags. Then swap it out.

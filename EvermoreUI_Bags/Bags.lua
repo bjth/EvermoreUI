@@ -87,6 +87,7 @@ local M = EV:NewModule("Bags", {
     collapsed  = {},                   -- [key] = true
     sort       = "quality",            -- within a section: quality, name, ilvl, id
     ilvl       = true,                 -- item level on gear
+    searchHide = true,                 -- searching hides what doesn't match (off: dims it)
     point      = { "BOTTOMRIGHT", -60, 110 },
 })
 M.title = "Bags"
@@ -118,7 +119,7 @@ local function Read(bag, slot)
     local i = {
         bag = bag, slot = slot, id = info.itemID, icon = info.iconFileID, count = info.stackCount,
         locked = info.isLocked, quality = info.quality, readable = info.isReadable, link = info.hyperlink,
-        filtered = info.isFiltered, noValue = info.hasNoValue, bound = info.isBound,
+        filtered = false, noValue = info.hasNoValue, bound = info.isBound,
     }
     local _, _, _, _, _, class, sub = C_Item.GetItemInfoInstant(info.itemID)
     i.class, i.sub = class, sub
@@ -183,7 +184,15 @@ end
 
 function M.NewSection(name)
     local db = M.db
-    local key = ("c%d%03d"):format(time(), math.random(0, 999))
+    -- Unique within the saved setup (and across imports): time, then a count
+    -- until nothing has the key already.
+    local key, n = nil, #db.custom
+    repeat
+        n = n + 1
+        key = ("c%d_%d"):format(time(), n)
+        local taken = false
+        for _, sec in ipairs(db.custom) do if sec.key == key then taken = true; break end end
+    until not taken
     local sec = { key = key, name = name or L["New section"], on = true, match = "all", rules = {}, items = {} }
     db.custom[#db.custom + 1] = sec
     return sec
@@ -378,6 +387,7 @@ local function ItemLevelText(b, i, size)
 end
 
 local freeText = {}
+local labelOf = setmetatable({}, { __mode = "k" })   -- button -> its section's name, for in: searches
 
 --- Read every bag, sort into sections, lay out. Called on BAG_UPDATE_DELAYED
 --- and when the window opens or settings change.
@@ -399,13 +409,17 @@ function M:Build()
             used[b] = true
             if i then
                 local c = CategoryOf(i, all)
-                local s = byKey[c.key]
-                if not s then
-                    s = { cat = c, items = {} }
-                    byKey[c.key] = s
-                    sections[#sections + 1] = s
+                labelOf[b] = c.label
+                if M.query then i.filtered = not Rules.SearchMatches(M.query, i, c.label) end
+                if not (i.filtered and db.searchHide) then
+                    local s = byKey[c.key]
+                    if not s then
+                        s = { cat = c, items = {} }
+                        byKey[c.key] = s
+                        sections[#sections + 1] = s
+                    end
+                    s.items[#s.items + 1] = { b = b, i = i }
                 end
-                s.items[#s.items + 1] = { b = b, i = i }
             else
                 local fam = BagFamily(bag)
                 freeCount[fam] = (freeCount[fam] or 0) + 1
@@ -425,7 +439,7 @@ function M:Build()
     local shown = {}
     for n, s in ipairs(sections) do
         local h = Header(n)
-        local folded = db.collapsed[s.cat.key]
+        local folded = db.collapsed[s.cat.key] and not M.query
         h.key, h.label = s.cat.key, s.cat.label
         h:ClearAllPoints()
         h:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
@@ -499,7 +513,10 @@ function M:Repaint()
         for slot, b in pairs(list) do
             if b:IsShown() then
                 local i = Read(bag, slot)
-                if i then Paint(b, i) end
+                if i then
+                    if M.query then i.filtered = not Rules.SearchMatches(M.query, i, labelOf[b]) end
+                    Paint(b, i)
+                end
             end
         end
     end
@@ -528,8 +545,16 @@ local function BuildWindow()
     content:SetPoint("TOPLEFT", win.body, "TOPLEFT", PAD, -(TOP - 32))
 
     local search = W.SearchBox(win.titleBar, 160, function(text)
-        pcall(C_Container.SetItemSearch, text or "")
+        M.query = Rules.ParseSearch(text)
+        M:Build()
     end, L["Search"])
+    search:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(L["Search"])
+        for _, line in ipairs(Rules.SEARCH_HELP) do GameTooltip:AddLine(line, 0.8, 0.8, 0.8, true) end
+        GameTooltip:Show()
+    end)
+    search:HookScript("OnLeave", function() GameTooltip:Hide() end)
     search:SetHeight(20)
     search:SetPoint("RIGHT", win.closeButton or win.titleBar, win.closeButton and "LEFT" or "RIGHT", -8, 0)
     win.search = search
@@ -554,7 +579,7 @@ local function BuildWindow()
         M:Build()
     end)
     win:HookScript("OnHide", function()
-        pcall(C_Container.SetItemSearch, "")
+        M.query = nil
         search:SetText("")
         if C_NewItems and C_NewItems.ClearAll and M.db.clearNew ~= false then pcall(C_NewItems.ClearAll) end
     end)
@@ -654,7 +679,6 @@ function M:OnEnable()
     self:RegisterEvent("QUEST_ACCEPTED", Rebuild)
     self:RegisterEvent("ITEM_LOCK_CHANGED", function() M:Repaint() end)
     self:RegisterEvent("BAG_UPDATE_COOLDOWN", function() M:Repaint() end)
-    self:RegisterEvent("INVENTORY_SEARCH_UPDATE", function() M:Repaint() end)
     self:RegisterEvent("PLAYER_MONEY", function() if win and win:IsShown() then win.money:SetText(EV:FormatMoney(GetMoney())) end end)
 end
 

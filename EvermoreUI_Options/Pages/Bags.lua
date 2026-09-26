@@ -12,7 +12,7 @@ if not M then return end
 local ns = EV._ModuleNS and EV._ModuleNS["EvermoreUI_Bags"]
 local R = ns and ns.Rules
 
-local TAB_GENERAL, TAB_SECTIONS = L["General"], L["Sections"]
+local TAB_GENERAL, TAB_SECTIONS, TAB_SETS = L["General"], L["Sections"], L["Sets"]
 local selected   -- key of your section being edited
 
 local SORTS = {
@@ -43,6 +43,9 @@ local function General(p)
     p:Section(L["Items"])
     p:Dual({ type = "dropdown", text = L["Order within a section"], width = 200, values = SORTS, get = G("sort"), set = S("sort") },
            { type = "toggle", text = L["Item level on gear"], get = G("ilvl"), set = S("ilvl") })
+    p:Dual({ type = "toggle", text = L["Searching hides the rest"],
+             tooltip = L["Off: items that don't match stay, dimmed. Hover the search box for what you can type."],
+             get = G("searchHide"), set = S("searchHide") }, nil)
     p:Note(L["Alt + click a bag on the bag bar to empty it into the others. Drop an item on a section's title in your bags to keep it in that section; click a title to fold it."], 0.7)
 end
 
@@ -224,16 +227,46 @@ local function Sections(p)
     end
 end
 
+--------------------------------------------------------------------------------
+--  Sets: ready-made, and sharing yours
+--------------------------------------------------------------------------------
+local function SetsTab(p)
+    local Sets = ns and ns.Sets
+    if not Sets then return end
+    p:Section(L["Ready-made sets"])
+    p:Note(L["Adds the set's sections to yours and moves them to the top. A section of yours with the same name takes the set's rules. Nothing else changes."], 0.7)
+    for _, set in ipairs(Sets.READY) do
+        p:Row{ type = "button", text = set.name, label = L["Add"], width = 90, tooltip = set.description,
+               onClick = function() Sets.Apply(set); EV.Options:Rebuild() end }
+    end
+    p:Section(L["Share"])
+    p:Note(L["Your whole setup (your sections, the order, which built-in sections are on, and items you've dropped on sections) as one line of text."], 0.7)
+    p:Dual({ type = "button", text = L["Copy your setup"], label = L["Export"], width = 100,
+             onClick = function()
+                 W.ShowCopyText(L["Bag sections"], Sets.Export(), L["Paste it into Import on another character, or share it."])
+             end },
+           { type = "button", text = L["Use a shared setup"], label = L["Import"], width = 100,
+             onClick = function()
+                 W.ShowPasteText(L["Bag sections"], L["This replaces your sections and their order."], L["Import"], function(text)
+                     local ok, err = Sets.Import(text)
+                     if not ok then return err end
+                     EV.Options:Rebuild()
+                 end)
+             end })
+end
+
 EV.Options:RegisterPage{
     key = "bags", title = L["Bags"], group = "Interface", module = "Bags",
     description = L["All your bags in one window, split into sections by category. Replaces Blizzard's bag windows."],
-    tabs = { TAB_GENERAL, TAB_SECTIONS },
+    tabs = { TAB_GENERAL, TAB_SECTIONS, TAB_SETS },
     build = function(p, tab)
-        if tab == TAB_SECTIONS then Sections(p) else General(p) end
+        if tab == TAB_SECTIONS then Sections(p)
+        elseif tab == TAB_SETS then SetsTab(p)
+        else General(p) end
     end,
     onReset = function(tab)
-        if tab == TAB_SECTIONS then return end
-        for _, k in ipairs({ "columns", "size", "spacing", "sort", "ilvl" }) do M.db[k] = M.defaults[k] end
+        if tab ~= TAB_GENERAL then return end
+        for _, k in ipairs({ "columns", "size", "spacing", "sort", "ilvl", "searchHide" }) do M.db[k] = M.defaults[k] end
         M:Refresh()
     end,
 }
