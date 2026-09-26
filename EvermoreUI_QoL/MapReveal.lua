@@ -3,10 +3,12 @@ if EV_BLOCKED then return end
 --  MapReveal.lua
 --  Show the whole world map: the parts of each zone you haven't explored are
 --  drawn as if you had. Optionally tinted darker so you can tell them apart.
+--  Switched on and off from the Quality of Life page, live, no reload.
 --
 --  The game only hands out the overlays you've explored
 --  (C_MapExplorationInfo.GetExploredMapTextures). Every overlay a map has is
---  in MapData.lua, built from the game's own map tables. Blizzard's
+--  in MapData.lua, built from the game's own map tables for Forever's client
+--  (its map art is its own, not classic era's). Blizzard's
 --  exploration pin draws the explored ones; after each of its refreshes we
 --  draw the rest on a frame of our own laid over the pin, with the same
 --  tiling maths, so nothing of Blizzard's pin or its texture pools is touched.
@@ -22,11 +24,15 @@ local L = EV.L
 local ceil, max = math.ceil, math.max
 
 local M = EV:NewModule("MapReveal", {
+    enabled = true, -- reveal the unexplored parts at all
     tint = false,   -- draw unexplored areas darker
     shade = 0.6,    -- their brightness when tinted
 })
 M.title = "Whole Map"
 M.description = "Reveals the whole world map, including the parts you haven't explored yet."
+-- The switch lives on the Quality of Life page, not the Modules page: it is
+-- one setting, and it applies without a reload.
+M.internal = true
 ns.mapReveal = M
 
 local overlays = setmetatable({}, { __mode = "k" })   -- pin -> our frame
@@ -47,12 +53,15 @@ local function Clear(f)
     f.used = 0
 end
 
-local function Texture(f, layer, sub)
+local function Texture(f, canvas, layer, sub)
     f.used = f.used + 1
     local t = f.textures[f.used]
     if not t then
         t = f:CreateTexture(nil, layer, nil, sub)
         f.textures[f.used] = t
+        -- Clipped to the map's scroll area like Blizzard's own overlays, so
+        -- nothing spills past the frame when zoomed in.
+        if canvas.AddMaskableTexture then canvas:AddMaskableTexture(t) end
     else
         t:SetDrawLayer(layer, sub)
     end
@@ -63,7 +72,7 @@ end
 local function Draw(pin)
     local f = Layer(pin)
     Clear(f)
-    if not M:IsEnabled() then return end
+    if not (M:IsEnabled() and M.db.enabled) then return end
     local canvas = pin.GetMap and pin:GetMap()
     local mapID = canvas and canvas:GetMapID()
     local list = mapID and ns.MapOverlays and ns.MapOverlays[mapID]
@@ -72,7 +81,7 @@ local function Draw(pin)
     -- What's explored already, by first tile.
     local explored = C_MapExplorationInfo.GetExploredMapTextures(mapID) or {}
     local have, known = {}, {}
-    for _, e in ipairs(list) do known[e[5]] = true end
+    for _, e in ipairs(list) do known[e[6]] = true end
     local matched, total = 0, 0
     for _, e in ipairs(explored) do
         local first = e.fileDataIDs and e.fileDataIDs[1]
@@ -94,8 +103,9 @@ local function Draw(pin)
     local shade = M.db.tint and (M.db.shade or 1) or 1
 
     for _, e in ipairs(list) do
-        if not have[e[5]] then
+        if not have[e[6]] then
             local w, h, ox, oy = e[1], e[2], e[3], e[4]
+            local s = sub + (e[5] or 0)
             local wide, tall = ceil(w / TW), ceil(h / TH)
             for j = 1, tall do
                 local ph, fh
@@ -108,7 +118,7 @@ local function Draw(pin)
                     while fh < ph do fh = fh * 2 end
                 end
                 for k = 1, wide do
-                    local file = e[4 + (j - 1) * wide + k]
+                    local file = e[5 + (j - 1) * wide + k]
                     if file then
                         local pw, fw
                         if k < wide then
@@ -119,7 +129,7 @@ local function Draw(pin)
                             fw = 16
                             while fw < pw do fw = fw * 2 end
                         end
-                        local t = Texture(f, layer, sub)
+                        local t = Texture(f, canvas, layer, s)
                         t:SetSize(pw, ph)
                         t:SetTexCoord(0, pw / fw, 0, ph / fh)
                         t:SetPoint("TOPLEFT", f, "TOPLEFT", ox + TW * (k - 1), -(oy + TH * (j - 1)))
@@ -157,6 +167,16 @@ local function Watch()
     watching = true
     WorldMapFrame:HookScript("OnShow", HookPins)
     HookPins()
+end
+
+function M:OnInitialize()
+    -- It used to be switched off on the Modules page. Carry that over to the
+    -- setting here, so the module itself always loads and the switch works.
+    local core = EV.DB and EV.DB:GetCore()
+    if core and core.disabled and core.disabled[self.name] then
+        core.disabled[self.name] = nil
+        self.db.enabled = false
+    end
 end
 
 function M:OnEnable()
