@@ -34,6 +34,9 @@ local M = EV:NewModule("Windows", {
 M.title = "Windows"
 M.description = "Drag Blizzard's windows by their title bar; they open where you left them."
 ns.windows = M
+-- Windows another module has taken over (the bank, while the Bags module
+-- keeps Blizzard's out of sight): never placed or dragged here.
+M.skip = {}
 
 local NAMES = {
     "CharacterFrame", "SpellBookFrame", "PlayerSpellsFrame", "ProfessionsBookFrame", "QuestLogFrame",
@@ -62,6 +65,7 @@ end
 
 local function Place(f)
     local name = f:GetName()
+    if name and M.skip[name] then return end
     local p = name and Store()[name]
     if not (p and f:IsShown()) then return end
     if not CanTouch(f) then pending = true; return end
@@ -95,6 +99,7 @@ local function Handle(f)
     h:EnableMouse(true)
     h:SetScript("OnMouseDown", function(_, button)
         if button ~= "LeftButton" or not M:IsEnabled() or not CanTouch(f) then return end
+        if M.skip[f:GetName() or ""] then return end
         f:SetMovable(true)
         f:SetClampedToScreen(true)
         f:StartMoving()

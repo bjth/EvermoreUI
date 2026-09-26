@@ -20,6 +20,10 @@ Small comforts while the bag addon is built.
   `set`, `junk`, `new`, `quest`, `tip:use` for tooltip text, `in:gathering`
   for a section, `|` for or and `!` for not. Hover the search box for the
   list. Searching hides what doesn't match (or dims it, if you prefer).
+- **Bank**: your bank in the same style when you visit one, with the same
+  sections, search and sort, and your account bank alongside where the game
+  allows. Right-click items in your bags to put them in the bank. The
+  game's own bank window is a button away for buying bank tabs.
 - **Empty a bag**: Alt + click a bag on the bag bar to move everything in
   it into free space in your other bags, topping up part stacks first and
   keeping arrows, shards and herbs in their own bags. Then swap it out.

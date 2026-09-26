@@ -13,6 +13,9 @@ if EV_BLOCKED then return end
 --  is its slot; both are set with SetID, so the values come from the game
 --  and nothing we write is read back by those clicks.
 --
+--  The bank gets a window of its own in the same style (see "The bank
+--  window" below).
+--
 --  Opening and closing follows Blizzard's own calls: OpenAllBags,
 --  ToggleAllBags, ToggleBackpack and friends are post-hooked. Whatever they
 --  did to Blizzard's windows, ours opens or closes to match and theirs is
@@ -255,18 +258,20 @@ local SORTS = {
 }
 M.SORTS = SORTS
 
+
 --------------------------------------------------------------------------------
---  Window
+--  Views: the bags window and the bank window share everything below. A view
+--  knows which bags it shows; buttons are kept per bag, so a bag's buttons
+--  live in whichever view holds that bag.
 --------------------------------------------------------------------------------
-local win, content
-local holders, buttons, headers = {}, {}, {}
+local holders, buttons = {}, {}
 local PAD, TOP, FOOT, HEAD = 10, 44, 30, 20
 
-local function Holder(bag)
+local function Holder(view, bag)
     local h = holders[bag]
     if h then return h end
-    h = CreateFrame("Frame", nil, content)
-    h:SetAllPoints(content)
+    h = CreateFrame("Frame", nil, view.content)
+    h:SetAllPoints(view.content)
     h:SetID(bag)
     holders[bag] = h
     return h
@@ -290,11 +295,11 @@ local function Skin(b)
     b.evEdge = edge
 end
 
-local function Button(bag, slot)
+local function Button(view, bag, slot)
     buttons[bag] = buttons[bag] or {}
     local b = buttons[bag][slot]
     if b then return b end
-    b = CreateFrame("ItemButton", nil, Holder(bag), "ContainerFrameItemButtonTemplate")
+    b = CreateFrame("ItemButton", nil, Holder(view, bag), "ContainerFrameItemButtonTemplate")
     b:SetID(slot)
     Skin(b)
     buttons[bag][slot] = b
@@ -329,10 +334,10 @@ end
 
 --- A section title. Click folds the section; dropping an item on it puts
 --- that item in this section from now on (the item goes back where it was).
-local function Header(n)
-    local h = headers[n]
+local function Header(view, n)
+    local h = view.headers[n]
     if h then return h end
-    h = CreateFrame("Button", nil, content)
+    h = CreateFrame("Button", nil, view.content)
     h:SetHeight(HEAD - 2)
     h.text = T.Text(h, "small", "textMuted", true)
     h.text:SetPoint("LEFT", 0, 0)
@@ -344,14 +349,14 @@ local function Header(n)
         if kind ~= "item" or not self.key then return false end
         M.Assign(itemID, self.key)
         ClearCursor()
-        M:Build()
+        M:Refresh()
         return true
     end
     h:SetScript("OnReceiveDrag", Drop)
     h:SetScript("OnClick", function(self)
         if Drop(self) or not self.key then return end
         M.db.collapsed[self.key] = not M.db.collapsed[self.key] or nil
-        M:Build()
+        M:Refresh()
     end)
     h:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
@@ -361,7 +366,7 @@ local function Header(n)
         GameTooltip:Show()
     end)
     h:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    headers[n] = h
+    view.headers[n] = h
     return h
 end
 
@@ -386,31 +391,36 @@ local function ItemLevelText(b, i, size)
     t:Show()
 end
 
-local freeText = {}
+local freeText = setmetatable({}, { __mode = "k" })
 local labelOf = setmetatable({}, { __mode = "k" })   -- button -> its section's name, for in: searches
 
---- Read every bag, sort into sections, lay out. Called on BAG_UPDATE_DELAYED
+local View = {}
+View.__index = View
+
+--- Read the view's bags, sort into sections, lay out. Called on bag events
 --- and when the window opens or settings change.
-function M:Build()
+function View:Build()
+    local win = self.win
     if not (win and win:IsShown()) then return end
-    local db = self.db
+    local db = M.db
     local size, gap, cols = db.size, db.spacing, max(4, db.columns)
+    local content = self.content
+    local query = self.query
 
     local all = M.All()
     local position = {}
     for n, e in ipairs(all) do position[e.key] = n end
     local sections, byKey = {}, {}
     local empties, freeCount = {}, {}
-    local used = {}
-    for _, bag in ipairs(BagList()) do
+    local bags = self.bags()
+    for _, bag in ipairs(bags) do
         for slot = 1, C_Container.GetContainerNumSlots(bag) do
             local i = Read(bag, slot)
-            local b = Button(bag, slot)
-            used[b] = true
+            local b = Button(self, bag, slot)
             if i then
                 local c = CategoryOf(i, all)
                 labelOf[b] = c.label
-                if M.query then i.filtered = not Rules.SearchMatches(M.query, i, c.label) end
+                if query then i.filtered = not Rules.SearchMatches(query, i, c.label) end
                 if not (i.filtered and db.searchHide) then
                     local s = byKey[c.key]
                     if not s then
@@ -437,9 +447,10 @@ function M:Build()
     local y = 0
     local width = cols * size + (cols - 1) * gap
     local shown = {}
+    local headers = self.headers
     for n, s in ipairs(sections) do
-        local h = Header(n)
-        local folded = db.collapsed[s.cat.key] and not M.query
+        local h = Header(self, n)
+        local folded = db.collapsed[s.cat.key] and not query
         h.key, h.label = s.cat.key, s.cat.label
         h:ClearAllPoints()
         h:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
@@ -447,18 +458,20 @@ function M:Build()
         h.text:SetText((folded and "+ " or "") .. s.cat.label .. "  |cff808080" .. #s.items .. "|r")
         h:Show()
         y = y + HEAD
-        for k, e in ipairs(folded and {} or s.items) do
-            local r, c = floor((k - 1) / cols), (k - 1) % cols
-            local b = e.b
-            b:SetSize(size, size)
-            b:ClearAllPoints()
-            b:SetPoint("TOPLEFT", content, "TOPLEFT", c * (size + gap), -(y + r * (size + gap)))
-            Paint(b, e.i)
-            ItemLevelText(b, e.i, size)
-            b:Show()
-            shown[b] = true
+        if not folded then
+            for k, e in ipairs(s.items) do
+                local r, c = floor((k - 1) / cols), (k - 1) % cols
+                local b = e.b
+                b:SetSize(size, size)
+                b:ClearAllPoints()
+                b:SetPoint("TOPLEFT", content, "TOPLEFT", c * (size + gap), -(y + r * (size + gap)))
+                Paint(b, e.i)
+                ItemLevelText(b, e.i, size)
+                b:Show()
+                shown[b] = true
+            end
+            y = y + ceil(#s.items / cols) * (size + gap)
         end
-        if not folded then y = y + ceil(#s.items / cols) * (size + gap) end
         y = y + 6
     end
     for n = #sections + 1, #headers do headers[n]:Hide() end
@@ -466,8 +479,7 @@ function M:Build()
     -- One empty slot per kind of bag, with how many there are.
     local famOrder = { "normal", "reagent" }
     for fam in pairs(empties) do if fam ~= "normal" and fam ~= "reagent" then famOrder[#famOrder + 1] = fam end end
-    local k = 0
-    local total = 0
+    local k, total = 0, 0
     for _, fam in ipairs(famOrder) do
         local b = empties[fam]
         if b then
@@ -491,30 +503,37 @@ function M:Build()
         end
     end
     if k > 0 then y = y + size + gap end
-    -- Free-slot numbers only belong on the slots showing them.
-    for b, t in pairs(freeText) do if not shown[b] or b:HasItem() then t:Hide() end end
 
-    for _, list in pairs(buttons) do
-        for _, b in pairs(list) do
-            if not shown[b] then b:Hide() end
+    -- Everything of this view's bags that isn't laid out goes out of sight,
+    -- and so does anything left over from bags it no longer shows.
+    local mine = {}
+    for _, bag in ipairs(bags) do mine[bag] = true end
+    for bag, list in pairs(buttons) do
+        local here = holders[bag] and holders[bag]:GetParent() == content
+        if mine[bag] or here then
+            for _, b in pairs(list) do
+                if not (mine[bag] and shown[b]) then b:Hide() end
+                if freeText[b] and (not shown[b] or b:HasItem()) then freeText[b]:Hide() end
+            end
         end
     end
 
-    content:SetSize(width, max(size, y))
-    win:SetSize(width + PAD * 2, TOP + max(size, y) + FOOT)
-    win.money:SetText(EV:FormatMoney(GetMoney()))
+    local h = max(size, y)
+    content:SetSize(width, h)
+    win:SetSize(max(width + PAD * 2, self.minWidth or 0), TOP + h + FOOT + (self.extraTop or 0))
+    if win.money then win.money:SetText(EV:FormatMoney(GetMoney())) end
     win.free:SetText((L["%d free"]):format(total))
 end
 
---- Only the looks (lock, cooldown, search), for events that don't move items.
-function M:Repaint()
-    if not (win and win:IsShown()) then return end
-    for bag, list in pairs(buttons) do
-        for slot, b in pairs(list) do
+--- Only the looks (lock, cooldown), for events that don't move items.
+function View:Repaint()
+    if not (self.win and self.win:IsShown()) then return end
+    for _, bag in ipairs(self.bags()) do
+        for slot, b in pairs(buttons[bag] or {}) do
             if b:IsShown() then
                 local i = Read(bag, slot)
                 if i then
-                    if M.query then i.filtered = not Rules.SearchMatches(M.query, i, labelOf[b]) end
+                    if self.query then i.filtered = not Rules.SearchMatches(self.query, i, labelOf[b]) end
                     Paint(b, i)
                 end
             end
@@ -522,32 +541,55 @@ function M:Repaint()
     end
 end
 
-local function SavePoint()
-    local right, bottom = win:GetRight(), win:GetBottom()
-    if not (right and bottom) then return end
+-- Positions: a corner of the window as an offset from the same corner of
+-- the screen, so the window grows away from where it's pinned.
+local function SavePoint(view)
+    local win = view.win
+    local corner = view.corner
     local k = win:GetEffectiveScale() / UIParent:GetEffectiveScale()
-    M.db.point = { "BOTTOMRIGHT", floor(right * k - UIParent:GetWidth() + 0.5), floor(bottom * k + 0.5) }
+    local x, y
+    if corner == "BOTTOMRIGHT" then
+        x, y = win:GetRight(), win:GetBottom()
+        if not (x and y) then return end
+        x, y = x * k - UIParent:GetWidth(), y * k
+    else
+        x, y = win:GetLeft(), win:GetTop()
+        if not (x and y) then return end
+        x, y = x * k, y * k - UIParent:GetHeight()
+    end
+    M.db[view.pointKey] = { corner, floor(x + 0.5), floor(y + 0.5) }
 end
 
-local function PlaceWindow()
-    local p = M.db.point or {}
-    win:ClearAllPoints()
-    win:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", p[2] or -60, p[3] or 110)
+local function PlaceWindow(view)
+    local p = M.db[view.pointKey] or {}
+    local d = view.defaultPoint
+    view.win:ClearAllPoints()
+    view.win:SetPoint(view.corner, UIParent, view.corner, p[2] or d[1], p[3] or d[2])
 end
 
-local function BuildWindow()
-    if win then return end
+local function NewView(key, opts)
+    local view = setmetatable({ key = key, headers = {} }, View)
+    for k, v in pairs(opts) do view[k] = v end
+    return view
+end
+
+local function BuildWindow(view)
+    if view.win then return end
     local W = EV.UI
-    win = W.Window("EvermoreUIBags", { width = 440, height = 300, title = L["Bags"], strata = "MEDIUM" })
-    win.titleBar:HookScript("OnDragStop", function() SavePoint(); PlaceWindow() end)
+    local win = W.Window(view.frameName, { width = 440, height = 300, title = view.title, strata = "MEDIUM" })
+    view.win = win
+    win.titleBar:HookScript("OnDragStop", function() SavePoint(view); PlaceWindow(view) end)
 
-    content = CreateFrame("Frame", nil, win.body)
-    content:SetPoint("TOPLEFT", win.body, "TOPLEFT", PAD, -(TOP - 32))
+    local content = CreateFrame("Frame", nil, win.body)
+    content:SetPoint("TOPLEFT", win.body, "TOPLEFT", PAD, -(TOP - 32) - (view.extraTop or 0))
+    view.content = content
 
-    local search = W.SearchBox(win.titleBar, 160, function(text)
-        M.query = Rules.ParseSearch(text)
-        M:Build()
+    local search = W.SearchBox(win.titleBar, 150, function(text)
+        view.query = Rules.ParseSearch(text)
+        view:Build()
     end, L["Search"])
+    search:SetHeight(20)
+    search:SetPoint("RIGHT", win.closeButton or win.titleBar, win.closeButton and "LEFT" or "RIGHT", -8, 0)
     search:HookScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:SetText(L["Search"])
@@ -555,39 +597,167 @@ local function BuildWindow()
         GameTooltip:Show()
     end)
     search:HookScript("OnLeave", function() GameTooltip:Hide() end)
-    search:SetHeight(20)
-    search:SetPoint("RIGHT", win.closeButton or win.titleBar, win.closeButton and "LEFT" or "RIGHT", -8, 0)
     win.search = search
 
-    if C_Container.SortBags then
+    if view.sort then
         local sort = W.Button(win.titleBar, L["Sort"], 56, function()
             if InCombatLockdown() then return end
-            pcall(C_Container.SortBags)
+            view.sort()
         end)
         sort:SetHeight(20)
         sort:SetPoint("RIGHT", search, "LEFT", -6, 0)
         win.sort = sort
     end
 
-    win.money = T.Text(win.body, "body", "text")
-    win.money:SetPoint("BOTTOMRIGHT", win.body, "BOTTOMRIGHT", -PAD, 9)
+    if view.money then
+        win.money = T.Text(win.body, "body", "text")
+        win.money:SetPoint("BOTTOMRIGHT", win.body, "BOTTOMRIGHT", -PAD, 9)
+    end
     win.free = T.Text(win.body, "small", "textMuted")
     win.free:SetPoint("BOTTOMLEFT", win.body, "BOTTOMLEFT", PAD, 10)
 
+    if view.decorate then view.decorate(view, win) end
+
     win:HookScript("OnShow", function()
-        PlaceWindow()
-        M:Build()
+        PlaceWindow(view)
+        view:Build()
     end)
     win:HookScript("OnHide", function()
-        M.query = nil
+        view.query = nil
         search:SetText("")
-        if C_NewItems and C_NewItems.ClearAll and M.db.clearNew ~= false then pcall(C_NewItems.ClearAll) end
+        if view.onHide then view.onHide(view) end
     end)
-    PlaceWindow()
+    PlaceWindow(view)
 end
 
 --------------------------------------------------------------------------------
---  Taking over from Blizzard's bags
+--  The bags window
+--------------------------------------------------------------------------------
+local bagsView = NewView("bags", {
+    frameName = "EvermoreUIBags", title = L["Bags"], bags = BagList,
+    corner = "BOTTOMRIGHT", pointKey = "point", defaultPoint = { -60, 110 },
+    money = true,
+    sort = C_Container.SortBags and function() pcall(C_Container.SortBags) end or nil,
+    onHide = function()
+        if C_NewItems and C_NewItems.ClearAll then pcall(C_NewItems.ClearAll) end
+    end,
+})
+
+--------------------------------------------------------------------------------
+--  The bank window
+--
+--  Forever's bank is the modern one: tabs you buy, each a container of its
+--  own (C_Bank.FetchPurchasedBankTabData), for your character and, where the
+--  game allows, your account. Blizzard's BankFrame has to stay shown while
+--  you're at the bank (hiding it ends the visit: its OnHide calls
+--  C_Bank.CloseBankFrame), so it is made invisible and moved off screen
+--  instead, and brought back by the "Blizzard's bank" button for buying tabs.
+--  Right-clicking an item in your bags puts it in the bank Blizzard's frame
+--  has selected, which is the character bank unless you change it there.
+--------------------------------------------------------------------------------
+local BT = Enum.BankType or { Character = 0, Account = 2 }
+local bankType = BT.Character
+local atBank = false
+local showBlizzardBank = false
+
+local function BankBags()
+    local list = {}
+    if C_Bank and C_Bank.FetchPurchasedBankTabData then
+        local ok, tabs = pcall(C_Bank.FetchPurchasedBankTabData, bankType)
+        if ok and type(tabs) == "table" then
+            for _, t in ipairs(tabs) do
+                local id = t.ID or t.bankTabID
+                if id and (C_Container.GetContainerNumSlots(id) or 0) > 0 then list[#list + 1] = id end
+            end
+        end
+        return list
+    end
+    -- An older bank: the bank itself and its bag slots.
+    if BANK_CONTAINER and (C_Container.GetContainerNumSlots(BANK_CONTAINER) or 0) > 0 then list[#list + 1] = BANK_CONTAINER end
+    for bag = (NUM_BAG_SLOTS or 4) + 2, (NUM_BAG_SLOTS or 4) + 1 + (NUM_BANKBAGSLOTS or 7) do
+        if (C_Container.GetContainerNumSlots(bag) or 0) > 0 then list[#list + 1] = bag end
+    end
+    return list
+end
+
+local function CanView(t)
+    if not (C_Bank and C_Bank.CanViewBank) then return t == BT.Character end
+    local ok, can = pcall(C_Bank.CanViewBank, t)
+    return ok and can or false
+end
+
+local bankView
+bankView = NewView("bank", {
+    frameName = "EvermoreUIBank", title = L["Bank"], bags = BankBags,
+    corner = "TOPLEFT", pointKey = "bankPoint", defaultPoint = { 40, -110 },
+    extraTop = 30, minWidth = 380,
+    sort = function()
+        if bankType == BT.Account and C_Container.SortAccountBankBags then
+            pcall(C_Container.SortAccountBankBags)
+        elseif C_Container.SortBankBags then
+            pcall(C_Container.SortBankBags)
+        end
+    end,
+    decorate = function(view, win)
+        local W = EV.UI
+        local mineBtn = W.Button(win.body, L["Character"], 110, function()
+            bankType = BT.Character; view:Paint(); view:Build()
+        end)
+        mineBtn:SetHeight(22)
+        mineBtn:SetPoint("TOPLEFT", win.body, "TOPLEFT", PAD, -8)
+        local acct = W.Button(win.body, L["Account"], 110, function()
+            bankType = BT.Account; view:Paint(); view:Build()
+        end)
+        acct:SetHeight(22)
+        acct:SetPoint("LEFT", mineBtn, "RIGHT", 6, 0)
+        local blizz = W.Button(win.body, L["Blizzard's bank"], 120, function()
+            showBlizzardBank = not showBlizzardBank
+            M.ApplyBankFrame()
+        end)
+        blizz:SetHeight(22)
+        blizz:SetPoint("TOPRIGHT", win.body, "TOPRIGHT", -PAD, -8)
+        blizz:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(L["Blizzard's bank"])
+            GameTooltip:AddLine(L["Shows or hides the game's own bank window, for buying bank tabs and its other settings."], 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        blizz:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        view.tabs = { [BT.Character] = mineBtn, [BT.Account] = acct }
+        function view:Paint()
+            for t, b in pairs(self.tabs) do
+                b:SetShown(t == BT.Character or CanView(t))
+                b:SetStyle(t == bankType and "primary" or "secondary")
+            end
+        end
+    end,
+    onHide = function()
+        -- Closing ours ends the visit, as closing Blizzard's would.
+        if atBank and C_Bank and C_Bank.CloseBankFrame then pcall(C_Bank.CloseBankFrame) end
+    end,
+})
+
+--- Blizzard's bank window: invisible and off screen while ours is in use,
+--- but still shown, so the visit stays open.
+function M.ApplyBankFrame()
+    local f = BankFrame
+    if not (f and f:IsShown()) then return end
+    if M:IsEnabled() and not showBlizzardBank then
+        f:SetAlpha(0)
+        if not (InCombatLockdown() and f:IsProtected()) then
+            f:ClearAllPoints()
+            f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -5000, 5000)
+        end
+    else
+        f:SetAlpha(1)
+        if not (InCombatLockdown() and f:IsProtected()) and UpdateUIPanelPositions then
+            pcall(UpdateUIPanelPositions, f)
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
+--  Opening and closing, and taking over from Blizzard's bags
 --------------------------------------------------------------------------------
 local function IsOurBag(id)
     return type(id) ~= "number" or (id >= 0 and id <= (NUM_BAG_SLOTS or 4) + 1)
@@ -611,15 +781,15 @@ local function HideBlizzard()
     end
 end
 
-local function Show(on)
+local function Show(view, on)
     if not M:IsEnabled() then return end
-    BuildWindow()
-    win:SetShown(on)
+    BuildWindow(view)
+    view.win:SetShown(on)
 end
 
-function M:Toggle() Show(not (win and win:IsShown())) end
-function M:Open() Show(true) end
-function M:Close() if win then win:Hide() end end
+function M:Toggle() Show(bagsView, not (bagsView.win and bagsView.win:IsShown())) end
+function M:Open() Show(bagsView, true) end
+function M:Close() if bagsView.win then bagsView.win:Hide() end end
 
 -- After each of Blizzard's calls: follow what it meant, hide its windows.
 -- The calls nest (ToggleAllBags opens the bags through OpenBag and
@@ -667,21 +837,48 @@ function M:OnEnable()
         end)
     end
 
+    -- The bank.
+    if BankFrame then
+        BankFrame:HookScript("OnShow", function() M.ApplyBankFrame() end)
+        if type(ShowUIPanel) == "function" then hooksecurefunc("ShowUIPanel", function() M.ApplyBankFrame() end) end
+        if type(UpdateUIPanelPositions) == "function" then
+            hooksecurefunc("UpdateUIPanelPositions", function() if not showBlizzardBank then M.ApplyBankFrame() end end)
+        end
+    end
+    local win = EV:GetModule("Windows", true)
+    if win and win.skip then win.skip.BankFrame = true end
+    self:RegisterEvent("BANKFRAME_OPENED", function()
+        atBank = true
+        showBlizzardBank = false
+        bankType = BT.Character
+        Show(bankView, true)
+        if bankView.Paint then bankView:Paint() end
+        M.ApplyBankFrame()
+    end)
+    self:RegisterEvent("BANKFRAME_CLOSED", function()
+        atBank = false
+        if bankView.win then bankView.win:Hide() end
+    end)
+
     local queued = false
     local function Rebuild()
         if queued then return end
         queued = true
-        C_Timer.After(0.05, function() queued = false; M:Build() end)
+        C_Timer.After(0.05, function() queued = false; M:Refresh() end)
     end
-    self:RegisterEvent("BAG_UPDATE_DELAYED", Rebuild)
-    self:RegisterEvent("BAG_NEW_ITEMS_UPDATED", Rebuild)
-    self:RegisterEvent("EQUIPMENT_SETS_CHANGED", Rebuild)
-    self:RegisterEvent("QUEST_ACCEPTED", Rebuild)
-    self:RegisterEvent("ITEM_LOCK_CHANGED", function() M:Repaint() end)
-    self:RegisterEvent("BAG_UPDATE_COOLDOWN", function() M:Repaint() end)
-    self:RegisterEvent("PLAYER_MONEY", function() if win and win:IsShown() then win.money:SetText(EV:FormatMoney(GetMoney())) end end)
+    for _, e in ipairs({ "BAG_UPDATE_DELAYED", "BAG_NEW_ITEMS_UPDATED", "EQUIPMENT_SETS_CHANGED", "QUEST_ACCEPTED",
+                         "PLAYERBANKSLOTS_CHANGED", "BANK_TABS_CHANGED", "BANK_TAB_SETTINGS_UPDATED" }) do
+        self:RegisterEvent(e, Rebuild)
+    end
+    local function Repaint() bagsView:Repaint(); bankView:Repaint() end
+    self:RegisterEvent("ITEM_LOCK_CHANGED", Repaint)
+    self:RegisterEvent("BAG_UPDATE_COOLDOWN", Repaint)
+    self:RegisterEvent("PLAYER_MONEY", function()
+        if bagsView.win and bagsView.win:IsShown() then bagsView.win.money:SetText(EV:FormatMoney(GetMoney())) end
+    end)
 end
 
 function M:Refresh()
-    if win and win:IsShown() then self:Build() end
+    bagsView:Build()
+    bankView:Build()
 end
