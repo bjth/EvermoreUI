@@ -18,6 +18,7 @@ if EV_BLOCKED then return end
 --      { setSize = fn(w, h), getSize = fn() -> w, h, page = "databars", tab = "Experience" })
 --    designer = surface key, designerTab = its tab: edit mode's settings
 --    button opens the designer there instead of the options page
+--    secure = true: protected frames are anchored to it; only moved out of combat
 --------------------------------------------------------------------------------
 local EV = EvermoreUI
 local L = EV.L
@@ -115,7 +116,9 @@ function Movers:Apply(key)
     local e = elements[key]
     if not e then return end
     local f = e.frame
-    if f:IsProtected() and InCombatLockdown() then
+    -- secure: not protected itself, but protected frames hang from it, so
+    -- moving it in combat would be blocked the same way.
+    if (f:IsProtected() or e.secure) and InCombatLockdown() then
         pendingApply[key] = true   -- again after combat, in case loading didn't take
         if not EV.loading then return end
     end

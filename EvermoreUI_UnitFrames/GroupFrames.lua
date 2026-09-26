@@ -72,6 +72,7 @@ ns.group = M
 
 local KINDS = { party = 5, raid = 40 }
 local headers = {}      -- kind -> header
+local holders = {}      -- kind -> the frame edit mode moves (below)
 local children = {}     -- every dressed frame
 local byUnit = {}       -- unit token -> { frame = true }
 local hidden = CreateFrame("Frame")
@@ -365,30 +366,61 @@ local function Spawn(kind)
     h:Hide()
 end
 
+--- The space a whole group takes: five (four without you) or a full raid.
+local function FullSize(kind)
+    local c = M.db[kind]
+    local w, h, sp = c.width, c.height, c.spacing
+    if kind == "party" then
+        local n = c.showPlayer and 5 or 4
+        local vertical = c.grow ~= "RIGHT" and c.grow ~= "LEFT"
+        return vertical and w or (w * n + sp * (n - 1)), vertical and (h * n + sp * (n - 1)) or h
+    end
+    local cols, rows = 8, 5
+    if c.layout == "rows" then cols, rows = rows, cols end
+    return w * cols + sp * (cols - 1), h * rows + sp * (rows - 1)
+end
+
+--- The corner a group grows from, which the header is pinned by.
+local function StartCorner(kind)
+    if kind == "raid" then return "TOPLEFT" end
+    local g = M.db.party.grow
+    if g == "UP" then return "BOTTOMLEFT" elseif g == "LEFT" then return "TOPRIGHT" end
+    return "TOPLEFT"
+end
+
+-- Edit mode moves a holder, not the header. The header sizes itself to the
+-- frames it shows (almost nothing when you're on your own, so it couldn't
+-- be seen or grabbed), and pinned by its centre it would slide about as
+-- people joined. The holder is always the full group's size, and the header
+-- hangs from its starting corner, so the first frame never moves.
+-- The holder carries protected frames, so it is only moved out of combat
+-- (secure = true in Movers).
 local function Header(kind)
     if headers[kind] then return headers[kind] end
+    local holder = CreateFrame("Frame", "EvermoreUI_" .. kind .. "Holder", UIParent)
+    holder:SetSize(FullSize(kind))
+    holders[kind] = holder
     local h = CreateFrame("Frame", "EvermoreUI_" .. kind .. "Header", UIParent, "SecureGroupHeaderTemplate")
     h:SetAttribute("template", "SecureUnitButtonTemplate")
     h:SetAttribute("templateType", "Button")
     h:SetFrameStrata("LOW")
     headers[kind] = h
-    local c = M.db[kind]
-    local sizeFor = function()
-        local cc = M.db[kind]
-        if kind == "party" then
-            local vertical = cc.grow == "DOWN" or cc.grow == "UP"
-            return vertical and cc.width or (cc.width * 5 + cc.spacing * 4),
-                   vertical and (cc.height * 5 + cc.spacing * 4) or cc.height
-        end
-        return cc.width * 8 + cc.spacing * 7, cc.height * 5 + cc.spacing * 4
-    end
-    EV.Movers:Register(h, "GF_" .. kind, kind == "party" and L["Party"] or L["Raid"],
-        kind == "party" and { "TOPLEFT", "TOPLEFT", 20, -240 } or { "TOPLEFT", "TOPLEFT", 20, -240 }, {
+    EV.Movers:Register(holder, "GF_" .. kind, kind == "party" and L["Party"] or L["Raid"],
+        { "TOPLEFT", "TOPLEFT", 20, -240 }, {
         group = L["Unit Frames"], page = "groupframes", designer = "groupframes", designerTab = kind,
-        getSize = sizeFor,
+        secure = true,
         isDisabled = function() return not (M:IsEnabled() and M.db[kind].enabled) end,
     })
     return h
+end
+
+--- Size the holder and pin the header to it. Out of combat.
+local function Pin(kind)
+    local holder, h = holders[kind], headers[kind]
+    EV.Pixel:SetSize(holder, FullSize(kind))
+    local corner = StartCorner(kind)
+    h:ClearAllPoints()
+    h:SetPoint(corner, holder, corner, 0, 0)
 end
 
 --------------------------------------------------------------------------------
@@ -554,7 +586,7 @@ end
 
 function ns.RefreshPreview()
     for kind, n in pairs({ party = 5, raid = 25 }) do
-        local on = M.preview[kind] and M:IsEnabled() and M.db[kind].enabled and headers[kind] ~= nil
+        local on = M.preview[kind] and M:IsEnabled() and M.db[kind].enabled and holders[kind] ~= nil
         local c = M.db[kind]
         local shown = SampleCount(kind, n)
         for i = 1, n do
@@ -566,7 +598,7 @@ function ns.RefreshPreview()
                     fakes[kind][i] = f
                 end
                 Sample(f, kind, i, c, i == 1)
-                Place(kind, f, i, c, headers[kind])
+                Place(kind, f, i, c, holders[kind])
             elseif fakes[kind][i] then
                 fakes[kind][i]:Hide()
             end
@@ -617,6 +649,7 @@ function M:Apply()
     for kind in pairs(KINDS) do
         local h = Header(kind)
         Configure(kind)
+        Pin(kind)
         Spawn(kind)
         LayoutChildren(kind)
         RegisterStateDriver(h, "visibility", Visibility(kind))
