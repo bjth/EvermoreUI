@@ -454,8 +454,10 @@ end
 --  Applying settings
 --------------------------------------------------------------------------------
 function M:Apply()
-    if InCombatLockdown() then pending = true; return end
-    pending = false
+    if EV:Locked() then pending = true; return end
+    -- Loading after a reload in combat: set up now so the group shows, and
+    -- once more when combat ends in case any of it didn't take.
+    pending = InCombatLockdown()
     for kind in pairs(KINDS) do
         local h = Header(kind)
         Configure(kind)

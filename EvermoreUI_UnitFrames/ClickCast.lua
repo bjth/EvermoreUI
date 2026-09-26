@@ -80,8 +80,8 @@ function ns.ApplyClickCast()
     local M = ns.module
     local frames = ns.frames or {}
     if not M then return end
-    if InCombatLockdown() then pending = true; return end
-    pending = false
+    if EV:Locked() then pending = true; return end
+    pending = InCombatLockdown()
     local cfg = M.db.clickCast
     local set = {}
     if cfg and cfg.enabled then
