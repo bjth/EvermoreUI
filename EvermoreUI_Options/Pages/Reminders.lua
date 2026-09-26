@@ -136,7 +136,16 @@ local function Editor(p, e)
              get = function() return e.kind or "buff" end, set = S("kind") })
     if e.kind == "weapon" then
         p:Dual({ type = "dropdown", text = L["Hand"], width = 140, values = HANDS,
-                 get = function() return e.hand or "main" end, set = S("hand") }, nil)
+                 get = function() return e.hand or "main" end, set = S("hand") },
+               { type = "toggle", text = L["Only once I know how"],
+                 tooltip = L["Hidden until you've learned one of the spells below: Poisons for a rogue, an imbue for a shaman."],
+                 get = function() return e.known and true or false end, set = S("known") })
+        p:Row{ type = "input", text = L["Learned from"], width = 320,
+               placeholder = L["Spell names or IDs, separated by commas"],
+               tooltip = L["Knowing any one of these shows the reminder, with the switch above on."],
+               get = function() return SpellsText(e.spells) end,
+               set = function(v) e.spells = ParseSpells(v); Changed() end,
+               disabled = function() return not e.known end }
     else
         p:Row{ type = "input", text = L["Buffs that count"], width = 320,
                placeholder = L["Spell names or IDs, separated by commas"],

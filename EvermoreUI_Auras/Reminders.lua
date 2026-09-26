@@ -17,6 +17,9 @@ if EV_BLOCKED then return end
 --    weapon  shown while the chosen hand has no temporary enchant (poison,
 --            oil, sharpening stone, shaman imbue). With an item set, click
 --            applies it to that hand (the item, then target-slot 16 or 17).
+--            "Only if known" with spells hides it until you know one of
+--            them: a rogue's poisons, a shaman's imbues, so a low level
+--            character isn't nagged about something it can't do yet.
 --
 --  "Where" limits an entry to dungeons and raids, or to being in a group.
 --  "Only when I carry something for it" (needItem) hides a buff reminder
@@ -83,13 +86,25 @@ local DEFAULTS = {
     },
     SHAMAN = {
         { label = "Lightning Shield", kind = "buff", spells = { 324 }, known = true },
-        { label = "Weapon imbue", kind = "weapon", hand = "main" },
+        { label = "Weapon imbue", kind = "weapon", hand = "main", known = true },
     },
     ROGUE = {
-        { label = "Main hand poison", kind = "weapon", hand = "main" },
-        { label = "Off hand poison", kind = "weapon", hand = "off" },
+        { label = "Main hand poison", kind = "weapon", hand = "main", known = true },
+        { label = "Off hand poison", kind = "weapon", hand = "off", known = true },
     },
 }
+
+-- What unlocks a class's weapon reminders. Rogues: the Poisons skill, or the
+-- poisons themselves where they're learnt as spells. Shamans: any imbue.
+local UNLOCKS = {
+    ROGUE  = { 2842, 315584, 2823, 8679, 3408, 5761 },
+    SHAMAN = { 8017, 8024, 8033, 8232 },
+}
+for class, list in pairs(DEFAULTS) do
+    for _, e in ipairs(list) do
+        if e.kind == "weapon" and UNLOCKS[class] then e.spells = UNLOCKS[class] end
+    end
+end
 
 local uidSeq = 0
 local function NewUID()
@@ -131,6 +146,19 @@ function M.List()
         end
         db.lists[myClass] = list
         db.off, db.food, db.weapons, db.classBuffs = nil, nil, nil, nil
+    end
+    -- Weapon reminders from before they could wait for the skill: the
+    -- class's own ones, untouched since, wait for it now.
+    if not db.weaponKnownSeeded then
+        db.weaponKnownSeeded = true
+        local unlocks = UNLOCKS[myClass]
+        for _, e in ipairs(list) do
+            if unlocks and e.kind == "weapon" and (e.spells == nil or #e.spells == 0) and not e.item then
+                local t = {}
+                for i, id in ipairs(unlocks) do t[i] = id end
+                e.spells, e.known = t, true
+            end
+        end
     end
     -- Lists made before needItem existed: Well Fed only when you have food.
     if not db.needItemSeeded then
@@ -293,7 +321,13 @@ local function Missing()
                 local equipped = GetInventoryItemID("player", slot)
                 local isWeapon = equipped and select(6, C_Item.GetItemInfoInstant(equipped)) == (Enum.ItemClass and Enum.ItemClass.Weapon or 2)
                 local has = (slot == 16) and hasMain or hasOff
-                if okW and isWeapon and not has then
+                local able = not e.known
+                if not able then
+                    for _, sp in ipairs(e.spells or {}) do
+                        if Known(SpellName(sp)) then able = true break end
+                    end
+                end
+                if okW and isWeapon and not has and able then
                     out[#out + 1] = { entry = e, label = e.label, icon = M.EntryIcon(e),
                                       item = (e.item and HaveItem(e.item)) and e.item or nil, slot = slot }
                 end
