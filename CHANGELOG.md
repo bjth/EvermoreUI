@@ -18,7 +18,9 @@ full frames addon.
   buffs before you rebuff. "Only mine" narrows either to yours. Focus,
   player and pet can show them too.
 - **Combo points** above the player frame for rogues, and druids in Cat
-  Form.
+  Form, and across the edge of your target's nameplate so you can read them
+  without looking away from the mob. Size, spot and colour on the
+  Nameplates page.
 - **Totems** under the player frame for shamans, with the time left. Right
   click one to destroy it.
 - **Fade out of combat**: the player and pet frames can fade away until

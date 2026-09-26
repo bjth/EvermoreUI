@@ -32,7 +32,6 @@ ns.ClassPower = CP
 
 local max = math.max
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local COMBO = Enum and Enum.PowerType and Enum.PowerType.ComboPoints or 4
 local MAX_TOTEMS = MAX_TOTEMS or 4
 
 local function IsSecret(v) return V.IsSecret(v) end
@@ -47,31 +46,8 @@ local _, CLASS = UnitClass("player")
 local combo            -- holder with .pips
 local comboMax = 5
 
---- Current points and the maximum. The current count may be secret; the
---- maximum is only used when it can be read.
-local function Points()
-    local ok, v = pcall(UnitPower, "player", COMBO)
-    local okM, m = pcall(UnitPowerMax, "player", COMBO)
-    if ok and okM and type(v) ~= "nil" and type(m) == "number" and (IsSecret(m) or m > 0) then
-        return v, (not IsSecret(m)) and m or nil
-    end
-    if type(GetComboPoints) == "function" then
-        local okC, c = pcall(GetComboPoints, "player", "target")
-        if okC and type(c) ~= "nil" then return c, nil end
-    end
-    return nil
-end
-
---- Should this character see combo points right now?
-local function WantsCombo()
-    if CLASS == "ROGUE" then return true end
-    if CLASS == "DRUID" then
-        local ok, pType = pcall(UnitPowerType, "player")
-        if not ok or IsSecret(pType) then return true end
-        return pType == (Enum and Enum.PowerType and Enum.PowerType.Energy or 3)
-    end
-    return false
-end
+local function Points() return EV.ComboPoints() end
+local function WantsCombo() return EV.WantsComboPoints() end
 
 local function BuildCombo(f)
     if combo then return combo end
@@ -100,7 +76,7 @@ function CP.LayoutCombo()
     if not (f and cfg) then return end
     local c = cfg.classPower
     BuildCombo(f)
-    if not (c and c.enabled and cfg.enabled) or not (CLASS == "ROGUE" or CLASS == "DRUID") then
+    if not (c and c.enabled and cfg.enabled) or not EV.HasComboClass() then
         combo:Hide()
         return
     end
@@ -310,10 +286,8 @@ end
 
 function CP.Enable(M)
     local ev = CreateFrame("Frame")
-    for _, e in ipairs({ "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
-                         "PLAYER_TARGET_CHANGED", "UPDATE_SHAPESHIFT_FORM", "UNIT_COMBO_POINTS",
-                         "PLAYER_TOTEM_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
-                         "PLAYER_REGEN_DISABLED" }) do
+    for _, e in ipairs(EV.COMBO_EVENTS) do pcall(ev.RegisterEvent, ev, e) end
+    for _, e in ipairs({ "PLAYER_TOTEM_UPDATE", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED" }) do
         pcall(ev.RegisterEvent, ev, e)
     end
     ev:SetScript("OnEvent", function(_, event, unit, token)
@@ -323,11 +297,7 @@ function CP.Enable(M)
         if event == "PLAYER_REGEN_ENABLED" then
             if totemsPending then totemsPending = false; CP.LayoutTotems() else CP.UpdateTotems() end
         end
-        if (event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT") then
-            if unit ~= "player" or (token and token ~= "COMBO_POINTS") then return end
-        elseif event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
-            if unit ~= "player" then return end
-        end
+        if not EV.IsComboEvent(event, unit, token) then return end
         CP.UpdateCombo()
     end)
     CP.Refresh()

@@ -15,3 +15,4 @@ Power.lua
 Cast.lua
 Auras.lua
 Extras.lua
+Combo.lua

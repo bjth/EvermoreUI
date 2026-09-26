@@ -44,6 +44,10 @@ local PIXEL_MODE = {
     { value = "smooth", text = L["Smooth (follows the mob exactly)"] },
     { value = "crisp",  text = L["Crisp (snaps to pixels, steps as it moves)"] },
 }
+local COMBO_SPOT = {
+    { value = "bottom", text = L["Bottom edge of the bar"] },
+    { value = "top",    text = L["Top edge of the bar"] },
+}
 local TANK_MODE = {
     { value = "auto", text = L["Auto (from your role)"] },
     { value = "tank", text = L["Always tank colours"] },
@@ -196,6 +200,27 @@ EV.Options:RegisterPage{
                  L["A glow below the plate. Off: on a mob with no cast bar showing it reads as a mana bar."]))
         p:Dual(S("nonTargetAlpha", L["Other plates opacity"], 0.3, 1, 0.05,
                  { tooltip = L["1 disables the fade entirely, and with it the only pass that touches every plate on a target change."] }), nil)
+
+        if EV.HasComboClass and EV.HasComboClass() then
+            local function noCombo() return not M.db.comboPoints end
+            p:Section(L["Combo points"])
+            p:Dual(T("comboPoints", L["On your target's plate"],
+                     L["Your combo points as a row of pips across the edge of your target's health bar, so you can read them without looking away from the mob. They're on the player frame too."]),
+                   D("comboSpot", L["Where"], COMBO_SPOT, 190, { disabled = noCombo }))
+            p:Dual(S("comboWidth", L["Pip width"], 4, 30, 1, { disabled = noCombo }),
+                   S("comboHeight", L["Pip height"], 2, 16, 1, { disabled = noCombo }))
+            p:Dual(S("comboSpacing", L["Spacing"], 0, 10, 1, { disabled = noCombo }),
+                   S("comboY", L["Nudge up or down"], -30, 30, 1, { disabled = noCombo }))
+            p:Dual({ type = "colour", text = L["Colour"], disabled = noCombo,
+                     get = function() local c = M.db.comboColour or { 1, 0.86, 0.1 }; return c[1], c[2], c[3] end,
+                     set = function(r, g, b) M.db.comboColour = { r, g, b }; M:Restyle() end,
+                     reset = function() M.db.comboColour = { 1, 0.86, 0.1 }; M:Restyle() end,
+                     isCustom = function()
+                         local c = M.db.comboColour
+                         return type(c) == "table" and (math.abs(c[1] - 1) > 0.002 or math.abs(c[2] - 0.86) > 0.002
+                                                        or math.abs(c[3] - 0.1) > 0.002)
+                     end }, nil)
+        end
 
         p:Section(L["Execute range"])
         p:Dual(T("executeGlow", L["Glow below a health threshold"]),

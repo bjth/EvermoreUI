@@ -9,7 +9,7 @@ EvermoreUI.CHANGELOG = {
             { title = "New", items = {
                 "**Cast bars** on the player, target, focus and pet frames. Under the frame, or anywhere you like in edit mode. Spell icon, name, time left, a spark on the leading edge, grey when the cast can't be interrupted and a red \"Interrupted\" when it's cut off. Your own bar shows your latency, and replaces Blizzard's (switch that off on the Player tab).",
                 "**Buffs and debuffs on your target**: everyone's debuffs above the frame, so you can see who has Sunder or a curse up and whether it's sheeped, and its buffs below, for Purge, Tranquilizing Shot or checking a friend's buffs before you rebuff. \"Only mine\" narrows either to yours. Focus, player and pet can show them too.",
-                "**Combo points** above the player frame for rogues, and druids in Cat Form.",
+                "**Combo points** above the player frame for rogues, and druids in Cat Form, and across the edge of your target's nameplate so you can read them without looking away from the mob. Size, spot and colour on the Nameplates page.",
                 "**Totems** under the player frame for shamans, with the time left. Right click one to destroy it.",
                 "**Fade out of combat**: the player and pet frames can fade away until you're fighting, targeting, casting, hurt, short of power or hovering them.",
                 "**Copy settings** from one frame onto another.",

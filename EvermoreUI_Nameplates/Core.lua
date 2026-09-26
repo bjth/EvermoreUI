@@ -279,6 +279,16 @@ local M = EV:NewModule("Nameplates", {
     -- and cannot be read. Found by eye with /evui nptext.
     textPhase      = 0,
 
+    -- Your combo points on your target's plate (Combo.lua): rogues, and
+    -- druids in Cat Form. A row of pips straddling the bar's bottom edge.
+    comboPoints    = true,
+    comboWidth     = 12,
+    comboHeight    = 6,
+    comboSpacing   = 2,
+    comboSpot      = "bottom",      -- bottom | top edge of the health bar
+    comboY         = 0,
+    comboColour    = { 1, 0.86, 0.1 },
+
     -- Friendly plates: the reference uses a name-only design for these, so ours
     -- stay out of the way and Blizzard's are left alone.
     doFriendly     = false,
