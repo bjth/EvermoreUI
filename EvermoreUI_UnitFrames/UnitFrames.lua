@@ -243,6 +243,7 @@ function M:OnEnable()
         local key = u.key
         EV.Movers:Register(f, "UF_" .. key, L[u.title], POSITIONS[key], {
             group = L["Unit Frames"], page = "unitframes", tab = L[u.title],
+            designer = "unitframes", designerTab = key,
             getSize = function() return M.db[key].width, M.db[key].height end,
             setSize = function(w, h)
                 if w then M.db[key].width = w end
@@ -257,6 +258,7 @@ function M:OnEnable()
         EV.Movers:Register(f.castbar.proxy, "UF_" .. key .. "Cast", L[u.title] .. " " .. L["Cast Bar"],
             CAST_POSITIONS[key], {
             group = L["Unit Frames"], page = "unitframes", tab = L[u.title],
+            designer = "unitframes", designerTab = key,
             getSize = function()
                 local c = M.db[key].castbar
                 return (c.width > 0) and c.width or M.db[key].width, c.height

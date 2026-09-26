@@ -690,7 +690,11 @@ local function BuildInspector()
     f.reset:SetPoint("TOPLEFT", 0, -380)
     f.settings = W.Button(single, L["Frame settings"], 124, function()
         local e = Movers:Get(Primary())
-        if e and e.page then
+        -- Frames set up in the designer open there, on the frame's own tab.
+        if e and e.designer and EV.Designers and EV.Designers:Get(e.designer) then
+            EM:Exit(true)
+            EV.Designers:Open(e.designer, e.designerTab)
+        elseif e and e.page then
             EM:Exit(true)
             EV:OpenOptions()
             if EV.Options.ShowPage then EV.Options:ShowPage(e.page, e.tab) end
@@ -822,7 +826,7 @@ function EM:RefreshInspector()
     inspector.anchorSide:Refresh(); inspector.anchorAlign:Refresh()
     inspector.anchorSide:SetDisabled(not a); inspector.anchorAlign:SetDisabled(not a)
     inspector.matchW:Refresh(); inspector.matchH:Refresh()
-    inspector.settings:SetDisabled(not e.page)
+    inspector.settings:SetDisabled(not (e.page or e.designer))
     inspector:SetHeight(440)
 end
 

@@ -20,4 +20,6 @@ ClickCast.lua
 AuraBox.lua
 GroupFrames.lua
 Settings.lua
+GroupSettings.lua
 Designer.lua
+GroupDesigner.lua

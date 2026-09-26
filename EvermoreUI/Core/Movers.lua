@@ -16,6 +16,8 @@ if EV_BLOCKED then return end
 --
 --  EV.Movers:Register(frame, "XPBar", "XP Bar", { "BOTTOM", "BOTTOM", 0, 6 },
 --      { setSize = fn(w, h), getSize = fn() -> w, h, page = "databars", tab = "Experience" })
+--    designer = surface key, designerTab = its tab: edit mode's settings
+--    button opens the designer there instead of the options page
 --------------------------------------------------------------------------------
 local EV = EvermoreUI
 local L = EV.L

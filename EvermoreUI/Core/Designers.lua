@@ -48,8 +48,18 @@ function D:Open(key, tab)
     if EV.DesignerUI then EV.DesignerUI:Open(key, tab) end
 end
 
+-- Short names for /evui design: a word opens its surface (and tab).
+local ALIASES = {
+    uf = { "unitframes" }, frames = { "unitframes" },
+    np = { "nameplates" }, plates = { "nameplates" },
+    cd = { "cooldowns" }, cdm = { "cooldowns" },
+    party = { "groupframes", "party" }, raid = { "groupframes", "raid" }, group = { "groupframes" },
+}
+
 EV:RegisterSlash("design", function(rest)
-    rest = (rest or ""):lower()
+    rest = (rest or ""):lower():match("^%s*(.-)%s*$")
+    local alias = ALIASES[rest]
+    if alias then D:Open(alias[1], alias[2]) return end
     D:Open(rest ~= "" and rest or nil)
 end)
 EV:RegisterSlash("designer", function(rest) D:Open(rest ~= "" and rest:lower() or nil) end)

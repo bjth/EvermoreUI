@@ -28,19 +28,31 @@ local T = EV.Theme
 local UF = ns.Frame
 local issecret = issecretvalue or function() return false end
 
+--  Where each part sits: text by a point on its bar plus an offset (as the
+--  unit frames), icons centred on a point of the frame plus an offset, aura
+--  rows by a point on the health bar with the row growing away from it. All
+--  offsets are in frame units. The defaults are the layout these frames
+--  always had.
 local function Look(t)
     local base = {
         enabled = true, width = 200, height = 40, powerHeight = 6,
         portrait = "none", portraitSide = "left",
         healthColour = "class", healthText = "percent", powerText = "none",
-        showName = true, showLevel = false, fontSize = 12, nameAlign = "LEFT",
+        showName = true, showLevel = false, fontSize = 12, font = "",
+        namePoint = "LEFT", nameX = 5, nameY = 0, nameWidth = 0,
+        healthPoint = "RIGHT", healthX = -5, healthY = 0,
         textStyle = "both", barShade = 0.75, texture = "Flat", bgAlpha = 0.85,
         borderSize = 1, innerShadow = true, healPrediction = true,
         aggroBorder = true, aggroAlpha = 0.35, aggroPad = 6,
         spacing = 6, rangeAlpha = 0.45,
-        roleIcon = true, leaderIcon = true, readyCheck = true,
+        roleIcon = true, roleIconPoint = "TOPLEFT", roleIconX = 9, roleIconY = -9, roleIconSize = 12,
+        leaderIcon = true, leaderIconPoint = "TOPLEFT", leaderIconX = 9, leaderIconY = -1, leaderIconSize = 12,
+        readyCheck = true, readyIconPoint = "CENTER", readyIconX = 0, readyIconY = 0, readyIconSize = 16,
+        raidIconPoint = "TOP", raidIconX = 0, raidIconY = 0, raidIconSize = 18,
         debuffs = true, dispellableOnly = true, debuffSize = 18, debuffMax = 3,
+        debuffPoint = "BOTTOMRIGHT", debuffX = -2, debuffY = 2, debuffGrow = "LEFT",
         myBuffs = false, buffSize = 14, buffMax = 3,
+        buffPoint = "TOPRIGHT", buffX = -2, buffY = -2, buffGrow = "LEFT",
         hideBlizzard = true,
     }
     for k, v in pairs(t) do base[k] = v end
@@ -50,7 +62,8 @@ end
 local M = EV:NewModule("GroupFrames", {
     party = Look{ grow = "DOWN", showPlayer = true, sort = "index", raidStyle = false },
     raid  = Look{ width = 92, height = 42, powerHeight = 3, fontSize = 11, healthText = "none",
-                  nameAlign = "CENTER", spacing = 3, layout = "columns", sort = "group",
+                  namePoint = "CENTER", nameX = 0, nameY = 0, healthPoint = "CENTER", healthX = 0, healthY = -7,
+                  spacing = 3, layout = "columns", sort = "group",
                   roleIcon = true, leaderIcon = false, debuffSize = 14, debuffMax = 2 },
 })
 M.title = "Party & Raid"
@@ -66,6 +79,29 @@ hidden:Hide()
 local pending = false
 
 local function Cfg(f) return M.db[f.gkind] end
+
+--- Before the parts could be placed one by one, the name was either left
+--- or centred (nameAlign, left for a party and centred for a raid unless
+--- changed), and a centred name moved up to make room for the health text
+--- under it. Once per profile, that becomes the matching positions.
+local OLD_ALIGN = { party = "LEFT", raid = "CENTER" }
+local function Migrate()
+    for kind, c in pairs({ party = M.db.party, raid = M.db.raid }) do
+        if not c.placed then
+            local a = rawget(c, "nameAlign") or OLD_ALIGN[kind]
+            if a == "CENTER" then
+                c.namePoint, c.nameX, c.nameY = "CENTER", 0, c.healthText ~= "none" and 5 or 0
+                c.healthPoint, c.healthX, c.healthY = "CENTER", 0, -7
+            else
+                c.namePoint, c.nameX, c.nameY = "LEFT", 5, 0
+                c.healthPoint, c.healthX, c.healthY = "RIGHT", -5, 0
+            end
+            c.nameAlign = nil
+            c.placed = true
+        end
+    end
+end
+M.Migrate = Migrate
 
 --------------------------------------------------------------------------------
 --  Extra parts on a group frame
@@ -86,37 +122,45 @@ local function AuraHolder(f)
     return h
 end
 
+-- The leader icon is the one the single frames use (Frame.lua places it
+-- from leaderIcon* and shows it in UF.UpdateIndicators).
 local function Extras(f)
     f.role = Icon(f, 12)
-    f.leader = Icon(f, 12)
+    f.leaderIcon = Icon(f, 12)
     f.ready = Icon(f, 16)
     f.debuffHolder = AuraHolder(f)
     f.buffHolder = AuraHolder(f)
 end
 
+local POINTS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true,
+                 BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true }
+local function Point(v, fallback) return POINTS[v] and v or fallback end
+
+--- The width of an aura row: every icon it may show, with the gap AuraBox uses.
+local function RowWidth(size, n) return n * size + (n - 1) * 2 end
+M.RowWidth = RowWidth
+
 local function LayoutExtras(f, cfg)
-    local b = EV.Pixel:One(f) * (cfg.borderSize or 1)
-    f.role:ClearAllPoints()
-    f.role:SetPoint("TOPLEFT", f, "TOPLEFT", b + 2, -b - 2)
-    f.leader:ClearAllPoints()
-    f.leader:SetPoint("BOTTOMLEFT", f.role, "TOPLEFT", 0, -4)
-    f.ready:ClearAllPoints()
-    f.ready:SetPoint("CENTER", f.health, "CENTER", 0, 0)
-    f.debuffHolder:ClearAllPoints()
-    f.debuffHolder:SetPoint("BOTTOMRIGHT", f.health, "BOTTOMRIGHT", -2, 2)
-    f.buffHolder:ClearAllPoints()
-    f.buffHolder:SetPoint("TOPRIGHT", f.health, "TOPRIGHT", -2, -2)
-    if cfg.nameAlign == "CENTER" then
-        f.nameText:ClearAllPoints()
-        f.nameText:SetPoint("CENTER", f.health, "CENTER", 0, cfg.healthText ~= "none" and 5 or 0)
-        f.nameText:SetWidth(cfg.width - 8)
-        f.nameText:SetJustifyH("CENTER")
-        f.healthText:ClearAllPoints()
-        f.healthText:SetPoint("TOP", f.nameText, "BOTTOM", 0, -1)
-    else
-        f.nameText:SetJustifyH("LEFT")
+    local function At(icon, parent, point, fallback, x, y, size)
+        icon:SetSize(size, size)
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", parent, Point(point, fallback), x or 0, y or 0)
     end
+    At(f.role, f, cfg.roleIconPoint, "TOPLEFT", cfg.roleIconX, cfg.roleIconY, cfg.roleIconSize or 12)
+    At(f.ready, f.health, cfg.readyIconPoint, "CENTER", cfg.readyIconX, cfg.readyIconY, cfg.readyIconSize or 16)
+    -- Each aura row is a box as big as it can get, pinned by its own point
+    -- to the same point of the health bar; the icons fill it from the end
+    -- they grow away from.
+    local function Row(holder, point, fallback, x, y, size, n)
+        holder:ClearAllPoints()
+        point = Point(point, fallback)
+        holder:SetPoint(point, f.health, point, x or 0, y or 0)
+        holder:SetSize(RowWidth(size, n), size)
+    end
+    Row(f.debuffHolder, cfg.debuffPoint, "BOTTOMRIGHT", cfg.debuffX, cfg.debuffY, cfg.debuffSize, cfg.debuffMax)
+    Row(f.buffHolder, cfg.buffPoint, "TOPRIGHT", cfg.buffX, cfg.buffY, cfg.buffSize, cfg.buffMax)
 end
+M.LayoutExtras = LayoutExtras
 
 --- Engine aura containers: your dispellable (or all) debuffs, your own buffs.
 local function Auras(f, cfg)
@@ -124,10 +168,10 @@ local function Auras(f, cfg)
     if not C then return end
     C.Build(f.debuffHolder, cfg.debuffs and {
         unit = f.unit, filter = cfg.dispellableOnly and "HARMFUL|RAID" or "HARMFUL",
-        size = cfg.debuffSize, max = cfg.debuffMax, dispel = true, grow = "LEFT",
+        size = cfg.debuffSize, max = cfg.debuffMax, dispel = true, grow = cfg.debuffGrow or "LEFT",
     } or nil)
     C.Build(f.buffHolder, cfg.myBuffs and {
-        unit = f.unit, filter = "HELPFUL|PLAYER", size = cfg.buffSize, max = cfg.buffMax, grow = "LEFT",
+        unit = f.unit, filter = "HELPFUL|PLAYER", size = cfg.buffSize, max = cfg.buffMax, grow = cfg.buffGrow or "LEFT",
     } or nil)
 end
 
@@ -137,14 +181,7 @@ function M.UpdateRole(f, cfg)
     if atlas then f.role:SetAtlas(atlas); f.role:Show() else f.role:Hide() end
 end
 
-function M.UpdateLeader(f, cfg)
-    local tex
-    if cfg.leaderIcon then
-        if UnitIsGroupLeader(f.unit) then tex = "Interface\\GroupFrame\\UI-Group-LeaderIcon"
-        elseif UnitIsGroupAssistant and UnitIsGroupAssistant(f.unit) then tex = "Interface\\GroupFrame\\UI-Group-AssistantIcon" end
-    end
-    if tex then f.leader:SetTexture(tex); f.leader:Show() else f.leader:Hide() end
-end
+function M.UpdateLeader(f, cfg) UF.UpdateIndicators(f, cfg) end
 
 local READY = {
     ready = READY_CHECK_READY_TEXTURE or "Interface\\RaidFrame\\ReadyCheck-Ready",
@@ -347,7 +384,7 @@ local function Header(kind)
     end
     EV.Movers:Register(h, "GF_" .. kind, kind == "party" and L["Party"] or L["Raid"],
         kind == "party" and { "TOPLEFT", "TOPLEFT", 20, -240 } or { "TOPLEFT", "TOPLEFT", 20, -240 }, {
-        group = L["Unit Frames"], page = "groupframes", tab = kind == "party" and L["Party"] or L["Raid"],
+        group = L["Unit Frames"], page = "groupframes", designer = "groupframes", designerTab = kind,
         getSize = sizeFor,
         isDisabled = function() return not (M:IsEnabled() and M.db[kind].enabled) end,
     })
@@ -386,36 +423,128 @@ M.preview = { party = false, raid = false }
 local fakes = { party = {}, raid = {} }
 local SAMPLE = { "WARRIOR", "PRIEST", "MAGE", "ROGUE", "DRUID", "HUNTER", "PALADIN", "SHAMAN", "WARLOCK" }
 local SAMPLE_ROLE = { "TANK", "HEALER", "DAMAGER", "DAMAGER", "DAMAGER" }
+local SAMPLE_ICONS = { 136207, 135940, 136085, 135953, 136096, 135987 }
 
-local function Fake(kind, i)
-    local f = fakes[kind][i]
-    if f then return f end
-    f = CreateFrame("Button", nil, UIParent)
-    UF.Dress(f, "preview", nil)
+--- A plain frame with a group frame's parts, for stand-ins and the designer.
+--- It is never offered to click casting and never takes the mouse.
+local function Stand(parent)
+    local f = CreateFrame("Button", nil, parent or UIParent)
+    UF.Dress(f, "preview", nil, true)
     Extras(f)
     f:EnableMouse(false)
-    f:SetFrameStrata("LOW")
-    fakes[kind][i] = f
     return f
 end
+M.Stand = Stand
 
-local function Place(kind, f, i, c)
-    local h = headers[kind]
+--- Sample icons filling an aura row, so it can be seen and placed.
+local function SampleRow(holder, on, size, n, grow, dispel)
+    holder.samples = holder.samples or {}
+    for i = 1, math.max(n, #holder.samples) do
+        local t = holder.samples[i]
+        if i <= n and on then
+            if not t then
+                t = CreateFrame("Frame", nil, holder)
+                t.back = t:CreateTexture(nil, "BACKGROUND")
+                t.back:SetAllPoints()
+                t.icon = t:CreateTexture(nil, "ARTWORK")
+                t.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                holder.samples[i] = t
+            end
+            local one = EV.Pixel:One(holder)
+            t:SetSize(size, size)
+            t:ClearAllPoints()
+            local edge = grow == "RIGHT" and "LEFT" or "RIGHT"
+            t:SetPoint(edge, holder, edge, (grow == "RIGHT" and 1 or -1) * (i - 1) * (size + 2), 0)
+            if dispel then t.back:SetColorTexture(0.6, 0.2, 0.8, 1) else t.back:SetColorTexture(0, 0, 0, 1) end
+            t.icon:ClearAllPoints()
+            t.icon:SetPoint("TOPLEFT", one, -one)
+            t.icon:SetPoint("BOTTOMRIGHT", -one, one)
+            t.icon:SetTexture(SAMPLE_ICONS[(i - 1) % #SAMPLE_ICONS + 1])
+            t:Show()
+        elseif t then
+            t:Hide()
+        end
+    end
+end
+
+--- Dress a stand-in with made-up values: the i-th member of a group.
+--- `first` also shows the parts that only some members have (leader, a
+--- ready check answer, a raid mark), so each can be seen.
+local function Sample(f, kind, i, c, first)
+    f.gkind = kind
+    UF.Layout(f, c)
+    LayoutExtras(f, c)
+    local class = SAMPLE[(i - 1) % #SAMPLE + 1]
+    local r, g, b = EV.Palette.ClassRGB(class)
+    local k = c.barShade or 0.75
+    local hp = 100 - ((i * 37) % 60)
+    f.health:SetMinMaxValues(0, 100)
+    f.health:SetValue(hp)
+    if c.healthColour == "green" then f.health:SetStatusBarColor(0.2 * k, 0.8 * k, 0.2 * k, 1)
+    elseif c.healthColour == "dark" then f.health:SetStatusBarColor(0.16, 0.16, 0.16, 1)
+    else f.health:SetStatusBarColor((r or 0.5) * k, (g or 0.5) * k, (b or 0.5) * k, 1) end
+    f.power:SetMinMaxValues(0, 100)
+    f.power:SetValue(70)
+    f.power:SetStatusBarColor(0.18 * k, 0.45 * k, 1 * k, 1)
+    f.nameText:SetText((LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class] or class) .. " " .. i)
+    local texts = { percent = hp .. "%", deficit = "-" .. (100 - hp) * 30, current = (hp * 30 / 1000) .. "k" }
+    f.healthText:SetText(texts[c.healthText] or "")
+    f.healthText:SetShown(c.healthText ~= "none")
+    f.powerText:SetText("")
+    f.statusText:Hide()
+    local role = c.roleIcon and ROLE_ATLAS[SAMPLE_ROLE[(i - 1) % 5 + 1]]
+    if role then f.role:SetAtlas(role); f.role:Show() else f.role:Hide() end
+    if first and c.leaderIcon then
+        f.leaderIcon:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
+        f.leaderIcon:Show()
+    else
+        f.leaderIcon:Hide()
+    end
+    if first and c.readyCheck then f.ready:SetTexture(READY.ready); f.ready:Show() else f.ready:Hide() end
+    if first and f.raidIcon then
+        if SetRaidTargetIconTexture then SetRaidTargetIconTexture(f.raidIcon, 1) end
+        f.raidIcon:Show()
+    elseif f.raidIcon then
+        f.raidIcon:Hide()
+    end
+    SampleRow(f.debuffHolder, c.debuffs, c.debuffSize, i == 1 and c.debuffMax or math.min(c.debuffMax, 1),
+              c.debuffGrow, c.dispellableOnly)
+    SampleRow(f.buffHolder, c.myBuffs, c.buffSize, c.buffMax, c.buffGrow)
+    f:SetAlpha(1)
+    f:Show()
+end
+
+--- Where the i-th frame sits relative to `anchor`, the way the header lays
+--- the real ones out.
+local function Place(kind, f, i, c, anchor)
     local col, row = 0, i - 1
     local w, hh, sp = c.width, c.height, c.spacing
     f:ClearAllPoints()
     if kind == "party" then
         local g = c.grow or "DOWN"
-        if g == "DOWN" then f:SetPoint("TOPLEFT", h, "TOPLEFT", 0, -row * (hh + sp))
-        elseif g == "UP" then f:SetPoint("BOTTOMLEFT", h, "BOTTOMLEFT", 0, row * (hh + sp))
-        elseif g == "RIGHT" then f:SetPoint("TOPLEFT", h, "TOPLEFT", row * (w + sp), 0)
-        else f:SetPoint("TOPRIGHT", h, "TOPRIGHT", -row * (w + sp), 0) end
+        if g == "DOWN" then f:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, -row * (hh + sp))
+        elseif g == "UP" then f:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, row * (hh + sp))
+        elseif g == "RIGHT" then f:SetPoint("TOPLEFT", anchor, "TOPLEFT", row * (w + sp), 0)
+        else f:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -row * (w + sp), 0) end
         return
     end
     col, row = math.floor((i - 1) / 5), (i - 1) % 5
     if c.layout == "rows" then col, row = row, col end
-    f:SetPoint("TOPLEFT", h, "TOPLEFT", col * (w + sp), -row * (hh + sp))
+    f:SetPoint("TOPLEFT", anchor, "TOPLEFT", col * (w + sp), -row * (hh + sp))
 end
+
+--- The size of `n` frames laid out that way.
+local function Extent(kind, c, n)
+    local w, h, sp = c.width, c.height, c.spacing
+    if kind == "party" then
+        local vertical = c.grow ~= "RIGHT" and c.grow ~= "LEFT"
+        return vertical and w or (w * n + sp * (n - 1)), vertical and (h * n + sp * (n - 1)) or h
+    end
+    local cols, rows = math.ceil(n / 5), math.min(n, 5)
+    if c.layout == "rows" then cols, rows = rows, cols end
+    return w * cols + sp * (cols - 1), h * rows + sp * (rows - 1)
+end
+M.Extent = Extent
 
 function ns.RefreshPreview()
     for kind, n in pairs({ party = 5, raid = 25 }) do
@@ -423,31 +552,47 @@ function ns.RefreshPreview()
         local c = M.db[kind]
         for i = 1, n do
             if on then
-                local f = Fake(kind, i)
-                f.gkind = kind
-                UF.Layout(f, c)
-                LayoutExtras(f, c)
-                Place(kind, f, i, c)
-                local class = SAMPLE[(i - 1) % #SAMPLE + 1]
-                local r, g, b = EV.Palette.ClassRGB(class)
-                local k = c.barShade or 0.75
-                f.health:SetMinMaxValues(0, 100)
-                f.health:SetValue(100 - ((i * 37) % 60))
-                f.health:SetStatusBarColor((r or 0.5) * k, (g or 0.5) * k, (b or 0.5) * k, 1)
-                f.power:SetMinMaxValues(0, 100)
-                f.power:SetValue(70)
-                f.power:SetStatusBarColor(0.18 * k, 0.45 * k, 1 * k, 1)
-                f.nameText:SetText((LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class] or class) .. " " .. i)
-                f.healthText:SetText(c.healthText ~= "none" and ((100 - ((i * 37) % 60)) .. "%") or "")
-                f.statusText:Hide()
-                local role = c.roleIcon and ROLE_ATLAS[SAMPLE_ROLE[(i - 1) % 5 + 1]]
-                if role then f.role:SetAtlas(role); f.role:Show() else f.role:Hide() end
-                f:Show()
+                local f = fakes[kind][i]
+                if not f then
+                    f = Stand(UIParent)
+                    f:SetFrameStrata("LOW")
+                    fakes[kind][i] = f
+                end
+                Sample(f, kind, i, c, i == 1)
+                Place(kind, f, i, c, headers[kind])
             elseif fakes[kind][i] then
                 fakes[kind][i]:Hide()
             end
         end
     end
+end
+
+--------------------------------------------------------------------------------
+--  The designer's copy: a party of five or three raid groups, in a holder
+--  sized to them. The first frame is the one whose parts are picked.
+--------------------------------------------------------------------------------
+local DESIGN_COUNT = { party = 5, raid = 15 }
+
+function M:BuildDesignerPreview(kind, host)
+    local pv = CreateFrame("Frame", nil, host)
+    pv.kind = kind
+    pv.frames = {}
+    for i = 1, DESIGN_COUNT[kind] do pv.frames[i] = Stand(pv) end
+    return pv
+end
+
+function M:LayoutDesignerPreview(pv)
+    local kind = pv.kind
+    local c = M.db[kind]
+    local n = #pv.frames
+    local w, h = Extent(kind, c, n)
+    pv:SetSize(w, h)
+    for i, f in ipairs(pv.frames) do
+        f:SetFrameLevel(pv:GetFrameLevel() + 2)
+        Sample(f, kind, i, c, i == 1)
+        Place(kind, f, i, c, pv)
+    end
+    pv.first = pv.frames[1]
 end
 
 --------------------------------------------------------------------------------
@@ -501,7 +646,7 @@ local function Diagnose()
 end
 
 function M:Refresh() self:Apply() end
-function M:OnProfileChanged() self:Apply() end
+function M:OnProfileChanged() Migrate(); self:Apply() end
 
 function M.Children() return children end
 
@@ -510,6 +655,7 @@ function M:OnEnable()
         M.inReport = true
         EV.Report:AddLine(function() local ok, line = pcall(Diagnose); return ok and line or nil end)
     end
+    Migrate()
     RetireBlizzard()
     self:Apply()
 

@@ -632,7 +632,7 @@ local function Build(def)
     bar:SetSize(40, 40)
     holders[def.key] = bar
     EV.Movers:Register(bar, "CD_" .. def.key, def.label, def.pos, {
-        group = L["Combat"], page = "cooldowns", tab = def.label,
+        group = L["Combat"], page = "cooldowns", designer = "cooldowns",
         isDisabled = function() return not (M:IsEnabled() and M.db.bars[def.key].enabled) end,
     })
 end
