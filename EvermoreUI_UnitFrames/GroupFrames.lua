@@ -468,12 +468,46 @@ function M:Apply()
     if ns.RefreshPreview then ns.RefreshPreview() end
 end
 
+--- One report line per header: what the game has done with it, for when a
+--- group doesn't show. Read-only; safe in combat.
+local function Diagnose()
+    local out = {}
+    for _, kind in ipairs({ "party", "raid" }) do
+        local h = headers[kind]
+        if h then
+            local shown, first = 0, nil
+            local i = 1
+            while h[i] do
+                if h[i]:IsShown() then shown = shown + 1 end
+                if not first and h[i]:GetAttribute("unit") then first = h[i] end
+                i = i + 1
+            end
+            local line = ("%s: header %s/%s state %s, %d of %d shown"):format(kind,
+                h:IsShown() and "shown" or "hidden", h:IsVisible() and "visible" or "not visible",
+                tostring(h:GetAttribute("state-visibility")), shown, i - 1)
+            if first then
+                line = line .. (" first %s %s alpha %.2f size %dx%d points %d"):format(
+                    tostring(first:GetAttribute("unit")), first:IsShown() and "shown" or "hidden",
+                    first:GetAlpha(), first:GetWidth(), first:GetHeight(), first:GetNumPoints())
+            end
+            out[#out + 1] = line
+        end
+    end
+    out[#out + 1] = ("group %s raid %s combat %s pending %s"):format(tostring(IsInGroup()),
+        tostring(IsInRaid()), tostring(InCombatLockdown()), tostring(pending))
+    return "Group frames: " .. table.concat(out, "; ")
+end
+
 function M:Refresh() self:Apply() end
 function M:OnProfileChanged() self:Apply() end
 
 function M.Children() return children end
 
 function M:OnEnable()
+    if EV.Report and EV.Report.AddLine and not M.inReport then
+        M.inReport = true
+        EV.Report:AddLine(function() local ok, line = pcall(Diagnose); return ok and line or nil end)
+    end
     RetireBlizzard()
     self:Apply()
 
