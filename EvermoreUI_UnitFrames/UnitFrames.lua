@@ -104,7 +104,8 @@ end
 function M:ApplyFrame(key)
     local f, cfg = frames[key], self.db[key]
     if not f then return end
-    if InCombatLockdown() then pendingLayout = true; return end
+    if EV:Locked() then pendingLayout = true; return end
+    if InCombatLockdown() then pendingLayout = true end   -- loading: again after combat
     UF.Layout(f, cfg)
     if cfg.enabled then
         if f.unit == "player" then

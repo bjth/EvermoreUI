@@ -182,6 +182,10 @@ function EV:_RebindModules()
     EV:SendMessage("EV_PROFILE_CHANGED")
 end
 
+--- True when protected frames can't be touched: in combat, but not while
+--- the UI is loading after a reload in combat.
+function EV:Locked() return InCombatLockdown() and not self.loading end
+
 local driver = CreateFrame("Frame")
 driver:RegisterEvent("ADDON_LOADED")
 driver:RegisterEvent("PLAYER_LOGIN")
@@ -196,7 +200,11 @@ driver:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_LOGIN" then
         EV.loggedIn = true
         FlushInit()
+        -- A reload in combat still lets protected frames be set up while
+        -- the UI loads; modules check EV:Locked() rather than combat alone.
+        EV.loading = true
         FlushEnable()
+        EV.loading = false
         EV:SendMessage("EV_READY")
     elseif event == "PLAYER_LOGOUT" then
         EV:SendMessage("EV_LOGOUT")

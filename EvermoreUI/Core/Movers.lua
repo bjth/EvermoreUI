@@ -113,7 +113,10 @@ function Movers:Apply(key)
     local e = elements[key]
     if not e then return end
     local f = e.frame
-    if f:IsProtected() and InCombatLockdown() then pendingApply[key] = true; return end
+    if f:IsProtected() and InCombatLockdown() then
+        pendingApply[key] = true   -- again after combat, in case loading didn't take
+        if not EV.loading then return end
+    end
 
     -- Passive elements (Blizzard frames like chat) stay where Blizzard puts
     -- them until the user actually moves them.
