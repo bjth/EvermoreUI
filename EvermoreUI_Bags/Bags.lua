@@ -424,19 +424,29 @@ function M:Open() Show(true) end
 function M:Close() if win then win:Hide() end end
 
 -- After each of Blizzard's calls: follow what it meant, hide its windows.
+-- The calls nest (ToggleAllBags opens the bags through OpenBag and
+-- OpenBackpack), and post-hooks fire innermost first, so acting on each one
+-- would open ours and then toggle it straight shut. Instead each call just
+-- records itself; the outermost call's hook runs last, so the last one
+-- recorded is what was meant, and it is carried out once, a frame later.
+local want
+local function Resolve()
+    local kind = want
+    want = nil
+    if not (kind and M:IsEnabled()) then return end
+    if kind == "toggle" then M:Toggle()
+    elseif kind == "open" then M:Open()
+    elseif kind == "close" then M:Close() end
+    HideBlizzard()
+end
+
 local function After(kind, perBag)
     return function(id)
         if not M:IsEnabled() then return end
         -- ToggleBag / OpenBag for a bank bag: not ours.
         if perBag and not IsOurBag(id) then return end
-        if kind == "toggle" then
-            M:Toggle()
-        elseif kind == "open" then
-            M:Open()
-        elseif kind == "close" then
-            M:Close()
-        end
-        HideBlizzard()
+        if not want then C_Timer.After(0, Resolve) end
+        want = kind
     end
 end
 
