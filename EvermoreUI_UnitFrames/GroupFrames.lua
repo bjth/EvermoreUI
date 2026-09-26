@@ -546,12 +546,19 @@ local function Extent(kind, c, n)
 end
 M.Extent = Extent
 
+--- How many frames a sample group shows: a party is four without you.
+local function SampleCount(kind, full)
+    if kind == "party" and not M.db.party.showPlayer then return full - 1 end
+    return full
+end
+
 function ns.RefreshPreview()
     for kind, n in pairs({ party = 5, raid = 25 }) do
         local on = M.preview[kind] and M:IsEnabled() and M.db[kind].enabled and headers[kind] ~= nil
         local c = M.db[kind]
+        local shown = SampleCount(kind, n)
         for i = 1, n do
-            if on then
+            if on and i <= shown then
                 local f = fakes[kind][i]
                 if not f then
                     f = Stand(UIParent)
@@ -584,13 +591,17 @@ end
 function M:LayoutDesignerPreview(pv)
     local kind = pv.kind
     local c = M.db[kind]
-    local n = #pv.frames
+    local n = SampleCount(kind, #pv.frames)
     local w, h = Extent(kind, c, n)
     pv:SetSize(w, h)
     for i, f in ipairs(pv.frames) do
-        f:SetFrameLevel(pv:GetFrameLevel() + 2)
-        Sample(f, kind, i, c, i == 1)
-        Place(kind, f, i, c, pv)
+        if i <= n then
+            f:SetFrameLevel(pv:GetFrameLevel() + 2)
+            Sample(f, kind, i, c, i == 1)
+            Place(kind, f, i, c, pv)
+        else
+            f:Hide()
+        end
     end
     pv.first = pv.frames[1]
 end
