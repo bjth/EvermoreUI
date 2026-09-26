@@ -43,6 +43,7 @@ Core\Probes.lua
 
 # Slash commands
 Core\Durability.lua
+Core\BagMoves.lua
 Core\Alts.lua
 Core\Report.lua
 Core\Slash.lua

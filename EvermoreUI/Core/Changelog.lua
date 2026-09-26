@@ -3,6 +3,15 @@ if EV_BLOCKED then return end
 -- changelog, not this file.
 EvermoreUI.CHANGELOG = {
     {
+        version = "0.11.5",
+        intro = { "Small comforts while the bag addon is built." },
+        sections = {
+            { title = "New", items = {
+                "**Empty a bag**: Alt + click a bag on the bag bar to move everything in it into free space in your other bags, topping up part stacks first and keeping arrows, shards and herbs in their own bags. Then swap it out.",
+            } },
+        },
+    },
+    {
         version = "0.11.0",
         intro = { "Party and raid frames, just in time for dungeons." },
         sections = {
