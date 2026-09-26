@@ -651,9 +651,10 @@ local bagsView = NewView("bags", {
 --  game allows, your account. Blizzard's BankFrame has to stay shown while
 --  you're at the bank (hiding it ends the visit: its OnHide calls
 --  C_Bank.CloseBankFrame), so it is made invisible and moved off screen
---  instead, and brought back by the "Blizzard's bank" button for buying tabs.
+--  instead, and brought back by the "Blizzard's bank" button.
 --  Right-clicking an item in your bags puts it in the bank Blizzard's frame
---  has selected, which is the character bank unless you change it there.
+--  has selected, so choosing Character or Account in ours switches that one
+--  too. Buying a tab uses Blizzard's own purchase button template.
 --------------------------------------------------------------------------------
 local BT = Enum.BankType or { Character = 0, Account = 2 }
 local bankType = BT.Character
@@ -686,11 +687,32 @@ local function CanView(t)
     return ok and can or false
 end
 
+local function Supports(fn, t)
+    if not (C_Bank and C_Bank[fn]) then return false end
+    local ok, yes = pcall(C_Bank[fn], t)
+    return ok and yes or false
+end
+
+--- Make Blizzard's bank frame (out of sight) look at the same bank as ours,
+--- so right-clicking an item in your bags puts it there. The base SetTab is
+--- used rather than the frame's own, which would also try to buy a free tab.
+local function FollowInBlizzard(t)
+    local f = BankFrame
+    if not (f and f:IsShown() and f.BankPanel and BankFrameBaseMixin and BankFrameBaseMixin.SetTab) then return end
+    if f.GetActiveBankType and f:GetActiveBankType() == t then return end
+    local id = (t == BT.Account) and f.accountBankTabID or f.characterBankTabID
+    if id then pcall(BankFrameBaseMixin.SetTab, f, id) end
+end
+
+local function Gold(copper)
+    return EV:FormatMoney(tonumber(copper) or 0)
+end
+
 local bankView
 bankView = NewView("bank", {
     frameName = "EvermoreUIBank", title = L["Bank"], bags = BankBags,
     corner = "TOPLEFT", pointKey = "bankPoint", defaultPoint = { 40, -110 },
-    extraTop = 30, minWidth = 380,
+    extraTop = 30, minWidth = 460,
     sort = function()
         if bankType == BT.Account and C_Container.SortAccountBankBags then
             pcall(C_Container.SortAccountBankBags)
@@ -700,34 +722,108 @@ bankView = NewView("bank", {
     end,
     decorate = function(view, win)
         local W = EV.UI
-        local mineBtn = W.Button(win.body, L["Character"], 110, function()
-            bankType = BT.Character; view:Paint(); view:Build()
-        end)
+        local function Pick(t)
+            bankType = t
+            FollowInBlizzard(t)
+            view:Paint()
+            view:Build()
+        end
+        local mineBtn = W.Button(win.body, L["Character"], 100, function() Pick(BT.Character) end)
         mineBtn:SetHeight(22)
         mineBtn:SetPoint("TOPLEFT", win.body, "TOPLEFT", PAD, -8)
-        local acct = W.Button(win.body, L["Account"], 110, function()
-            bankType = BT.Account; view:Paint(); view:Build()
-        end)
+        local acct = W.Button(win.body, L["Account"], 100, function() Pick(BT.Account) end)
         acct:SetHeight(22)
         acct:SetPoint("LEFT", mineBtn, "RIGHT", 6, 0)
-        local blizz = W.Button(win.body, L["Blizzard's bank"], 120, function()
+
+        local function Tip(b, title, text)
+            b:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText(title)
+                GameTooltip:AddLine(text, 0.8, 0.8, 0.8, true)
+                GameTooltip:Show()
+            end)
+            b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        end
+
+        local blizz = W.Button(win.body, L["Blizzard's bank"], 110, function()
             showBlizzardBank = not showBlizzardBank
             M.ApplyBankFrame()
         end)
         blizz:SetHeight(22)
         blizz:SetPoint("TOPRIGHT", win.body, "TOPRIGHT", -PAD, -8)
-        blizz:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(L["Blizzard's bank"])
-            GameTooltip:AddLine(L["Shows or hides the game's own bank window, for buying bank tabs and its other settings."], 0.8, 0.8, 0.8, true)
-            GameTooltip:Show()
+        Tip(blizz, L["Blizzard's bank"], L["Shows or hides the game's own bank window."])
+
+        -- Buying a tab goes through Blizzard's own purchase button template
+        -- (made for addons: the bank type comes from an attribute), so the
+        -- purchase runs in Blizzard's code and its confirmation.
+        local buy
+        local ok, made = pcall(CreateFrame, "Button", nil, win.body, "BankPanelPurchaseButtonScriptTemplate")
+        if ok and made then
+            buy = made
+            buy:SetSize(96, 22)
+            buy.bg = T.Fill(buy, "BACKGROUND", "surface2")
+            buy.bg:SetAllPoints()
+            T.TokenBorder(buy, "accent")
+            buy.label = T.Text(buy, "small", "text", true)
+            buy.label:SetPoint("CENTER")
+            buy.label:SetText(L["Buy a tab"])
+            buy:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
+            local hl = buy:GetHighlightTexture()
+            if hl then hl:SetVertexColor(1, 1, 1, 0.08) end
+            buy:SetPoint("RIGHT", blizz, "LEFT", -6, 0)
+            buy:HookScript("OnEnter", function(self)
+                local data = C_Bank.FetchNextPurchasableBankTabData and C_Bank.FetchNextPurchasableBankTabData(bankType)
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText(L["Buy a bank tab"])
+                if data and data.tabCost then GameTooltip:AddLine(Gold(data.tabCost), 1, 1, 1) end
+                GameTooltip:Show()
+            end)
+            buy:HookScript("OnLeave", function() GameTooltip:Hide() end)
+        end
+
+        local deposit = W.Button(win.body, L["Deposit all"], 96, function()
+            if C_Bank and C_Bank.AutoDepositItemsIntoBank then pcall(C_Bank.AutoDepositItemsIntoBank, bankType) end
         end)
-        blizz:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        deposit:SetHeight(22)
+        deposit:SetPoint("RIGHT", buy or blizz, "LEFT", -6, 0)
+        Tip(deposit, L["Deposit all"], L["Puts everything this bank takes from your bags into it, as the game's own deposit button does."])
+
+        -- Money kept in the bank (the account bank holds gold).
+        local money = T.Text(win.body, "small", "text")
+        money:SetPoint("BOTTOMRIGHT", win.body, "BOTTOMRIGHT", -PAD - 150, 10)
+        local function AskGold(title, onGold)
+            EV.UI.AskNumber{ title = title, text = L["How much gold?"], value = 0, min = 0, max = 9999999,
+                             onSave = function(n) if n > 0 then onGold(n * 10000) end end }
+        end
+        local put = W.Button(win.body, L["Deposit"], 70, function()
+            AskGold(L["Deposit gold"], function(c) pcall(C_Bank.DepositMoney, bankType, c) end)
+        end)
+        put:SetHeight(20)
+        put:SetPoint("BOTTOMRIGHT", win.body, "BOTTOMRIGHT", -PAD - 76, 6)
+        local take = W.Button(win.body, L["Withdraw"], 70, function()
+            AskGold(L["Withdraw gold"], function(c) pcall(C_Bank.WithdrawMoney, bankType, c) end)
+        end)
+        take:SetHeight(20)
+        take:SetPoint("BOTTOMRIGHT", win.body, "BOTTOMRIGHT", -PAD, 6)
+
         view.tabs = { [BT.Character] = mineBtn, [BT.Account] = acct }
         function view:Paint()
             for t, b in pairs(self.tabs) do
                 b:SetShown(t == BT.Character or CanView(t))
                 b:SetStyle(t == bankType and "primary" or "secondary")
+            end
+            deposit:SetShown(Supports("DoesBankTypeSupportAutoDeposit", bankType))
+            if buy then
+                buy:SetAttribute("overrideBankType", bankType)
+                buy:SetShown(not InCombatLockdown() and Supports("CanPurchaseBankTab", bankType))
+            end
+            local moneyOK = Supports("DoesBankTypeSupportMoneyTransfer", bankType)
+            put:SetShown(moneyOK and Supports("CanDepositMoney", bankType))
+            take:SetShown(moneyOK and Supports("CanWithdrawMoney", bankType))
+            money:SetShown(moneyOK)
+            if moneyOK and C_Bank.FetchDepositedMoney then
+                local okM, amount = pcall(C_Bank.FetchDepositedMoney, bankType)
+                money:SetText(okM and Gold(amount) or "")
             end
         end
     end,
@@ -855,6 +951,10 @@ function M:OnEnable()
         if bankView.Paint then bankView:Paint() end
         M.ApplyBankFrame()
     end)
+    local function BankTop() if bankView.win and bankView.win:IsShown() and bankView.Paint then bankView:Paint() end end
+    self:RegisterEvent("ACCOUNT_MONEY", BankTop)
+    self:RegisterEvent("BANK_TABS_CHANGED", function() BankTop(); M:Refresh() end)
+    self:RegisterEvent("PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", function() M:Refresh() end)
     self:RegisterEvent("BANKFRAME_CLOSED", function()
         atBank = false
         if bankView.win then bankView.win:Hide() end
@@ -867,7 +967,7 @@ function M:OnEnable()
         C_Timer.After(0.05, function() queued = false; M:Refresh() end)
     end
     for _, e in ipairs({ "BAG_UPDATE_DELAYED", "BAG_NEW_ITEMS_UPDATED", "EQUIPMENT_SETS_CHANGED", "QUEST_ACCEPTED",
-                         "PLAYERBANKSLOTS_CHANGED", "BANK_TABS_CHANGED", "BANK_TAB_SETTINGS_UPDATED" }) do
+                         "PLAYERBANKSLOTS_CHANGED", "BANK_TAB_SETTINGS_UPDATED" }) do
         self:RegisterEvent(e, Rebuild)
     end
     local function Repaint() bagsView:Repaint(); bankView:Repaint() end
