@@ -1,5 +1,41 @@
 # EvermoreUI
 
+## 0.12.0
+
+The unit frames catch up with the rest of the suite: everything Blizzard's
+target and player frames used to carry, and the settings you'd expect from a
+full frames addon.
+
+### New
+- **Cast bars** on the player, target, focus and pet frames. Under the
+  frame, or anywhere you like in edit mode. Spell icon, name, time left,
+  a spark on the leading edge, grey when the cast can't be interrupted and a
+  red "Interrupted" when it's cut off. Your own bar shows your latency, and
+  replaces Blizzard's (switch that off on the Player tab).
+- **Buffs and debuffs on your target**: everyone's debuffs above the frame,
+  so you can see who has Sunder or a curse up and whether it's sheeped, and
+  its buffs below, for Purge, Tranquilizing Shot or checking a friend's
+  buffs before you rebuff. "Only mine" narrows either to yours. Focus,
+  player and pet can show them too.
+- **Combo points** above the player frame for rogues, and druids in Cat
+  Form.
+- **Totems** under the player frame for shamans, with the time left. Right
+  click one to destroy it.
+- **Fade out of combat**: the player and pet frames can fade away until
+  you're fighting, targeting, casting, hurt, short of power or hovering
+  them.
+- **Copy settings** from one frame onto another.
+
+### Changed
+- **More ways to style a frame**: border from 0 to 8 pixels in any colour,
+  background colour, your own health and power colours (or power in your
+  class colour), a font per frame, name colour and width, where the name,
+  health and power text sit with offsets, and the size and spot of the raid
+  mark, leader and PvP icons and your combat and resting icons.
+- **Target of target and pet** sit a little lower by default, clear of the
+  new cast bars and your target's buffs. Frames you've already placed stay
+  where you put them.
+
 ## 0.11.5
 
 Small comforts while the bag addon is built.

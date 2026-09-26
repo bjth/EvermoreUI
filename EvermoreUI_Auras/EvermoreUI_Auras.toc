@@ -9,6 +9,5 @@
 ## Group: EvermoreUI
 
 Presets.lua
-Container.lua
 Auras.lua
 Reminders.lua

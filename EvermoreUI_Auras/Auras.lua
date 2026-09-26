@@ -10,7 +10,7 @@ if not (EvermoreUI and EvermoreUI.NewModule) then return end -- stale-parent gua
 local EV = EvermoreUI
 EV._ModuleNS[ADDON_NAME] = ns
 local L = EV.L
-local C = ns.Container
+local C = EV.AuraContainer
 
 local DEFAULTS = {
     buffs = {

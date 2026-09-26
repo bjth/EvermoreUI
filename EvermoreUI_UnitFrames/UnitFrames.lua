@@ -23,6 +23,29 @@ local UNITS = {
 }
 ns.UNITS = UNITS
 
+-- The parts a frame carries beyond its bars. Each unit starts from these
+-- and overrides what differs (below).
+local function Castbar(t)
+    local c = {
+        enabled = true, detached = false, width = 0, height = 18, gap = 4, x = 0,
+        icon = true, iconSide = "LEFT", spark = true, showName = true, showTime = true,
+        timeFormat = "remaining", fontSize = 11, texture = "", latency = true,
+        hideBlizzard = true,
+    }
+    for k, v in pairs(t or {}) do c[k] = v end
+    return c
+end
+
+local function Auras(t)
+    local a = {
+        enabled = false, size = 24, spacing = 2, perRow = 8, max = 16,
+        side = "TOP", align = "START", x = 0, y = 0,
+        onlyMine = false, showTimer = true, timerSize = 10, showSwipe = true, sort = "default",
+    }
+    for k, v in pairs(t or {}) do a[k] = v end
+    return a
+end
+
 local function Unit(t)
     local base = {
         enabled = true, width = 240, height = 46, powerHeight = 10,
@@ -37,41 +60,94 @@ local function Unit(t)
         -- on the health bar, and their red aggro glow at their strength.
         borderSize = 2, innerShadow = true,
         healPrediction = true, aggroBorder = false, aggroAlpha = 0.35, aggroPad = 8,
+        -- Colours. The border and background defaults are the plates' black
+        -- and near-black; custom health and power only apply in "custom".
+        borderColour = { 0, 0, 0 }, bgColour = { 0.031, 0.031, 0.031 },
+        healthCustom = { 0.2, 0.75, 0.3 }, powerColour = "type", powerCustom = { 0.18, 0.45, 1 },
+        nameColour = "white",
+        -- Text: "" is General > Font. Positions are the layout this frame
+        -- always had; offsets are pixels.
+        font = "", powerFontSize = 0,
+        namePoint = "LEFT", nameX = 5, nameY = 0, nameWidth = 0,
+        healthPoint = "RIGHT", healthX = -5, healthY = 0,
+        powerPoint = "RIGHT", powerX = -5, powerY = 0,
+        -- Indicators.
+        raidIconSize = 18, raidIconPoint = "TOP", raidIconX = 0, raidIconY = 0,
+        leaderIcon = true, leaderIconSize = 14, leaderIconPoint = "TOPLEFT",
+        pvpIcon = false, pvpIconSize = 24, pvpIconPoint = "BOTTOMLEFT",
+        castbar = Castbar(),
+        buffs = Auras(), debuffs = Auras(),
     }
     for k, v in pairs(t) do base[k] = v end
     return base
 end
 
 local DEFAULTS = {
-    player       = Unit{ aggroBorder = true, powerTicks = true, powerTickGhost = true },
+    player       = Unit{ aggroBorder = true, powerTicks = true, powerTickGhost = true,
+                         combatIcon = true, restingIcon = true, stateIconSize = 18, stateIconPoint = "TOPLEFT",
+                         -- Your own buffs and debuffs are the Buffs & Debuffs module's
+                         -- job; these are here for anyone who wants them on the frame.
+                         buffs = Auras{ side = "BOTTOM", perRow = 10 },
+                         debuffs = Auras{ side = "TOP", perRow = 8, size = 26 },
+                         -- Combo points above the frame, totems below it.
+                         classPower = { enabled = true, side = "TOP", height = 8, spacing = 2,
+                                        width = 0, x = 0, y = 0, colour = { 1, 0.86, 0.1 },
+                                        hideEmpty = false },
+                         totems = { enabled = true, size = 26, spacing = 3, side = "BOTTOM",
+                                    align = "START", x = 0, y = 0, showTimer = true },
+                         fader = { enabled = false, alpha = 0, combat = true, target = true,
+                                   casting = true, health = true, power = false, mouseover = true } },
     -- On for the target: it answers the plate's question ("is this mob on
     -- me"), so the frame and the plate light together.
-    target       = Unit{ portraitSide = "right", aggroBorder = true },
+    -- Target auras: everyone's debuffs above the frame (who has Sunder up,
+    -- whether it's sheeped), buffs under the cast bar (what to Purge or
+    -- Tranquilize, or whether a friend already has your buff).
+    target       = Unit{ portraitSide = "right", aggroBorder = true,
+                         debuffs = Auras{ enabled = true, side = "TOP", size = 26, perRow = 8, max = 16 },
+                         buffs = Auras{ enabled = true, side = "BOTTOM", size = 20, perRow = 10, max = 20 } },
     targettarget = Unit{ width = 130, height = 26, powerHeight = 4, portrait = "none",
-                         healthText = "percent", powerText = "none", fontSize = 11, showLevel = false },
+                         healthText = "percent", powerText = "none", fontSize = 11, showLevel = false,
+                         castbar = Castbar{ enabled = false, height = 12, icon = false, fontSize = 10 } },
+    -- Focus: your own debuffs, the sheep or the sap you're keeping up.
     focus        = Unit{ width = 180, height = 32, powerHeight = 6, portrait = "none",
-                         healthText = "percent", powerText = "none", fontSize = 12 },
+                         healthText = "percent", powerText = "none", fontSize = 12,
+                         castbar = Castbar{ height = 16 },
+                         debuffs = Auras{ side = "TOP", size = 22, perRow = 7, max = 7, onlyMine = true } },
     pet          = Unit{ width = 130, height = 26, powerHeight = 5, portrait = "none",
                          healthText = "percent", powerText = "none", fontSize = 11, showLevel = false,
-                         happiness = true },
+                         happiness = true,
+                         castbar = Castbar{ height = 12, icon = false, fontSize = 10 },
+                         fader = { enabled = false, alpha = 0, combat = true, target = true,
+                                   casting = true, health = true, power = false, mouseover = true } },
     -- Click casting on these frames (ClickCast.lua).
     clickCast    = { enabled = true, binds = {} },
 }
 
 -- Default HUD: player and target either side of centre, small frames tucked
--- under their outer edges. Centre offsets from the middle of the screen.
+-- under their outer edges, below the cast bars and the target's buffs that
+-- hang under the big frames. Centre offsets from the middle of the screen.
 local POSITIONS = {
     player       = { "CENTER", "CENTER", -280, -200 },
     target       = { "CENTER", "CENTER",  280, -200 },
-    targettarget = { "CENTER", "CENTER",  335, -242 },
-    pet          = { "CENTER", "CENTER", -335, -242 },
+    targettarget = { "CENTER", "CENTER",  335, -310 },
+    pet          = { "CENTER", "CENTER", -335, -310 },
     focus        = { "CENTER", "CENTER", -280, -110 },
+}
+
+-- Where a cast bar goes the first time you detach it: the player's in the
+-- classic spot above the action bars, the others under their frames.
+local CAST_POSITIONS = {
+    player       = { "CENTER", "CENTER", 0, -260 },
+    target       = { "CENTER", "CENTER", 280, -250 },
+    targettarget = { "CENTER", "CENTER", 335, -335 },
+    focus        = { "CENTER", "CENTER", -280, -145 },
+    pet          = { "CENTER", "CENTER", -335, -335 },
 }
 
 local M = EV:NewModule("UnitFrames", DEFAULTS)
 ns.module = M
 M.title = "Unit Frames"
-M.description = "Clean, resizable player, target, target of target, focus and pet frames."
+M.description = "Clean, resizable player, target, target of target, focus and pet frames, with cast bars, buffs and debuffs, combo points and totems."
 M.UNITS = UNITS
 
 local frames = {}      -- key -> frame
@@ -107,6 +183,8 @@ function M:ApplyFrame(key)
     if EV:Locked() then pendingLayout = true; return end
     if InCombatLockdown() then pendingLayout = true end   -- loading: again after combat
     UF.Layout(f, cfg)
+    ns.CastBar.Layout(f, cfg)
+    ns.UnitAuras.Layout(f, cfg)
     if cfg.enabled then
         if f.unit == "player" then
             f:Show()
@@ -118,7 +196,12 @@ function M:ApplyFrame(key)
         f:Hide()
     end
     EV.Movers:Apply("UF_" .. key)
+    if f.castbar then EV.Movers:Apply("UF_" .. key .. "Cast") end
     UF.UpdateAll(f, cfg)
+    ns.CastBar.Check(f.castbar)
+    ns.Fader.Update(f)
+    -- Combo points and totems size and sit by the player frame.
+    if key == "player" and self:IsEnabled() then ns.ClassPower.Refresh() end
 end
 
 function M:Refresh()
@@ -127,6 +210,7 @@ function M:Refresh()
     -- layout may just have moved or resized.
     if ns.RefreshClassic and self:IsEnabled() then ns.RefreshClassic() end
     if ns.ApplyClickCast and self:IsEnabled() then ns.ApplyClickCast() end
+    if self:IsEnabled() then ns.ClassPower.Refresh() end
 end
 
 function M:UpdateUnit(key)
@@ -146,7 +230,12 @@ function M:OnEnable()
     for _, u in ipairs(UNITS) do
         local f = UF.Create(u.key, u.unit)
         frames[u.key], byUnit[u.unit] = f, f
-        f:HookScript("OnShow", function(self) UF.UpdateAll(self, M.db[self.key]) end)
+        ns.CastBar.Build(f)
+        ns.UnitAuras.Build(f)
+        f:HookScript("OnShow", function(self)
+            UF.UpdateAll(self, M.db[self.key])
+            ns.UnitAuras.Update(self)
+        end)
         local key = u.key
         EV.Movers:Register(f, "UF_" .. key, L[u.title], POSITIONS[key], {
             group = L["Unit Frames"], page = "unitframes", tab = L[u.title],
@@ -159,6 +248,29 @@ function M:OnEnable()
             isDisabled = function() return not (M:IsEnabled() and M.db[key].enabled) end,
         })
         if self.db[u.key].hideBlizzard and self.db[u.key].enabled then RetireBlizzard(u.key) end
+
+        -- The cast bar's stand-in for edit mode, used when it's detached.
+        EV.Movers:Register(f.castbar.proxy, "UF_" .. key .. "Cast", L[u.title] .. " " .. L["Cast Bar"],
+            CAST_POSITIONS[key], {
+            group = L["Unit Frames"], page = "unitframes", tab = L[u.title],
+            getSize = function()
+                local c = M.db[key].castbar
+                return (c.width > 0) and c.width or M.db[key].width, c.height
+            end,
+            setSize = function(w, h)
+                local c = M.db[key].castbar
+                if w then c.width = w end
+                if h then c.height = h end
+                M:ApplyFrame(key)
+            end,
+            isDisabled = function()
+                local c = M.db[key].castbar
+                return not (M:IsEnabled() and M.db[key].enabled and c.enabled and c.detached)
+            end,
+        })
+        local cc = self.db[u.key].castbar
+        if cc.enabled and cc.hideBlizzard and self.db[u.key].enabled then ns.CastBar.RetireBlizzard(u.unit) end
+        if u.key == "player" or u.key == "pet" then ns.Fader.Attach(f) end
     end
     ns.frames = frames
 
@@ -194,7 +306,12 @@ function M:OnEnable()
     self:RegisterEvent("UNIT_NAME_UPDATE", Name)
     self:RegisterEvent("UNIT_LEVEL", Name)
     self:RegisterEvent("UNIT_CLASSIFICATION_CHANGED", Name)
-    self:RegisterEvent("UNIT_FACTION", Colour)
+    -- A module keeps one handler per event, so faction does both jobs here:
+    -- the unit's colours and its PvP flag.
+    self:RegisterEvent("UNIT_FACTION", function(...)
+        Colour(...)
+        Indicators()
+    end)
     self:RegisterEvent("UNIT_CONNECTION", Colour)
     self:RegisterEvent("UNIT_FLAGS", Colour)
     self:RegisterEvent("UNIT_PORTRAIT_UPDATE", Portrait)
@@ -208,21 +325,35 @@ function M:OnEnable()
     self:RegisterEvent("RAID_TARGET_UPDATE", function()
         for _, f in pairs(frames) do if f:IsShown() then UF.UpdateRaidIcon(f) end end
     end)
+    -- A token that now means someone else: the aura containers follow the
+    -- token, not the unit, so they are told to read again.
+    local function Retoken(key)
+        self:UpdateUnit(key)
+        if frames[key] then ns.UnitAuras.Update(frames[key]) end
+    end
     self:RegisterEvent("PLAYER_TARGET_CHANGED", function()
-        self:UpdateUnit("target"); self:UpdateUnit("targettarget")
+        Retoken("target"); Retoken("targettarget")
         AggroAll()   -- the restricted aggro path asks about the unit's target
     end)
     self:RegisterEvent("UNIT_TARGET", function(_, _, unit)
-        if unit == "target" then self:UpdateUnit("targettarget") end
+        if unit == "target" then Retoken("targettarget") end
     end)
-    self:RegisterEvent("PLAYER_FOCUS_CHANGED", function() self:UpdateUnit("focus") end)
+    self:RegisterEvent("PLAYER_FOCUS_CHANGED", function() Retoken("focus") end)
     self:RegisterEvent("UNIT_PET", function(_, _, unit)
-        if unit == "player" then self:UpdateUnit("pet") end
+        if unit == "player" then Retoken("pet") end
     end)
+    local function Indicators()
+        for _, f in pairs(frames) do
+            if f:IsShown() then UF.UpdateIndicators(f, self.db[f.key]) end
+        end
+    end
+    self:RegisterEvent("PARTY_LEADER_CHANGED", Indicators)
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", Indicators)
+    self:RegisterEvent("PLAYER_FLAGS_CHANGED", Indicators)
     self:RegisterEvent("PLAYER_UPDATE_RESTING", function() self:UpdateUnit("player") end)
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", function() UF.UpdateState(frames.player) end)
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", function() UF.UpdateState(frames.player, self.db.player) end)
     self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
-        UF.UpdateState(frames.player)
+        UF.UpdateState(frames.player, self.db.player)
         AggroAll()   -- threat drops out of combat without an event of its own
         if pendingLayout then pendingLayout = false; self:Refresh() end
     end)
@@ -246,6 +377,16 @@ function M:OnEnable()
     -- General > Font: the slug object follows the face, so restyle now
     -- rather than waiting for a reload.
     self:RegisterMessage("EV_FONT_CHANGED", function() self:Refresh() end)
+    ns.CastBar.Enable(self)
+    ns.Fader.Enable(self)
+    -- Edit mode: cast bars show a preview to place, faded frames come back.
+    self:RegisterMessage("EV_UNLOCK", function()
+        ns.CastBar.PreviewAll(true); ns.Fader.UpdateAll()
+    end)
+    self:RegisterMessage("EV_LOCK", function()
+        ns.CastBar.PreviewAll(false); ns.Fader.UpdateAll()
+    end)
+    ns.ClassPower.Enable(self)
     self:Refresh()
     if ns.EnableClassic then ns.EnableClassic() end
 end
@@ -259,7 +400,32 @@ function M:ResetUnit(key)
     wipe(self.db[key])
     EV.DB.Merge(self.db[key], DEFAULTS[key])
     EV.Movers:Reset("UF_" .. key)
+    EV.Movers:Reset("UF_" .. key .. "Cast")
     self:ApplyFrame(key)
+    if self:IsEnabled() then ns.ClassPower.Refresh() end
 end
+
+-- What "copy settings from" leaves alone: whether the frame is on at all,
+-- Blizzard's frame, and the things only one unit has.
+local NO_COPY = {
+    enabled = true, hideBlizzard = true, happiness = true, powerTicks = true, powerTickGhost = true,
+    classPower = true, totems = true, combatIcon = true, restingIcon = true,
+    stateIconSize = true, stateIconPoint = true, fader = true,
+}
+
+--- Copy one unit's look onto another (options page). Sizes, colours, text,
+--- cast bar and aura settings come across; position stays where it is.
+function M:CopyUnit(from, to)
+    if from == to or not (self.db[from] and self.db[to]) then return end
+    local src, dest = self.db[from], self.db[to]
+    for k, v in pairs(src) do
+        if not NO_COPY[k] and DEFAULTS[to][k] ~= nil then
+            dest[k] = type(v) == "table" and EV.CopyTable(v) or v
+        end
+    end
+    self:ApplyFrame(to)
+end
+
+M.DEFAULTS = DEFAULTS
 
 function M:GetFrame(key) return frames[key] end

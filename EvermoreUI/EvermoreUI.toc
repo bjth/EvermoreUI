@@ -37,6 +37,7 @@ Core\Palette.lua
 Core\FontObjects.xml
 Core\Fonts.lua
 Core\Movers.lua
+Core\AuraContainer.lua
 
 # Probes that need the game world (secure snippets)
 Core\Probes.lua

@@ -160,14 +160,18 @@ end
 --- Style a font string. Returns usedSlug, keptSlug: the second is false only
 --- when a slug object was applied and then sizing it failed or had to fall
 --- back to SetTextHeight, which is the case that makes text bounce.
-function Fonts:StyleText(fs, size, style, wantsEdge)
+---
+--- fontName picks a face other than General > Font (a unit frame's own
+--- font). nil or "" is the global face. A face we have slug objects for
+--- still renders through them; any other goes through SetFont.
+function Fonts:StyleText(fs, size, style, wantsEdge, fontName)
     if not fs then return false, true end
     style = style or "both"
     local wantOutline = wantsEdge ~= false and (style == "outline" or style == "both")
     local wantShadow  = (style == "shadow" or style == "both") or not wantsEdge
 
     local used, kept = false, true
-    local name = EV.Media:GlobalFontName()
+    local name = (type(fontName) == "string" and fontName ~= "") and fontName or EV.Media:GlobalFontName()
     local set = name and self.SLUG[name]
     local obj = set and _G[wantOutline and set.outline or set.plain]
     if obj then
@@ -180,7 +184,7 @@ function Fonts:StyleText(fs, size, style, wantsEdge)
             pcall(fs.SetTextHeight, fs, size)
         end
     else
-        fs:SetFont(EV.Media:Fetch("font"), size, wantOutline and "OUTLINE" or "")
+        fs:SetFont(EV.Media:Fetch("font", name), size, wantOutline and "OUTLINE" or "")
     end
 
     if wantShadow then
