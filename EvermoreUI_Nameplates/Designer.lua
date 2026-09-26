@@ -235,7 +235,7 @@ local function Elements()
             end,
             Reset = function()
                 local c = C()
-                c.comboWidth, c.comboHeight, c.comboSpacing, c.comboSpot, c.comboY = 12, 6, 2, "bottom", 0
+                c.comboWidth, c.comboHeight, c.comboSpacing, c.comboSpot, c.comboY = 12, 6, 2, "top", 0
             end,
             Options = function(p)
                 ns.Settings(p, { sections = { [L["Combo points"]] = true } })

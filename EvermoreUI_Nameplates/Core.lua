@@ -285,7 +285,7 @@ local M = EV:NewModule("Nameplates", {
     comboWidth     = 12,
     comboHeight    = 6,
     comboSpacing   = 2,
-    comboSpot      = "bottom",      -- bottom | top edge of the health bar
+    comboSpot      = "top",         -- top | bottom edge of the health bar
     comboY         = 0,
     comboColour    = { 1, 0.86, 0.1 },
 
