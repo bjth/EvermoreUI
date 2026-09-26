@@ -147,7 +147,7 @@ end
 
 local function Start(h, channel, isUpdate)
     local unit = h.unit
-    if not CB.LIVE[unit] then return end
+    if h.isPreview or not CB.LIVE[h.key] then return end
     local cfg, cc = Cfg(h)
     if not (cfg and cc and cc.enabled and cfg.enabled) then return end
 
@@ -241,7 +241,7 @@ end
 
 --- Is this unit casting right now? Start the bar if so, stop it if not.
 local function Check(h)
-    if not h or not CB.LIVE[h.unit] then return end
+    if not h or h.isPreview or not CB.LIVE[h.key] then return end
     h._hold = nil
     local bar = h.bar
     bar:SetScript("OnUpdate", nil)
@@ -261,10 +261,13 @@ CB.Check = Check
 --------------------------------------------------------------------------------
 --  Build and layout
 --------------------------------------------------------------------------------
-function CB.Build(f)
+--- preview: the designer's copy. No global names, not in the event map,
+--- and always laid out under its frame (a detached bar's spot is edit
+--- mode's business, not the designer's).
+function CB.Build(f, preview)
     if f.castbar then return f.castbar end
-    local h = CreateFrame("Frame", "EvermoreUI_" .. f.key .. "CastBar", f)
-    h.key, h.unit, h.frame = f.key, f.unit, f
+    local h = CreateFrame("Frame", (not preview) and ("EvermoreUI_" .. f.key .. "CastBar") or nil, f)
+    h.key, h.unit, h.frame, h.isPreview = f.key, f.unit, f, preview and true or nil
     h:Hide()
     h.bg = h:CreateTexture(nil, "BACKGROUND", nil, -8)
     h.bg:SetAllPoints()
@@ -302,11 +305,13 @@ function CB.Build(f)
     h.timer:SetJustifyH("RIGHT")
 
     -- What edit mode moves when the bar is detached.
-    h.proxy = CreateFrame("Frame", "EvermoreUI_" .. f.key .. "CastBarMover", UIParent)
-    h.proxy:SetSize(1, 1)
+    if not preview then
+        h.proxy = CreateFrame("Frame", "EvermoreUI_" .. f.key .. "CastBarMover", UIParent)
+        h.proxy:SetSize(1, 1)
+    end
 
     f.castbar = h
-    bars[f.unit] = h
+    if not preview then bars[f.unit] = h end
     return h
 end
 
@@ -315,7 +320,7 @@ function CB.Layout(f, cfg)
     local h = f.castbar
     if not h then return end
     local cc = cfg.castbar
-    if not (cc and cc.enabled and cfg.enabled and CB.LIVE[f.unit]) then
+    if not (cc and cc.enabled and cfg.enabled and CB.LIVE[f.key]) then
         h._hold = nil
         h.preview = false
         Stop(h, true)
@@ -325,10 +330,10 @@ function CB.Layout(f, cfg)
     local one = EV.Pixel:One(f)
     local w = (cc.width and cc.width > 0) and cc.width or cfg.width
     local ht = max(cc.height or 18, 4)
-    EV.Pixel:SetSize(h.proxy, w, ht)
+    if h.proxy then EV.Pixel:SetSize(h.proxy, w, ht) end
 
     h:ClearAllPoints()
-    if cc.detached then
+    if cc.detached and not h.isPreview then
         h:SetParent(UIParent)
         h:SetAllPoints(h.proxy)
     else
@@ -428,7 +433,7 @@ end
 --------------------------------------------------------------------------------
 function CB.Preview(h, on)
     local cfg, cc = Cfg(h)
-    on = on and cfg and cc and cfg.enabled and cc.enabled and CB.LIVE[h.unit]
+    on = on and cfg and cc and cfg.enabled and cc.enabled and CB.LIVE[h.key]
     h.preview = on and true or false
     if on then
         if h.casting or h._hold then return end

@@ -27,6 +27,11 @@ full frames addon.
   you're fighting, targeting, casting, hurt, short of power or hovering
   them.
 - **Copy settings** from one frame onto another.
+- **The designer**: drag the name, health and power text, icons, portrait,
+  cast bar, buffs and debuffs, combo points and totems into place on a live
+  copy of any unit frame, resize them by their corner, nudge with the arrow
+  keys. Save, Discard and undo, as in edit mode. `/evui design`, or Open
+  designer on the Unit Frames page.
 
 ### Changed
 - **More ways to style a frame**: border from 0 to 8 pixels in any colour,

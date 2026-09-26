@@ -1,0 +1,436 @@
+if EV_BLOCKED then return end
+--------------------------------------------------------------------------------
+--  Designer.lua
+--  The unit frames' surface for the designer (EvermoreUI_Options/Designer.lua,
+--  which documents the contract). Every element here is a view over settings
+--  the options page already has: dragging writes the same values the sliders
+--  do, so the two can never disagree.
+--
+--  Units: text offsets and icon offsets are in frame units, as Frame.lua uses
+--  them; cast bar, aura and pip nudges are pixels, as their files use them.
+--------------------------------------------------------------------------------
+local ADDON_NAME, ns = ...
+if not (EvermoreUI and EvermoreUI.NewModule and EvermoreUI.Designers) then return end
+local EV = EvermoreUI
+local L = EV.L
+local M = ns.module
+local floor, max, min, ceil = math.floor, math.max, math.min, math.ceil
+
+local _, CLASS = UnitClass("player")
+
+local THREE = {
+    { value = "LEFT", text = L["Left"] }, { value = "CENTER", text = L["Centre"] }, { value = "RIGHT", text = L["Right"] },
+}
+local NINE = {
+    { value = "TOPLEFT", text = L["Top left"] }, { value = "TOP", text = L["Top"] },
+    { value = "TOPRIGHT", text = L["Top right"] }, { value = "LEFT", text = L["Left"] },
+    { value = "CENTER", text = L["Centre"] }, { value = "RIGHT", text = L["Right"] },
+    { value = "BOTTOMLEFT", text = L["Bottom left"] }, { value = "BOTTOM", text = L["Bottom"] },
+    { value = "BOTTOMRIGHT", text = L["Bottom right"] },
+}
+local PARENTS = {
+    { value = "health", text = L["Health bar"] }, { value = "power", text = L["Power bar"] },
+    { value = "frame", text = L["Whole frame"] },
+}
+local SIDES4 = {
+    { value = "TOP", text = L["Above"] }, { value = "BOTTOM", text = L["Below"] },
+    { value = "LEFT", text = L["Left"] }, { value = "RIGHT", text = L["Right"] },
+}
+local SIDES2 = { { value = "TOP", text = L["Above"] }, { value = "BOTTOM", text = L["Below"] } }
+local STARTS = { { value = "START", text = L["Left end"] }, { value = "END", text = L["Right end"] } }
+local PORTRAITS = {
+    { value = "none", text = L["None"] }, { value = "3d", text = L["3D model"] },
+    { value = "2d", text = L["2D picture"] }, { value = "class", text = L["Class icon"] },
+}
+local HEALTH_TEXT = {
+    { value = "curpercent", text = L["12.3k  87%"] }, { value = "percent", text = L["87%"] },
+    { value = "current", text = L["12.3k"] }, { value = "curmax", text = L["12.3k / 14.1k"] },
+    { value = "deficit", text = L["Missing (-1.8k)"] }, { value = "none", text = L["None"] },
+}
+local POWER_TEXT = {
+    { value = "current", text = L["4,210"] }, { value = "percent", text = L["87%"] },
+    { value = "curmax", text = L["4.2k / 5k"] }, { value = "none", text = L["None"] },
+}
+
+local function Round(v) return floor(v + 0.5) end
+
+--- Controls over one unit's settings, the same shapes the options page uses.
+--- Paths are "width" or "castbar.height".
+local function Controls(tab)
+    local function C() return M.db[tab] end
+    local function Split(path)
+        local a, b = path:match("^([^.]+)%.(.+)$")
+        return a or path, b
+    end
+    local function Get(path)
+        return function()
+            local a, b = Split(path)
+            if b then return C()[a][b] end
+            return C()[a]
+        end
+    end
+    local function Set(path)
+        return function(v)
+            local a, b = Split(path)
+            if b then C()[a][b] = v else C()[a] = v end
+        end
+    end
+    local X = {}
+    function X.T(path, text, tip)
+        return { type = "toggle", text = text, tooltip = tip, get = Get(path), set = Set(path) }
+    end
+    function X.S(path, text, lo, hi, step, tip)
+        return { type = "slider", text = text, min = lo, max = hi, step = step or 1, tooltip = tip,
+                 get = Get(path), set = Set(path) }
+    end
+    function X.D(path, text, values, width, tip)
+        return { type = "dropdown", text = text, values = values, width = width or 130, tooltip = tip,
+                 get = Get(path), set = Set(path) }
+    end
+    return X
+end
+
+--- Reset some keys of a unit (or of one of its tables) to the defaults.
+local function ResetKeys(tab, keys, sub)
+    local d = M.DEFAULTS[tab]
+    local c = M.db[tab]
+    if sub then d, c = d[sub], c[sub] end
+    for _, k in ipairs(keys) do
+        local v = d[k]
+        c[k] = type(v) == "table" and EV.CopyTable(v) or v
+    end
+end
+
+--------------------------------------------------------------------------------
+--  Element builders
+--------------------------------------------------------------------------------
+local function TextElement(tab, key, label, prefix, field, parentDefault, shown, formatPath, formatValues)
+    local function C() return M.db[tab] end
+    local function Host(pf)
+        local which = C()[prefix .. "Parent"] or parentDefault
+        if which == "frame" then return pf end
+        if which == "power" and (C().powerHeight or 0) > 0 then return pf.power end
+        return pf.health
+    end
+    local d = M.DEFAULTS[tab]
+    return {
+        key = key, label = label,
+        region = function(pf) return pf[field] end,
+        shown = shown,
+        move = "free", points = "three", anchor = "same",
+        parent = Host,
+        snapX = { d[prefix .. "X"] or 0, -(d[prefix .. "X"] or 0) },
+        get = function() return C()[prefix .. "Point"], C()[prefix .. "X"] or 0, C()[prefix .. "Y"] or 0 end,
+        set = function(point, x, y)
+            local c = C()
+            c[prefix .. "Point"], c[prefix .. "X"], c[prefix .. "Y"] = point, x, y
+        end,
+        Nudge = function(dx, dy)
+            local c = C()
+            c[prefix .. "X"] = (c[prefix .. "X"] or 0) + dx
+            c[prefix .. "Y"] = (c[prefix .. "Y"] or 0) + dy
+        end,
+        Reset = function() ResetKeys(tab, { prefix .. "Point", prefix .. "X", prefix .. "Y", prefix .. "Parent" }) end,
+        Options = function(p)
+            local X = Controls(tab)
+            if formatPath then p:Row(X.D(formatPath, L["Shows"], formatValues, 170)) end
+            p:Row(X.D(prefix .. "Parent", L["Sits on"], PARENTS, 150))
+            p:Row(X.D(prefix .. "Point", L["Lined up"], THREE, 130))
+            p:Row(X.S(prefix .. "X", L["Across"], -150, 150, 1))
+            p:Row(X.S(prefix .. "Y", L["Up and down"], -60, 60, 1))
+        end,
+    }
+end
+
+local function IconElement(tab, key, label, prefix, field, fallbackPoint, shown, extraOptions)
+    local function C() return M.db[tab] end
+    return {
+        key = key, label = label,
+        region = function(pf) return pf[field] end,
+        shown = shown,
+        move = "free", points = "nine", anchor = "center",
+        parent = function(pf) return pf end,
+        get = function()
+            local c = C()
+            return c[prefix .. "Point"] or fallbackPoint, c[prefix .. "X"] or 0, c[prefix .. "Y"] or 0
+        end,
+        set = function(point, x, y)
+            local c = C()
+            c[prefix .. "Point"], c[prefix .. "X"], c[prefix .. "Y"] = point, x, y
+        end,
+        Nudge = function(dx, dy)
+            local c = C()
+            c[prefix .. "X"] = (c[prefix .. "X"] or 0) + dx
+            c[prefix .. "Y"] = (c[prefix .. "Y"] or 0) + dy
+        end,
+        getSize = function() local s = C()[prefix .. "Size"] or 16; return s, s end,
+        setSize = function(w, h) C()[prefix .. "Size"] = max(8, min(64, Round(max(w, h)))) end,
+        Reset = function() ResetKeys(tab, { prefix .. "Point", prefix .. "X", prefix .. "Y", prefix .. "Size" }) end,
+        Options = function(p)
+            local X = Controls(tab)
+            if extraOptions then extraOptions(p, X) end
+            p:Row(X.D(prefix .. "Point", L["Corner"], NINE, 150))
+            p:Row(X.S(prefix .. "Size", L["Size"], 8, 64, 1))
+            p:Row(X.S(prefix .. "X", L["Across"], -150, 150, 1))
+            p:Row(X.S(prefix .. "Y", L["Up and down"], -150, 150, 1))
+        end,
+    }
+end
+
+local function AuraElement(tab, kind, label)
+    local function A() return M.db[tab][kind] end
+    local C = EV.AuraContainer
+    return {
+        key = kind, label = label,
+        region = function(pf) return pf.auraHolders and pf.auraHolders[kind] end,
+        shown = function() return A().enabled and M.db[tab].enabled end,
+        move = "slot", slots = "sides", aligned = true,
+        getSlot = function() return A().side or "TOP", A().align or "START" end,
+        setSlot = function(side, align) A().side, A().align = side, align end,
+        Nudge = function(dx, dy) A().x = (A().x or 0) + dx; A().y = (A().y or 0) + dy end,
+        -- The grip sets the icon size: the box it would draw at that size.
+        getSize = function()
+            local a = A()
+            local cols = max(1, min(a.perRow, a.max))
+            local rows = max(1, ceil(a.max / a.perRow))
+            return cols * a.size + (cols - 1) * a.spacing, rows * a.size + (rows - 1) * a.spacing
+        end,
+        setSize = function(w, h)
+            local a = A()
+            local rows = max(1, ceil(a.max / a.perRow))
+            a.size = max(10, min(60, Round((h - (rows - 1) * a.spacing) / rows)))
+        end,
+        Reset = function()
+            local keep = A().enabled
+            ResetKeys(tab, { "side", "align", "x", "y", "size", "spacing", "perRow", "max" }, kind)
+            A().enabled = keep
+        end,
+        Options = function(p)
+            local X = Controls(tab)
+            local b = kind .. "."
+            p:Row(X.T(b .. "enabled", kind == "debuffs" and L["Show debuffs"] or L["Show buffs"]))
+            p:Row(X.T(b .. "onlyMine", L["Only mine"]))
+            p:Row(X.D(b .. "side", L["Side"], SIDES4, 120))
+            p:Row(X.D(b .. "align", L["Start from"], STARTS, 130))
+            p:Row(X.S(b .. "size", L["Icon size"], 10, 60, 1))
+            p:Row(X.S(b .. "perRow", L["Per row"], 1, 20, 1))
+            p:Row(X.S(b .. "max", L["Most shown"], 1, 40, 1))
+            p:Row(X.S(b .. "spacing", L["Spacing"], 0, 12, 1))
+            p:Row(X.S(b .. "x", L["Nudge across"], -200, 200, 1))
+            p:Row(X.S(b .. "y", L["Nudge up and down"], -200, 200, 1))
+            p:Row(X.T(b .. "showTimer", L["Time left"]))
+            if not (C and C.Supported()) then
+                p:Note(L["This client has no aura containers, so these only show here."])
+            end
+        end,
+    }
+end
+
+--------------------------------------------------------------------------------
+--  The surface
+--------------------------------------------------------------------------------
+local function Elements(tab)
+    local function C() return M.db[tab] end
+    local list = {}
+    local function Add(e) list[#list + 1] = e end
+
+    Add{
+        key = "frame", label = L["Frame"],
+        region = function(pf) return pf end,
+        getSize = function() return C().width, C().height end,
+        setSize = function(w, h)
+            C().width = max(60, min(500, w))
+            C().height = max(12, min(100, h))
+        end,
+        Reset = function() ResetKeys(tab, { "width", "height", "powerHeight", "borderSize" }) end,
+        Options = function(p)
+            local X = Controls(tab)
+            p:Row(X.T("enabled", L["Show this frame"]))
+            p:Row(X.S("width", L["Width"], 60, 500, 1))
+            p:Row(X.S("height", L["Height"], 12, 100, 1))
+            p:Row(X.S("powerHeight", L["Power bar height"], 0, 30, 1, L["0 hides the power bar."]))
+            p:Row(X.S("borderSize", L["Border thickness"], 0, 8, 1))
+            p:Row(X.S("fontSize", L["Font size"], 8, 24, 1))
+            p:Note(L["Where the frame sits on your screen is edit mode's job: /evui edit."])
+        end,
+    }
+    Add{
+        key = "portrait", label = L["Portrait"],
+        region = function(pf) return pf.portrait end,
+        shown = function() return C().portrait ~= "none" end,
+        move = "slot", slots = "horizontal",
+        getSlot = function() return C().portraitSide == "right" and "RIGHT" or "LEFT" end,
+        setSlot = function(side) C().portraitSide = side == "RIGHT" and "right" or "left" end,
+        Reset = function() ResetKeys(tab, { "portrait", "portraitSide" }) end,
+        Options = function(p)
+            local X = Controls(tab)
+            p:Row(X.D("portrait", L["Style"], PORTRAITS, 150))
+            p:Row(X.D("portraitSide", L["Side"], { { value = "left", text = L["Left"] }, { value = "right", text = L["Right"] } }, 120))
+        end,
+    }
+    Add(TextElement(tab, "name", L["Name"], "name", "nameText", "health",
+        function() return C().showName end))
+    Add(TextElement(tab, "healthText", L["Health text"], "health", "healthText", "health",
+        function() return C().healthText ~= "none" end, "healthText", HEALTH_TEXT))
+    Add(TextElement(tab, "powerText", L["Power text"], "power", "powerText", "power",
+        function() return C().powerText ~= "none" end, "powerText", POWER_TEXT))
+    Add(IconElement(tab, "raidIcon", L["Raid mark"], "raidIcon", "raidIcon", "TOP", nil))
+    Add(IconElement(tab, "leaderIcon", L["Leader and assist"], "leaderIcon", "leaderIcon", "TOPLEFT",
+        function() return C().leaderIcon end,
+        function(p, X) p:Row(X.T("leaderIcon", L["Show"])) end))
+    Add(IconElement(tab, "pvpIcon", L["PvP flag"], "pvpIcon", "pvpIcon", "BOTTOMLEFT",
+        function() return C().pvpIcon end,
+        function(p, X) p:Row(X.T("pvpIcon", L["Show"])) end))
+    if tab == "player" then
+        Add(IconElement(tab, "stateIcon", L["Combat and resting"], "stateIcon", "stateIcon", "TOPLEFT",
+            function() return C().combatIcon ~= false or C().restingIcon ~= false end,
+            function(p, X)
+                p:Row(X.T("combatIcon", L["In combat"]))
+                p:Row(X.T("restingIcon", L["Resting"]))
+            end))
+    end
+
+    if ns.CastBar.LIVE[tab] then
+        local function CC() return C().castbar end
+        Add{
+            key = "castbar", label = L["Cast bar"],
+            region = function(pf) return pf.castbar end,
+            shown = function() return CC().enabled and C().enabled end,
+            move = "nudge",
+            get = function() return CC().x or 0, -(CC().gap or 4) end,
+            set = function(x, y) CC().x = x; CC().gap = max(0, -y) end,
+            Nudge = function(dx, dy)
+                CC().x = (CC().x or 0) + dx
+                CC().gap = max(0, (CC().gap or 4) - dy)
+            end,
+            getSize = function()
+                local c = CC()
+                return (c.width and c.width > 0) and c.width or C().width, c.height
+            end,
+            setSize = function(w, h)
+                local c = CC()
+                -- Within a pixel of the frame's width means "match the frame".
+                c.width = math.abs(w - C().width) <= 1 and 0 or max(40, min(600, w))
+                c.height = max(4, min(60, h))
+            end,
+            Reset = function()
+                local keep = CC().enabled
+                ResetKeys(tab, { "width", "height", "gap", "x", "icon", "iconSide" }, "castbar")
+                CC().enabled = keep
+            end,
+            Options = function(p)
+                local X = Controls(tab)
+                p:Row(X.T("castbar.enabled", L["Show a cast bar"]))
+                p:Row(X.T("castbar.detached", L["Place it in edit mode instead"],
+                          L["Off: it hangs under the frame and moves with it. On: it's an element of its own in edit mode, and shows under the frame here only so you can style it."]))
+                p:Row(X.S("castbar.height", L["Height"], 4, 60, 1))
+                p:Row(X.S("castbar.width", L["Width"], 0, 600, 1, L["0 matches the frame's width."]))
+                p:Row(X.S("castbar.gap", L["Gap under the frame"], 0, 60, 1))
+                p:Row(X.S("castbar.x", L["Nudge sideways"], -300, 300, 1))
+                p:Row(X.T("castbar.icon", L["Spell icon"]))
+                p:Row(X.D("castbar.iconSide", L["Icon side"], { { value = "LEFT", text = L["Left"] }, { value = "RIGHT", text = L["Right"] } }, 120))
+                p:Row(X.T("castbar.showName", L["Spell name"]))
+                p:Row(X.T("castbar.showTime", L["Time left"]))
+                p:Row(X.S("castbar.fontSize", L["Font size"], 7, 24, 1))
+            end,
+        }
+        Add(AuraElement(tab, "debuffs", L["Debuffs"]))
+        Add(AuraElement(tab, "buffs", L["Buffs"]))
+    end
+
+    if tab == "player" and EV.HasComboClass and EV.HasComboClass() then
+        local function CP() return C().classPower end
+        Add{
+            key = "combo", label = L["Combo points"],
+            region = function(pf) return pf.pvCombo end,
+            shown = function() return CP().enabled and C().enabled end,
+            move = "slot", slots = "vertical",
+            getSlot = function() return CP().side == "BOTTOM" and "BOTTOM" or "TOP" end,
+            setSlot = function(side) CP().side = side end,
+            Nudge = function(dx, dy) CP().x = (CP().x or 0) + dx; CP().y = (CP().y or 0) + dy end,
+            getSize = function()
+                local c = CP()
+                return (c.width and c.width > 0) and c.width or C().width, c.height
+            end,
+            setSize = function(w, h)
+                local c = CP()
+                c.width = math.abs(w - C().width) <= 1 and 0 or max(30, min(500, w))
+                c.height = max(2, min(30, h))
+            end,
+            Reset = function()
+                local keep = CP().enabled
+                ResetKeys(tab, { "side", "height", "spacing", "width", "x", "y" }, "classPower")
+                CP().enabled = keep
+            end,
+            Options = function(p)
+                local X = Controls(tab)
+                p:Row(X.T("classPower.enabled", L["Show combo points"]))
+                p:Row(X.D("classPower.side", L["Side"], SIDES2, 120))
+                p:Row(X.S("classPower.height", L["Height"], 2, 30, 1))
+                p:Row(X.S("classPower.width", L["Width"], 0, 500, 1, L["0 matches the frame's width."]))
+                p:Row(X.S("classPower.spacing", L["Spacing"], 0, 12, 1))
+                p:Row(X.T("classPower.hideEmpty", L["Hide when empty out of combat"]))
+            end,
+        }
+    end
+
+    if tab == "player" and CLASS == "SHAMAN" then
+        local function TT() return C().totems end
+        Add{
+            key = "totems", label = L["Totems"],
+            region = function(pf) return pf.pvTotems end,
+            shown = function() return TT().enabled and C().enabled end,
+            move = "slot", slots = "vertical", aligned = true,
+            getSlot = function() return TT().side == "TOP" and "TOP" or "BOTTOM", TT().align or "START" end,
+            setSlot = function(side, align) TT().side, TT().align = side, align end,
+            Nudge = function(dx, dy) TT().x = (TT().x or 0) + dx; TT().y = (TT().y or 0) + dy end,
+            getSize = function()
+                local t = TT()
+                return 4 * t.size + 3 * (t.spacing or 3), t.size
+            end,
+            setSize = function(w, h) TT().size = max(12, min(60, Round(h))) end,
+            Reset = function()
+                local keep = TT().enabled
+                ResetKeys(tab, { "size", "spacing", "side", "align", "x", "y" }, "totems")
+                TT().enabled = keep
+            end,
+            Options = function(p)
+                local X = Controls(tab)
+                p:Row(X.T("totems.enabled", L["Show totems"]))
+                p:Row(X.D("totems.side", L["Side"], SIDES2, 120))
+                p:Row(X.D("totems.align", L["Start from"], STARTS, 130))
+                p:Row(X.S("totems.size", L["Size"], 12, 60, 1))
+                p:Row(X.S("totems.spacing", L["Spacing"], 0, 20, 1))
+                p:Row(X.T("totems.showTimer", L["Time left"]))
+            end,
+        }
+    end
+    return list
+end
+
+EV.Designers:Register{
+    key = "unitframes", title = L["Unit Frames"], module = "UnitFrames", kind = "canvas",
+    page = "unitframes",
+    note = L["The copy is bound to you and shows samples (a cast, a full set of auras, your icons) so everything you can place is on screen. Positions on the screen are edit mode's job."],
+    Tabs = function()
+        local list = {}
+        for _, u in ipairs(M.UNITS) do list[#list + 1] = { value = u.key, text = L[u.title] } end
+        return list
+    end,
+    PageTab = function(tab)
+        for _, u in ipairs(M.UNITS) do if u.key == tab then return L[u.title] end end
+    end,
+    Build = function(host, tab) return M:BuildPreview(tab, host) end,
+    Layout = function(pf) M:LayoutPreview(pf) end,
+    Elements = function(tab) return Elements(tab) end,
+    Snapshot = function(tab) return EV.CopyTable(M.db[tab]) end,
+    Restore = function(tab, snap)
+        local c = M.db[tab]
+        wipe(c)
+        for k, v in pairs(EV.CopyTable(snap)) do c[k] = v end
+        if M:IsEnabled() then M:ApplyFrame(tab) end
+    end,
+    Apply = function(tab)
+        if M:IsEnabled() then M:ApplyFrame(tab) end
+    end,
+}

@@ -198,6 +198,11 @@ EV.Options:RegisterPage{
         end
 
         ------------------------------------------------------------------------
+        if EV.Designers and EV.Designers:Get("unitframes") then
+            p:Banner(L["Drag the name, texts, icons, cast bar and auras into place on a live copy of this frame."],
+                     L["Open designer"], function() EV.Designers:Open("unitframes", key) end)
+        end
+
         p:Section(L["Frame"])
         p:Dual(T("enabled", L["Show this frame"]),
                T("hideBlizzard", L["Hide Blizzard's frame"],

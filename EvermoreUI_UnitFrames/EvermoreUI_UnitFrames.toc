@@ -19,3 +19,4 @@ Classic.lua
 ClickCast.lua
 AuraBox.lua
 GroupFrames.lua
+Designer.lua

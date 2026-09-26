@@ -337,19 +337,25 @@ function UF.Create(key, unit)
     f:SetFrameStrata("LOW")
     f:SetAttribute("unit", unit)
     UF.Dress(f, key, unit)
-    -- The single frames' own icons (group frames carry theirs in
-    -- GroupFrames.lua): group leader or assistant, and PvP flag.
+    UF.AddSingleExtras(f)
+    return f
+end
+
+--- The single frames' own icons (group frames carry theirs in
+--- GroupFrames.lua): group leader or assistant, and PvP flag.
+function UF.AddSingleExtras(f)
     f.leaderIcon = f.overlay:CreateTexture(nil, "OVERLAY", nil, 2)
     f.leaderIcon:Hide()
     f.pvpIcon = f.overlay:CreateTexture(nil, "OVERLAY", nil, 2)
     f.pvpIcon:Hide()
-    return f
 end
 
 --- Build the frame's parts onto a button that already exists: ours from
 --- UF.Create, or one a group header made (GroupFrames.lua). Out of combat.
-function UF.Dress(f, key, unit)
-    f.key, f.unit = key, unit
+--- preview: the designer's copy, a plain frame that must not be offered to
+--- click-casting addons.
+function UF.Dress(f, key, unit, preview)
+    f.key, f.unit, f.isPreview = key, unit, preview and true or nil
     if f.GetAttribute and f:IsProtected() then
         f:SetAttribute("*type1", "target")
         f:SetAttribute("*type2", "togglemenu")
@@ -357,8 +363,10 @@ function UF.Dress(f, key, unit)
     end
 
     -- Click-casting addons (Clique and friends) look here.
-    ClickCastFrames = ClickCastFrames or {}
-    ClickCastFrames[f] = true
+    if not preview then
+        ClickCastFrames = ClickCastFrames or {}
+        ClickCastFrames[f] = true
+    end
 
     f:SetScript("OnEnter", function(self)
         if GameTooltip_SetDefaultAnchor then GameTooltip_SetDefaultAnchor(GameTooltip, self)
@@ -616,6 +624,15 @@ function UF.Layout(f, cfg)
     -- offset. Offsets are in the frame's own units, as the fixed insets
     -- always were, so group frames (which have no offsets saved) keep their
     -- layout exactly; at the default UI size a unit is a pixel.
+    -- Which part a text sits on: the health bar, the power bar or the
+    -- whole frame. A power bar switched off (height 0) hands its text to
+    -- the health bar rather than to a hidden parent.
+    local function Host(which, fallback)
+        if which == "frame" then return f end
+        if which == "power" then return ph > 0 and f.power or f.health end
+        if which == "health" then return f.health end
+        return fallback
+    end
     local function Place(fs, bar, point, x, y)
         point = (point == "CENTER" or point == "RIGHT") and point or "LEFT"
         fs:ClearAllPoints()
@@ -623,8 +640,11 @@ function UF.Layout(f, cfg)
         fs:SetJustifyH(point)
         return point
     end
-    local hp = Place(f.healthText, f.health, cfg.healthPoint or "RIGHT", cfg.healthX or -5, cfg.healthY or 0)
-    local np = Place(f.nameText, f.health, cfg.namePoint or "LEFT", cfg.nameX or 5, cfg.nameY or 0)
+    local healthHost = Host(cfg.healthParent, f.health)
+    local nameHost = Host(cfg.nameParent, f.health)
+    local powerHost = Host(cfg.powerParent, f.power)
+    local hp = Place(f.healthText, healthHost, cfg.healthPoint or "RIGHT", cfg.healthX or -5, cfg.healthY or 0)
+    local np = Place(f.nameText, nameHost, cfg.namePoint or "LEFT", cfg.nameX or 5, cfg.nameY or 0)
     -- Stop a long name running into the health text. The usual layout (name
     -- left, health right, same line) ends the name where the health text
     -- starts, as it always has. Any other arrangement uses a width: your
@@ -632,7 +652,7 @@ function UF.Layout(f, cfg)
     local barW = max(w - b * 2 - pw, 1)
     local share = cfg.nameWidth or 0
     if share <= 0 and np == "LEFT" and hp == "RIGHT" and (cfg.nameY or 0) == (cfg.healthY or 0)
-       and cfg.healthText ~= "none" then
+       and nameHost == healthHost and cfg.healthText ~= "none" then
         f.nameText:SetPoint("RIGHT", f.healthText, "LEFT", -6, 0)
     else
         local pct = share > 0 and share or 100
@@ -640,8 +660,10 @@ function UF.Layout(f, cfg)
     end
     f.statusText:ClearAllPoints()
     f.statusText:SetPoint("CENTER", f.health, "CENTER", 0, 0)
-    Place(f.powerText, f.power, cfg.powerPoint or "RIGHT", cfg.powerX or -5, cfg.powerY or 0)
-    f.powerText:SetShown(ph >= 9 and cfg.powerText ~= "none")
+    Place(f.powerText, powerHost, cfg.powerPoint or "RIGHT", cfg.powerX or -5, cfg.powerY or 0)
+    -- On the power bar it needs room (9 tall); anywhere else it always fits.
+    local roomy = powerHost ~= f.power or ph >= 9
+    f.powerText:SetShown(roomy and cfg.powerText ~= "none")
     f.nameText:SetShown(cfg.showName)
 
     -- Raid target mark: size and spot are yours; top centre by default.
@@ -833,9 +855,9 @@ function UF.LayoutIndicators(f, cfg)
         icon:ClearAllPoints()
         icon:SetPoint("CENTER", f, Corner(point, fallback), x or 0, y or 0)
     end
-    At(f.leaderIcon, cfg.leaderIconSize or 14, cfg.leaderIconPoint, "TOPLEFT", 8, 0)
-    At(f.pvpIcon, cfg.pvpIconSize or 24, cfg.pvpIconPoint, "BOTTOMLEFT", 0, 0)
-    At(f.stateIcon, cfg.stateIconSize or 18, cfg.stateIconPoint, "TOPLEFT", 2, -2)
+    At(f.leaderIcon, cfg.leaderIconSize or 14, cfg.leaderIconPoint, "TOPLEFT", cfg.leaderIconX or 8, cfg.leaderIconY or 0)
+    At(f.pvpIcon, cfg.pvpIconSize or 24, cfg.pvpIconPoint, "BOTTOMLEFT", cfg.pvpIconX or 0, cfg.pvpIconY or 0)
+    At(f.stateIcon, cfg.stateIconSize or 18, cfg.stateIconPoint, "TOPLEFT", cfg.stateIconX or 2, cfg.stateIconY or -2)
 end
 
 -- UnitIsGroupLeader and friends are plain booleans about group roles, never

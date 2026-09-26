@@ -74,7 +74,7 @@ end
 --- not it's casting right now.
 function UA.BottomClearance(f, cfg)
     local cc = cfg.castbar
-    if cc and cc.enabled and not cc.detached and ns.CastBar.LIVE[f.unit] then
+    if cc and cc.enabled and (not cc.detached or f.isPreview) and ns.CastBar.LIVE[f.key] then
         return EV.Pixel:One(f) * (cc.gap or 4) + max(cc.height or 18, 4)
     end
     return 0
@@ -87,7 +87,7 @@ end
 function UA.Claimed(f, cfg, side)
     local total = 0
     local C = EV.AuraContainer
-    if not (C and LIVE_UNITS[f.unit]) then return 0 end
+    if not (C and LIVE_UNITS[f.key]) then return 0 end
     for _, kind in ipairs({ "debuffs", "buffs" }) do
         local a = cfg[kind]
         if a and a.enabled and (a.side or "TOP") == side then
@@ -135,26 +135,80 @@ function UA.Layout(f, cfg)
     -- Debuffs first: on a target they're the ones you're reading.
     for _, kind in ipairs({ "debuffs", "buffs" }) do
         local h, a = f.auraHolders[kind], cfg[kind]
-        if a and a.enabled and cfg.enabled and LIVE[f.unit] and C and C.Supported() then
+        if a and a.enabled and cfg.enabled and LIVE[f.key] and C and (f.isPreview or C.Supported()) then
             local shape = Shape(a)
             local side = a.side or "TOP"
             Place(h, f, cfg, a, shape, claimed[side])
             local w, ht = C.BoxSize(shape)
             claimed[side] = claimed[side] + ((side == "TOP" or side == "BOTTOM") and ht or w)
                             + EV.Pixel:One(f) * 4
-            C.Build(h, shape, {
-                unit = f.unit,
-                filter = FILTER[kind] .. (a.onlyMine and "|PLAYER" or ""),
-                cancel = (kind == "buffs" and f.unit == "player") or nil,
-                tooltip = true,
-                tooltipAnchor = "ANCHOR_BOTTOMRIGHT",
-                dispel = kind == "debuffs" or nil,
-                sort = a.sort,
-            })
+            if f.isPreview then
+                UA.Placeholders(h, shape, kind)
+            else
+                C.Build(h, shape, {
+                    unit = f.unit,
+                    filter = FILTER[kind] .. (a.onlyMine and "|PLAYER" or ""),
+                    cancel = (kind == "buffs" and f.unit == "player") or nil,
+                    tooltip = true,
+                    tooltipAnchor = "ANCHOR_BOTTOMRIGHT",
+                    dispel = kind == "debuffs" or nil,
+                    sort = a.sort,
+                })
+            end
             h:Show()
         else
             if C then C.Hide(h) end
             h:Hide()
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
+--  Designer preview: sample icons filling the block's whole box, laid out
+--  the way the engine grows them, so what you place is the space it claims.
+--------------------------------------------------------------------------------
+local SAMPLE = {
+    debuffs = { 136207, 135817, 132337, 136118, 136139, 135849, 132092, 136188 },
+    buffs   = { 135987, 136078, 135932, 132333, 135938, 136090, 135926, 132341 },
+}
+
+function UA.Placeholders(h, shape, kind)
+    h.samples = h.samples or {}
+    local one = EV.Pixel:One(h)
+    local size, gap, perRow, n = shape.size, shape.spacing, shape.perRow, shape.max
+    local left = shape.growX == "LEFT"
+    local up = shape.growY == "UP"
+    for i = 1, math.max(n, #h.samples) do
+        local s = h.samples[i]
+        if i <= n then
+            if not s then
+                s = CreateFrame("Frame", nil, h)
+                s.icon = s:CreateTexture(nil, "ARTWORK")
+                s.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                s.back = s:CreateTexture(nil, "BACKGROUND")
+                s.back:SetAllPoints()
+                h.samples[i] = s
+            end
+            local col, row = (i - 1) % perRow, math.floor((i - 1) / perRow)
+            local x = col * (size + gap)
+            local y = row * (size + gap)
+            s:ClearAllPoints()
+            s:SetSize(size, size)
+            s:SetPoint((up and "BOTTOM" or "TOP") .. (left and "RIGHT" or "LEFT"), h,
+                       (up and "BOTTOM" or "TOP") .. (left and "RIGHT" or "LEFT"),
+                       left and -x or x, up and y or -y)
+            s.icon:ClearAllPoints()
+            s.icon:SetPoint("TOPLEFT", one, -one)
+            s.icon:SetPoint("BOTTOMRIGHT", -one, one)
+            local list = SAMPLE[kind] or SAMPLE.buffs
+            s.icon:SetTexture(list[(i - 1) % #list + 1])
+            if kind == "debuffs" then s.back:SetColorTexture(0.8, 0.1, 0.1, 1) else s.back:SetColorTexture(0, 0, 0, 1) end
+            -- Later icons fade: the box is room for the most you could have,
+            -- not what you'll usually see.
+            s:SetAlpha(i <= perRow and 1 or 0.45)
+            s:Show()
+        elseif s then
+            s:Hide()
         end
     end
 end

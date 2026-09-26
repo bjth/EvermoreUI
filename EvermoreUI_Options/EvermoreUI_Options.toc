@@ -15,6 +15,7 @@ Theme.lua
 Page.lua
 Window.lua
 EditMode.lua
+Designer.lua
 
 # Pages, in sidebar order within each group
 Pages\General.lua

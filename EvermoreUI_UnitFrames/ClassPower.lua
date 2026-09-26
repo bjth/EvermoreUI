@@ -57,31 +57,25 @@ local function BuildCombo(f)
     return combo
 end
 
-local function Pip(i)
-    local p = combo.pips[i]
+local function Pip(row, i)
+    local p = row.pips[i]
     if p then return p end
-    p = CreateFrame("StatusBar", nil, combo)
+    p = CreateFrame("StatusBar", nil, row)
     p:SetStatusBarTexture(WHITE)
     p:SetMinMaxValues(i - 1, i)
     p:SetValue(0)
     p.bg = p:CreateTexture(nil, "BACKGROUND")
     p.bg:SetAllPoints()
     EV.Pixel.NoSnap(p.bg)
-    combo.pips[i] = p
+    row.pips[i] = p
     return p
 end
 
-function CP.LayoutCombo()
-    local f, cfg = Frame(), Cfg()
-    if not (f and cfg) then return end
+--- Size, place and colour a row of n pips for frame f. Shared by the real
+--- row and the designer's copy, so the preview is the same geometry.
+local function PlaceCombo(combo, f, cfg, n)
     local c = cfg.classPower
-    BuildCombo(f)
-    if not (c and c.enabled and cfg.enabled) or not EV.HasComboClass() then
-        combo:Hide()
-        return
-    end
     local one = EV.Pixel:One(f)
-    local n = comboMax
     local w = (c.width and c.width > 0) and c.width or cfg.width
     local h = max(c.height or 8, 2)
     local gap = one * (c.spacing or 2)
@@ -108,7 +102,7 @@ function CP.LayoutCombo()
 
     local pw = (w - gap * (n - 1)) / n
     for i = 1, max(n, #combo.pips) do
-        local p = Pip(i)
+        local p = Pip(combo, i)
         if i <= n then
             p:SetStatusBarTexture(tex)
             p:SetStatusBarColor(col[1], col[2], col[3], 1)
@@ -125,6 +119,18 @@ function CP.LayoutCombo()
             p:Hide()
         end
     end
+end
+
+function CP.LayoutCombo()
+    local f, cfg = Frame(), Cfg()
+    if not (f and cfg) then return end
+    local c = cfg.classPower
+    BuildCombo(f)
+    if not (c and c.enabled and cfg.enabled) or not EV.HasComboClass() then
+        combo:Hide()
+        return
+    end
+    PlaceCombo(combo, f, cfg, comboMax)
     CP.UpdateCombo()
 end
 
@@ -158,6 +164,7 @@ end
 --  Totems
 --------------------------------------------------------------------------------
 local totems           -- holder with .buttons
+local PlaceTotems      -- below
 
 local function TotemButton(slot)
     local b = CreateFrame("Button", "EvermoreUI_Totem" .. slot, totems, "SecureActionButtonTemplate")
@@ -201,6 +208,15 @@ function CP.LayoutTotems()
         totems:Hide()
         return
     end
+    PlaceTotems(totems, f, cfg)
+    for _, b in ipairs(totems.buttons) do b:Show() end
+    totems:Show()
+    CP.UpdateTotems()
+end
+
+--- Size and place the totem row and its buttons. Shared with the designer.
+PlaceTotems = function(totems, f, cfg)
+    local t = cfg.totems
     local one = EV.Pixel:One(f)
     local size, gap = max(t.size or 24, 10), one * (t.spacing or 3)
     local n = MAX_TOTEMS
@@ -228,10 +244,7 @@ function CP.LayoutTotems()
         b.icon:SetPoint("BOTTOMRIGHT", -one * bpx, one * bpx)
         b.cd:SetAllPoints(b.icon)
         b.cd:SetHideCountdownNumbers(t.showTimer == false)
-        b:Show()
     end
-    totems:Show()
-    CP.UpdateTotems()
 end
 
 function CP.UpdateTotems()
@@ -263,6 +276,59 @@ function CP.UpdateTotems()
         -- it. Mouse on a secure button is out of combat only; in combat an
         -- empty one stays clickable (right click on nothing does nothing).
         if calm then b:EnableMouse(not b.empty) end
+    end
+end
+
+--------------------------------------------------------------------------------
+--  Designer preview: the same geometry on plain frames, with sample values
+--------------------------------------------------------------------------------
+local SAMPLE_TOTEMS = { 135825, 136097, 135861, 136114 }
+
+function CP.Preview(f, cfg)
+    -- Combo points: three of five lit.
+    if EV.HasComboClass() then
+        if not f.pvCombo then
+            f.pvCombo = CreateFrame("Frame", nil, f)
+            f.pvCombo.pips = {}
+        end
+        local c = cfg.classPower
+        if c and c.enabled and cfg.enabled then
+            PlaceCombo(f.pvCombo, f, cfg, comboMax)
+            for i = 1, comboMax do
+                local p = f.pvCombo.pips[i]
+                if p then p:SetValue(3) end
+            end
+            f.pvCombo:Show()
+        else
+            f.pvCombo:Hide()
+        end
+    end
+    -- Totems: plain frames (nothing to click in a preview), two down.
+    if CLASS == "SHAMAN" then
+        if not f.pvTotems then
+            local row = CreateFrame("Frame", nil, f)
+            row.buttons = {}
+            for slot = 1, MAX_TOTEMS do
+                local b = CreateFrame("Frame", nil, row)
+                b.bg = b:CreateTexture(nil, "BACKGROUND")
+                b.bg:SetAllPoints()
+                b.bg:SetColorTexture(0, 0, 0, 1)
+                b.icon = b:CreateTexture(nil, "ARTWORK")
+                b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                b.icon:SetTexture(SAMPLE_TOTEMS[slot])
+                b.cd = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
+                row.buttons[slot] = b
+            end
+            f.pvTotems = row
+        end
+        local t = cfg.totems
+        if t and t.enabled and cfg.enabled then
+            PlaceTotems(f.pvTotems, f, cfg)
+            for slot, b in ipairs(f.pvTotems.buttons) do b:SetAlpha(slot <= 2 and 1 or 0.35) end
+            f.pvTotems:Show()
+        else
+            f.pvTotems:Hide()
+        end
     end
 end
 

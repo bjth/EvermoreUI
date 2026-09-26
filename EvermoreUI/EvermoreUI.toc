@@ -49,6 +49,7 @@ Core\BagMoves.lua
 Core\Alts.lua
 Core\Report.lua
 Core\Slash.lua
+Core\Designers.lua
 Core\Perf.lua
 Core\GameMenu.lua
 Core\Experimental.lua

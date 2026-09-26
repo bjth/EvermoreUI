@@ -68,13 +68,13 @@ local function Unit(t)
         -- Text: "" is General > Font. Positions are the layout this frame
         -- always had; offsets are pixels.
         font = "", powerFontSize = 0,
-        namePoint = "LEFT", nameX = 5, nameY = 0, nameWidth = 0,
-        healthPoint = "RIGHT", healthX = -5, healthY = 0,
-        powerPoint = "RIGHT", powerX = -5, powerY = 0,
+        namePoint = "LEFT", nameX = 5, nameY = 0, nameWidth = 0, nameParent = "health",
+        healthPoint = "RIGHT", healthX = -5, healthY = 0, healthParent = "health",
+        powerPoint = "RIGHT", powerX = -5, powerY = 0, powerParent = "power",
         -- Indicators.
         raidIconSize = 18, raidIconPoint = "TOP", raidIconX = 0, raidIconY = 0,
-        leaderIcon = true, leaderIconSize = 14, leaderIconPoint = "TOPLEFT",
-        pvpIcon = false, pvpIconSize = 24, pvpIconPoint = "BOTTOMLEFT",
+        leaderIcon = true, leaderIconSize = 14, leaderIconPoint = "TOPLEFT", leaderIconX = 8, leaderIconY = 0,
+        pvpIcon = false, pvpIconSize = 24, pvpIconPoint = "BOTTOMLEFT", pvpIconX = 0, pvpIconY = 0,
         castbar = Castbar(),
         buffs = Auras(), debuffs = Auras(),
     }
@@ -85,6 +85,7 @@ end
 local DEFAULTS = {
     player       = Unit{ aggroBorder = true, powerTicks = true, powerTickGhost = true,
                          combatIcon = true, restingIcon = true, stateIconSize = 18, stateIconPoint = "TOPLEFT",
+                         stateIconX = 2, stateIconY = -2,
                          -- Your own buffs and debuffs are the Buffs & Debuffs module's
                          -- job; these are here for anyone who wants them on the frame.
                          buffs = Auras{ side = "BOTTOM", perRow = 10 },
@@ -410,7 +411,7 @@ end
 local NO_COPY = {
     enabled = true, hideBlizzard = true, happiness = true, powerTicks = true, powerTickGhost = true,
     classPower = true, totems = true, combatIcon = true, restingIcon = true,
-    stateIconSize = true, stateIconPoint = true, fader = true,
+    stateIconSize = true, stateIconPoint = true, stateIconX = true, stateIconY = true, fader = true,
 }
 
 --- Copy one unit's look onto another (options page). Sizes, colours, text,
@@ -429,3 +430,56 @@ end
 M.DEFAULTS = DEFAULTS
 
 function M:GetFrame(key) return frames[key] end
+
+--------------------------------------------------------------------------------
+--  Designer preview
+--
+--  A copy of one frame for the designer's canvas: the same parts and the same
+--  layout code as the real frame, on a plain (insecure) frame bound to you so
+--  there is always a unit to draw. Casts, auras, pips and icons show samples,
+--  so everything you might place is on screen at once.
+--------------------------------------------------------------------------------
+function M:BuildPreview(key, parent)
+    local f = CreateFrame("Frame", nil, parent)
+    UF.Dress(f, key, "player", true)
+    UF.AddSingleExtras(f)
+    if key == "player" and not f.stateIcon then
+        f.stateIcon = f.overlay:CreateTexture(nil, "OVERLAY")
+        f.stateIcon:SetTexture("Interface\\CharacterFrame\\UI-StateIcon")
+    end
+    ns.CastBar.Build(f, true)
+    ns.UnitAuras.Build(f)
+    return f
+end
+
+--- Lay the preview out from the saved settings and fill in samples.
+function M:LayoutPreview(f)
+    local cfg = self.db[f.key]
+    UF.Layout(f, cfg)
+    ns.CastBar.Layout(f, cfg)
+    ns.UnitAuras.Layout(f, cfg)
+    ns.ClassPower.Preview(f, cfg)
+    UF.UpdateAll(f, cfg)
+    ns.CastBar.Preview(f.castbar, true)
+    -- Every icon you can place, shown whether or not it applies to you now.
+    f.raidIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
+    if SetRaidTargetIconTexture then SetRaidTargetIconTexture(f.raidIcon, 8) end
+    f.raidIcon:Show()
+    if f.leaderIcon then
+        f.leaderIcon:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
+        f.leaderIcon:SetShown(cfg.leaderIcon and true or false)
+    end
+    if f.pvpIcon then
+        f.pvpIcon:SetTexture("Interface\\TargetingFrame\\UI-PVP-Horde")
+        f.pvpIcon:SetTexCoord(0, 0.62, 0, 0.62)
+        f.pvpIcon:SetShown(cfg.pvpIcon and true or false)
+    end
+    if f.stateIcon then
+        f.stateIcon:SetTexCoord(0.5, 1, 0, 0.49)
+        f.stateIcon:SetShown(cfg.combatIcon ~= false or cfg.restingIcon ~= false)
+    end
+    f:SetAlpha(1)
+    f:Show()
+end
+
+M.CAST_LIVE = ns.CastBar.LIVE
