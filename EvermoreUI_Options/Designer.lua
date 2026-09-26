@@ -558,17 +558,21 @@ local function SyncInspector()
     local ck = TabKey() .. ":" .. e.key
     local c = inspectorCache[ck]
     if not c then
+        -- The page builder puts its rows T.PAD in from the left, which suits
+        -- the options window and not this narrow column: the host is pulled
+        -- left so rows start 8 in, and the rows are as wide as the column
+        -- less the scroll bar's room (kept whether or not it shows).
+        local T_PAD = (EV.Theme and EV.Theme.PAD) or 32
+        local width = max((inspector:GetWidth() or 420) - 30, 200)
         local f = CreateFrame("Frame", nil, inspector.scroll.content)
-        f:SetPoint("TOPLEFT")
-        local width = inspector.scroll.content:GetWidth()
-        if not width or width < 50 then width = 300 end
-        f:SetWidth(width)
+        f:SetPoint("TOPLEFT", inspector.scroll.content, "TOPLEFT", 8 - T_PAD, 0)
+        f:SetWidth(width + T_PAD)
         -- The builder calls this after a control changes AND at the end of
         -- every Refresh, including ours; only the first is an edit.
         -- A slider fires on every step of a drag. The copy follows each step;
         -- the commit (an undo step, and the real frames) waits until the
         -- control has been still for a moment, so one drag is one undo.
-        local b = EV.Options_NewBuilder(f, width - 16, function()
+        local b = EV.Options_NewBuilder(f, width, function()
             if quiet then return end
             Relayout()
             UI:SchedulePaint()
@@ -580,6 +584,13 @@ local function SyncInspector()
                 UI:Commit()
             end)
         end)
+        -- Sliders and dropdowns sized for the column, so labels keep room.
+        local row = b.Row
+        b.Row = function(self, cfg)
+            if cfg and cfg.type == "slider" and not cfg.width then cfg.width = 150 end
+            if cfg and cfg.type == "dropdown" then cfg.width = min(cfg.width or 150, 160) end
+            return row(self, cfg)
+        end
         if e.Options then e.Options(b) end
         quiet = true
         b:Refresh()
@@ -758,7 +769,7 @@ function UI:RequestClose()
 end
 
 local function Build()
-    win = W.Window("EvermoreUIDesigner", { width = 1180, height = 720, title = L["Designer"],
+    win = W.Window("EvermoreUIDesigner", { width = 1240, height = 740, title = L["Designer"],
                                            strata = "DIALOG", escape = false })
     win:SetFrameStrata("DIALOG")
     win.closeButton:SetScript("OnClick", function() UI:RequestClose() end)
@@ -774,7 +785,7 @@ local function Build()
     -- Left: the element list.
     local left = CreateFrame("Frame", nil, body)
     left:SetPoint("TOPLEFT", body, "TOPLEFT", 12, -84)
-    left:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 12, 60)
+    left:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 12, 52)
     left:SetWidth(176)
     local lbg = T.Fill(left, "BACKGROUND", "surfaceSunk", 0.5)
     lbg:SetAllPoints()
@@ -787,8 +798,8 @@ local function Build()
     -- Right: the inspector.
     inspector = CreateFrame("Frame", nil, body)
     inspector:SetPoint("TOPRIGHT", body, "TOPRIGHT", -12, -84)
-    inspector:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -12, 60)
-    inspector:SetWidth(360)
+    inspector:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -12, 52)
+    inspector:SetWidth(420)
     local ibg = T.Fill(inspector, "BACKGROUND", "surfaceSunk", 0.5)
     ibg:SetAllPoints()
     inspector.title = Txt(inspector, 16, "text", true)
@@ -810,14 +821,16 @@ local function Build()
         end
     end)
     inspector.reset:SetPoint("TOPRIGHT", -10, -8)
-    inspector.scroll = W.Scroll(inspector)
+    inspector.scroll = W.Scroll(inspector, { reserve = true })
     inspector.scroll:SetPoint("TOPLEFT", 0, -56)
     inspector.scroll:SetPoint("BOTTOMRIGHT", 0, 4)
 
     -- Middle: the canvas.
     canvas = CreateFrame("Frame", nil, body)
     canvas:SetPoint("TOPLEFT", left, "TOPRIGHT", 12, 0)
-    canvas:SetPoint("BOTTOMRIGHT", inspector, "BOTTOMLEFT", -12, 0)
+    -- Shorter than the side columns: the canvas's own two lines of help sit
+    -- under it, clear of the buttons along the bottom.
+    canvas:SetPoint("BOTTOMRIGHT", inspector, "BOTTOMLEFT", -12, 40)
     canvas:SetClipsChildren(true)
     canvas:EnableMouse(true)
     canvas:SetScript("OnMouseDown", function(_, button)
@@ -844,14 +857,17 @@ local function Build()
     stage.zoom:SetFrameLevel(stage:GetFrameLevel() + 1)
 
     hint = Txt(body, 12, "textMuted")
-    hint:SetPoint("TOPLEFT", canvas, "BOTTOMLEFT", 2, -8)
+    hint:SetPoint("TOPLEFT", canvas, "BOTTOMLEFT", 2, -6)
     hint:SetPoint("RIGHT", canvas, "RIGHT", 0, 0)
     hint:SetJustifyH("LEFT")
-    hint:SetWordWrap(true)
+    hint:SetWordWrap(false)
 
     local keys = Txt(body, 11, "textDisabled")
-    keys:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 14, 16)
-    keys:SetText(L["Drag to move  -  Alt: no snapping  -  Arrows nudge 1, Shift 10  -  Ctrl+Z undo  -  Esc deselect"])
+    keys:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -6)
+    keys:SetPoint("RIGHT", canvas, "RIGHT", 0, 0)
+    keys:SetJustifyH("LEFT")
+    keys:SetWordWrap(false)
+    keys:SetText(L["Drag to move, Alt: no snapping, arrows nudge (Shift: 10), Ctrl+Z undo, Esc deselect"])
 
     -- Bottom right: the actions.
     local save = W.Button(body, L["Save & close"], 130, function() UI:Save() end, "accent")

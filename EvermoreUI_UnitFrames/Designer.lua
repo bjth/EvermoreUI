@@ -284,7 +284,7 @@ local function Elements(tab)
         end,
         Options = function(p)
             ns.Settings(p, tab, { sections = {
-                [L["Frame"]] = true, [L["Position"]] = true, [L["Colours and texture"]] = true,
+                [L["General"]] = true, [L["Position"]] = true, [L["Colours and texture"]] = true,
                 [L["Text"]] = { font = true, textStyle = true, fontSize = true, powerFontSize = true },
                 [L["Classic"]] = true, [L["Fade out of combat"]] = true, [L["Aggro glow"]] = true,
                 [L["Cast bar, buffs and debuffs"]] = true,
@@ -426,7 +426,7 @@ end
 EV.Designers:Register{
     key = "unitframes", title = L["Unit Frames"], module = "UnitFrames", kind = "canvas",
     page = "unitframes",
-    note = L["The copy is bound to you and shows samples (a cast, a full set of auras, your icons) so everything you can place is on screen. Positions on the screen are edit mode's job."],
+    note = L["A copy bound to you, with samples, so every part is on screen. Screen position is edit mode's."],
     Tabs = function()
         local list = {}
         for _, u in ipairs(M.UNITS) do list[#list + 1] = { value = u.key, text = L[u.title] } end

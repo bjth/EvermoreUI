@@ -356,7 +356,7 @@ EV.Designers:Register{
     key = "cooldowns", title = L["Cooldowns"], module = "Cooldowns", kind = "grid",
     page = "cooldowns",
     help = L["Drag icons to reorder them, move a cooldown between the Essential and Utility bars, or drop one in the tray to hide it from our bars. This is saved for your class and spec."],
-    note = L["Which spells are tracked at all is the game's choice: Choose tracked spells opens its Cooldown Manager settings."],
+    note = L["Which spells are tracked is the game's choice: Choose tracked spells opens its settings."],
     Tabs = function() return { { value = "spec", text = L["This spec"] } } end,
     BuildGrid = function(stage)
         if not grid then Build(stage) end

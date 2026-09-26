@@ -261,7 +261,7 @@ end
 EV.Designers:Register{
     key = "nameplates", title = L["Nameplates"], module = "Nameplates", kind = "canvas",
     page = "nameplates",
-    note = L["A plate built like every real one, bound to you, with samples: a cast, a row of each kind of aura, a raid mark, a quest count. Moving something further above or below the bar makes room for it on every plate."],
+    note = L["A plate like every real one, with samples. Moving a part further out makes room on every plate."],
     Tabs = function() return { { value = "enemy", text = L["Enemy plate"] } } end,
     Build = function(host) return ns.BuildPreviewPlate(host) end,
     Layout = function(pf) ns.LayoutPreviewPlate(pf) end,

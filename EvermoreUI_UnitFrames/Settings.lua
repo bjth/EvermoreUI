@@ -219,7 +219,7 @@ function ns.Settings(builder, key, pick)
 
     ------------------------------------------------------------------------
 
-    p:Section(L["Frame"])
+    p:Section(L["General"])
     p:Dual(T("enabled", L["Show this frame"]),
            T("hideBlizzard", L["Hide Blizzard's frame"],
              L["Retires Blizzard's frame for this unit. Bringing it back needs a reload."],
