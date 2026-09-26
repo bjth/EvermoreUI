@@ -36,6 +36,26 @@ local SLOT_CENTRE = {
     { value = "level", text = L["Level"] }, { value = "health", text = L["Health"] },
 }
 
+local HEALTH_TEXT = {
+    { value = "none", text = L["None"] }, { value = "percent", text = L["87%"] },
+    { value = "current", text = L["12.3k"] }, { value = "curpercent", text = L["12.3k  87%"] },
+}
+local HEALTH_COLOURS = {
+    { value = "reaction", text = L["Reaction"] }, { value = "class", text = L["Class (players)"] },
+}
+local TEXT_STYLE = {
+    { value = "both", text = L["Outline and shadow"] }, { value = "shadow", text = L["Shadow only"] },
+    { value = "outline", text = L["Outline only"] },
+}
+local POWER_MODE = {
+    { value = "mana", text = L["Only units with mana"] }, { value = "any", text = L["Any resource"] },
+}
+local function Textures()
+    local list = {}
+    for _, name in ipairs(EV.Media:List("statusbar")) do list[#list + 1] = { value = name, text = name } end
+    return list
+end
+
 local function Controls()
     local X = {}
     local function Get(k) return function() return C()[k] end end
@@ -44,7 +64,23 @@ local function Controls()
     function X.S(k, text, lo, hi, step, tip)
         return { type = "slider", text = text, min = lo, max = hi, step = step or 1, tooltip = tip, get = Get(k), set = Set(k) }
     end
-    function X.D(k, text, values, width) return { type = "dropdown", text = text, values = values, width = width or 150, get = Get(k), set = Set(k) } end
+    function X.D(k, text, values, width, tip)
+        return { type = "dropdown", text = text, values = values, width = width or 150, tooltip = tip, get = Get(k), set = Set(k) }
+    end
+    function X.C(k, text, default)
+        return {
+            type = "colour", text = text,
+            get = function() local c = C()[k] or default; return c[1], c[2], c[3] end,
+            set = function(r, g, b) C()[k] = { r, g, b } end,
+            reset = function() C()[k] = { default[1], default[2], default[3] } end,
+            isCustom = function()
+                local c = C()[k]
+                if type(c) ~= "table" then return false end
+                for i = 1, 3 do if math.abs((c[i] or 0) - default[i]) > 0.002 then return true end end
+                return false
+            end,
+        }
+    end
     return X
 end
 
@@ -92,13 +128,25 @@ local function Elements()
         Reset = function() C().width, C().height = 196, 26 end,
         Options = function(p)
             local X = Controls()
+            p:Section(L["Size"])
             p:Row(X.S("width", L["Width"], 60, 320, 2))
             p:Row(X.S("height", L["Height"], 8, 48, 2))
+            p:Row(X.S("scale", L["Overall scale"], 0.6, 2, 0.05))
+            p:Section(L["Look"])
+            p:Row(X.D("texture", L["Texture"], Textures, 170,
+                      L["Includes textures from other addons that share them through LibSharedMedia."]))
+            p:Row(X.D("healthColour", L["Health colour"], HEALTH_COLOURS, 170))
+            p:Row(X.S("barShade", L["Bar brightness"], 0.5, 1, 0.05))
+            p:Row(X.S("borderSize", L["Border thickness"], 1, 3, 1))
+            p:Row(X.T("innerShadow", L["Inset shading"]))
+            p:Section(L["Text"])
             p:Row(X.D("textLeft", L["Left of the bar"], SLOT_SIDE, 170))
             p:Row(X.D("textCentre", L["Middle of the bar"], SLOT_CENTRE, 170))
             p:Row(X.D("textRight", L["Right of the bar"], SLOT_SIDE, 170))
+            p:Row(X.D("healthText", L["Health format"], HEALTH_TEXT, 170))
             p:Row(X.S("fontSize", L["Font size"], 8, 20, 1))
-            p:Note(L["Width and height move in steps of two: the plate is centred on the game's, and an odd size puts its edges on half pixels."])
+            p:Row(X.D("textStyle", L["Text edge"], TEXT_STYLE, 190))
+            p:Note(L["Width and height move in steps of two: the plate is centred on the game's, and an odd size puts its edges on half pixels. Threat, target highlighting and movement are on the Nameplates page: they're about behaviour rather than where things sit."])
         end,
     }
 
@@ -166,6 +214,7 @@ local function Elements()
         Options = function(p)
             local X = Controls()
             p:Row(X.T("showPower", L["Show the mob's resource"]))
+            p:Row(X.D("powerMode", L["Which units"], POWER_MODE, 190))
             p:Row(X.S("powerHeight", L["Strip height"], 2, 16, 1))
             p:Row(X.S("powerGap", L["Gap below the plate"], 0, 10, 1))
             p:Note(L["Shown with a sample of mana here; on real plates only units with the resource have it."])
@@ -223,6 +272,7 @@ local function Elements()
                 p:Row(X.S("comboHeight", L["Pip height"], 2, 16, 1))
                 p:Row(X.S("comboSpacing", L["Spacing"], 0, 10, 1))
                 p:Row(X.S("comboY", L["Nudge up or down"], -30, 30, 1))
+                p:Row(X.C("comboColour", L["Colour"], { 1, 0.86, 0.1 }))
             end,
         }
     end

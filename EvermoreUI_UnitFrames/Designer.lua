@@ -52,6 +52,26 @@ local POWER_TEXT = {
     { value = "curmax", text = L["4.2k / 5k"] }, { value = "none", text = L["None"] },
 }
 
+local HEALTH_COLOURS = {
+    { value = "class", text = L["Class / reaction"] }, { value = "green", text = L["Green"] },
+    { value = "dark", text = L["Dark"] }, { value = "custom", text = L["Your own colour"] },
+}
+local POWER_COLOURS = {
+    { value = "type", text = L["By resource"] }, { value = "class", text = L["Class colour"] },
+    { value = "custom", text = L["Your own colour"] },
+}
+local TEXT_STYLE = {
+    { value = "both", text = L["Outline and shadow"] }, { value = "shadow", text = L["Shadow only"] },
+    { value = "outline", text = L["Outline only"] },
+}
+local NAME_COLOURS = { { value = "white", text = L["White"] }, { value = "class", text = L["Class / reaction"] } }
+local function TEXTURES()
+    local list = {}
+    for _, name in ipairs(EV.Media:List("statusbar")) do list[#list + 1] = { value = name, text = name } end
+    return list
+end
+local function FONTS() return EV.Media:FontValues(true) end
+
 local function Round(v) return floor(v + 0.5) end
 --- Keep a dragged value inside what the inspector's slider can show, so the
 --- two never disagree and a wheel tick can't snap it somewhere else.
@@ -90,6 +110,28 @@ local function Controls(tab)
         return { type = "dropdown", text = text, values = values, width = width or 130, tooltip = tip,
                  get = Get(path), set = Set(path) }
     end
+    --- A colour setting ({ r, g, b }), with Reset back to the unit's default.
+    function X.C(path, text, disabled)
+        local function Default()
+            local a, b = Split(path)
+            local d = M.DEFAULTS[tab]
+            local v = b and d[a] and d[a][b] or d[a]
+            return type(v) == "table" and v or { 1, 1, 1 }
+        end
+        return {
+            type = "colour", text = text, disabled = disabled,
+            get = function() local c = Get(path)() or Default(); return c[1], c[2], c[3] end,
+            set = function(r, g, b) Set(path)({ r, g, b }) end,
+            reset = function() local d = Default(); Set(path)({ d[1], d[2], d[3] }) end,
+            isCustom = function()
+                local c, d = Get(path)(), Default()
+                if type(c) ~= "table" then return false end
+                for i = 1, 3 do if math.abs((c[i] or 0) - (d[i] or 0)) > 0.002 then return true end end
+                return false
+            end,
+        }
+    end
+    function X.Off(path, value) return function() return Get(path)() ~= value end end
     return X
 end
 
@@ -252,12 +294,31 @@ local function Elements(tab)
         Options = function(p)
             local X = Controls(tab)
             p:Row(X.T("enabled", L["Show this frame"]))
+            p:Section(L["Size"])
             p:Row(X.S("width", L["Width"], 60, 500, 1))
             p:Row(X.S("height", L["Height"], 12, 100, 1))
             p:Row(X.S("powerHeight", L["Power bar height"], 0, 30, 1, L["0 hides the power bar."]))
-            p:Row(X.S("borderSize", L["Border thickness"], 0, 8, 1))
+            p:Section(L["Bars"])
+            p:Row(X.D("texture", L["Texture"], TEXTURES, 170,
+                      L["Includes textures from other addons that share them through LibSharedMedia."]))
+            p:Row(X.D("healthColour", L["Health colour"], HEALTH_COLOURS, 170))
+            p:Row(X.C("healthCustom", L["Your health colour"], X.Off("healthColour", "custom")))
+            p:Row(X.D("powerColour", L["Power colour"], POWER_COLOURS, 170))
+            p:Row(X.C("powerCustom", L["Your power colour"], X.Off("powerColour", "custom")))
+            p:Row(X.S("barShade", L["Bar brightness"], 0.5, 1, 0.05))
+            p:Row(X.T("healPrediction", L["Incoming heals"]))
+            p:Section(L["Border and background"])
+            p:Row(X.S("borderSize", L["Border thickness"], 0, 8, 1, L["In pixels. 0 is no border."]))
+            p:Row(X.C("borderColour", L["Border colour"]))
+            p:Row(X.C("bgColour", L["Background colour"]))
+            p:Row(X.S("bgAlpha", L["Background opacity"], 0, 1, 0.05))
+            p:Row(X.T("innerShadow", L["Inset shading"]))
+            p:Section(L["Text"])
+            p:Row(X.D("font", L["Font"], FONTS, 190))
             p:Row(X.S("fontSize", L["Font size"], 8, 24, 1))
-            p:Note(L["Where the frame sits on your screen is edit mode's job: /evui edit."])
+            p:Row(X.S("powerFontSize", L["Power text size"], 0, 24, 1, L["0 is two points under the font size."]))
+            p:Row(X.D("textStyle", L["Text edge"], TEXT_STYLE, 190))
+            p:Note(L["Where the frame sits on your screen is edit mode's job: /evui edit. The aggro glow, fading and click casting are on the Unit Frames page."])
         end,
     }
     Add{
@@ -274,8 +335,19 @@ local function Elements(tab)
             p:Row(X.D("portraitSide", L["Side"], { { value = "left", text = L["Left"] }, { value = "right", text = L["Right"] } }, 120))
         end,
     }
-    Add(TextElement(tab, "name", L["Name"], "name", "nameText", "health",
-        function() return C().showName end))
+    local name = TextElement(tab, "name", L["Name"], "name", "nameText", "health",
+        function() return C().showName end)
+    local placeName = name.Options
+    name.Options = function(p)
+        local X = Controls(tab)
+        p:Row(X.T("showName", L["Show the name"]))
+        p:Row(X.T("showLevel", L["Level"]))
+        p:Row(X.D("nameColour", L["Name colour"], NAME_COLOURS, 170))
+        p:Row(X.S("nameWidth", L["Name width (%)"], 0, 100, 5,
+                  L["How much of the bar a long name may use. 0 lets it run up to the health text when the two share a line."]))
+        placeName(p)
+    end
+    Add(name)
     Add(TextElement(tab, "healthText", L["Health text"], "health", "healthText", "health",
         function() return C().healthText ~= "none" end, "healthText", HEALTH_TEXT))
     Add(TextElement(tab, "powerText", L["Power text"], "power", "powerText", "power",
@@ -338,6 +410,12 @@ local function Elements(tab)
                 p:Row(X.T("castbar.showName", L["Spell name"]))
                 p:Row(X.T("castbar.showTime", L["Time left"]))
                 p:Row(X.S("castbar.fontSize", L["Font size"], 7, 24, 1))
+                p:Row(X.T("castbar.spark", L["Spark"]))
+                p:Row(X.D("castbar.texture", L["Texture"], function()
+                    local list = { { value = "", text = L["Same as the frame"] } }
+                    for _, t in ipairs(TEXTURES()) do list[#list + 1] = t end
+                    return list
+                end, 170))
             end,
         }
         Add(AuraElement(tab, "debuffs", L["Debuffs"]))
@@ -375,6 +453,7 @@ local function Elements(tab)
                 p:Row(X.S("classPower.height", L["Height"], 2, 30, 1))
                 p:Row(X.S("classPower.width", L["Width"], 0, 500, 1, L["0 matches the frame's width."]))
                 p:Row(X.S("classPower.spacing", L["Spacing"], 0, 12, 1))
+                p:Row(X.C("classPower.colour", L["Colour"]))
                 p:Row(X.T("classPower.hideEmpty", L["Hide when empty out of combat"]))
             end,
         }
