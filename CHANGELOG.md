@@ -42,11 +42,19 @@ full frames addon.
   quest count and each row of auras anywhere around the bar, move the mana
   strip and cast bar up or down, flip combo points between edges, and
   resize by the corner. Nothing moves until you move it.
-- **Everything in the designer**: every Unit Frames and Nameplates setting
-  now lives in the designer, with the part it belongs to. The frame or
-  plate as a whole (size, colours, fading, the aggro glow, threat, target
-  highlighting, how plates move) is under Frame or Plate behaviour in its
-  list. Their options pages open the designer.
+- **Design your party and raid frames**: the designer's Party & Raid tab
+  shows a sample party, or three raid groups, laid out as yours will be.
+  Drag the name, health text, role, leader, ready check and raid mark
+  anywhere on the first frame, and the debuff and buff rows around it, and
+  every frame follows. Resize by the corner. Texture, border, font and
+  colours are there too.
+- **Everything in the designer**: every Unit Frames, Nameplates, Cooldowns
+  and Party & Raid setting now lives in the designer, with the part it
+  belongs to. The frame or plate as a whole (size, colours, fading, the
+  aggro glow, threat, target highlighting, how plates move) is under Frame
+  or Plate behaviour in its list; click a cooldown bar for its size and
+  text, or a cooldown for its linked timer. Their options pages open the
+  designer, and so does Frame settings in edit mode.
 
 ### Changed
 - **More ways to style a frame**: border from 0 to 8 pixels in any colour,
