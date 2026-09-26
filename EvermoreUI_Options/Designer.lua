@@ -27,9 +27,11 @@ if EV_BLOCKED then return end
 --    Snapshot(tab) -> table   Restore(tab, snap)   Apply(tab)
 --    note                                      one line under the canvas
 --    help                                      inspector text with nothing picked
---  A grid surface (kind = "grid") has no preview or elements; it draws into
---  the canvas itself with BuildGrid(stage, tab) and hides with HideGrid(),
---  and calls EV.DesignerUI:Commit() after each change it makes.
+--  A grid surface (kind = "grid") has no preview; it draws into the canvas
+--  itself with BuildGrid(stage, tab), hides with HideGrid(), and calls
+--  EV.DesignerUI:Commit() after each change it makes. Its elements have no
+--  region: it picks them with EV.DesignerUI:Select(key), and Paint(selected)
+--  lets it show which one is picked.
 --
 --  ELEMENT
 --    key, label
@@ -51,6 +53,8 @@ if EV_BLOCKED then return end
 --    Nudge(dx, dy)            arrow keys, in the element's own units
 --    getSize() -> w, h ; setSize(w, h)   frame units; gives it a grip
 --    Options(p)               inspector rows, with the options page builder
+--    sub                      the line under its name in the inspector
+--    unlisted = true          picked on the canvas only, not in the list
 --    Reset()
 --------------------------------------------------------------------------------
 local EV = EvermoreUI
@@ -400,6 +404,10 @@ local function Select(key)
     RefreshAll()
 end
 
+--- For grid surfaces, which pick their own elements.
+function UI:Select(key) Select(key) end
+function UI:Selected() return selected end
+
 local function CreateHandle()
     local h = CreateFrame("Button", nil, stage)
     h:RegisterForClicks("AnyUp")
@@ -509,7 +517,10 @@ local listButtons = {}
 
 local function SyncList()
     local y = -8
-    for i, e in ipairs(elements) do
+    local i = 0
+    for _, e in ipairs(elements) do
+      if not e.unlisted then
+        i = i + 1
         local b = listButtons[i]
         if not b then
             b = CreateFrame("Button", nil, listPanel.content)
@@ -535,8 +546,9 @@ local function SyncList()
         if selected == e.key then b.bg:SetColorTexture(T.RGBA("accent", 0.25)) else b.bg:SetColorTexture(0, 0, 0, 0) end
         b:Show()
         y = y - 26
+      end
     end
-    for i = #elements + 1, #listButtons do listButtons[i]:Hide() end
+    for j = i + 1, #listButtons do listButtons[j]:Hide() end
     listPanel:SetContentHeight(-y + 8)
 end
 
@@ -551,7 +563,7 @@ local function SyncInspector()
         return
     end
     inspector.title:SetText(e.label)
-    inspector.sub:SetText(e.move == "free" and L["Drag it, or set it exactly below."]
+    inspector.sub:SetText(e.sub or e.move == "free" and L["Drag it, or set it exactly below."]
         or e.move == "slot" and L["Drag it to a side of the frame, then nudge with the arrow keys."]
         or e.move == "nudge" and L["Drag it, or nudge with the arrow keys."] or "")
     inspector.reset:SetShown(e.Reset ~= nil)
@@ -606,6 +618,18 @@ local function SyncInspector()
     inspector.scroll:SetContentHeight(c.frame:GetHeight())
 end
 
+--- The picked element's rows changed shape (a list grew or shrank): draw
+--- them again. commit records the change when no control has.
+function UI:RebuildInspector(commit)
+    C_Timer.After(0, function()
+        if not (win and win:IsShown()) then return end
+        local ck = TabKey() .. ":" .. tostring(selected)
+        local c = inspectorCache[ck]
+        if c then c.frame:Hide(); inspectorCache[ck] = nil end
+        if commit then UI:Commit() else SyncInspector() end
+    end)
+end
+
 --------------------------------------------------------------------------------
 --  Tabs and the canvas
 --------------------------------------------------------------------------------
@@ -657,6 +681,7 @@ function RefreshAll()
     end
     SyncList()
     SyncInspector()
+    if surface and surface.kind == "grid" and surface.Paint then surface.Paint(selected) end
     win.undo:SetDisabled(#undo == 0)
     win.discard:SetDisabled(not Dirty())
     hint:SetText(surface and surface.note or "")

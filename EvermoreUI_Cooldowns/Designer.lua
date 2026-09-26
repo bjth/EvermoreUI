@@ -10,6 +10,9 @@ if EV_BLOCKED then return end
 --  arrangement"), per class and spec. Which spells are tracked at all is
 --  Blizzard's choice, in its Cooldown Manager settings; the button here opens
 --  them.
+--
+--  Click a row for that bar's settings, a cooldown for its linked timer.
+--  The settings themselves are in Settings.lua.
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 if not (EvermoreUI and EvermoreUI.NewModule and EvermoreUI.Designers) then return end
@@ -30,6 +33,7 @@ local rows = {}              -- row key -> row frame
 local tiles = {}             -- pool of icon tiles
 local dragging               -- { tile, item, from }
 local DragUpdate, Drop       -- below
+local Elements               -- below
 
 local function Texture(f)
     local info = f.cooldownInfo
@@ -50,6 +54,22 @@ local function Name(f)
     local info = f.cooldownInfo
     if type(info) ~= "table" then return nil end
     return M.SpellName(info.overrideSpellID) or M.SpellName(info.spellID)
+end
+
+--- The spell a linked timer is kept against (plain, or nil).
+local function SpellOf(f)
+    local info = f.cooldownInfo
+    local id = type(info) == "table" and info.spellID
+    if type(id) == "number" and not issecret(id) then return id end
+end
+
+local function BarKey(key) return "bar:" .. key end
+local function IconKey(id) return "spell:" .. id end
+
+--- What picking this tile opens: a cooldown's own timer, or a buff's bar.
+local function PickFor(item)
+    if item.group == "cd" and SpellOf(item.f) then return IconKey(item.id) end
+    return BarKey(item.native)
 end
 
 --- What each row holds right now: bars in your order, then the hidden tray.
@@ -102,6 +122,11 @@ end
 --------------------------------------------------------------------------------
 --  Drawing
 --------------------------------------------------------------------------------
+local function PaintTile(t)
+    local on = t.item and EV.DesignerUI:Selected() == PickFor(t.item) and t.item.group == "cd"
+    T.SetBorderToken(t, (on or t:IsMouseOver()) and "accent" or "border")
+end
+
 local function Tile(i)
     local t = tiles[i]
     if t then return t end
@@ -122,14 +147,15 @@ local function Tile(i)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine(self.name or L["Cooldown"], 1, 1, 1)
         GameTooltip:AddLine(self.item.group == "buff" and L["Drag along the row to reorder, or to the tray to hide it."]
-            or L["Drag to reorder, to the other cooldown row to move it there, or to the tray to hide it."],
+            or L["Drag to reorder, to the other cooldown row to move it there, or to the tray to hide it. Click for its linked timer."],
             0.75, 0.78, 0.82, true)
         GameTooltip:Show()
     end)
-    t:SetScript("OnLeave", function(self) T.SetBorderToken(self, "border"); GameTooltip:Hide() end)
+    t:SetScript("OnLeave", function(self) GameTooltip:Hide(); PaintTile(self) end)
     t:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" then return end
         GameTooltip:Hide()
+        EV.DesignerUI:Select(PickFor(self.item))
         dragging = { tile = self, item = self.item, from = self.row }
         grid.ghost.icon:SetTexture(self.icon:GetTexture())
         grid.ghost:Show()
@@ -148,6 +174,11 @@ local function Row(key, label)
     if r then return r end
     r = CreateFrame("Frame", nil, grid)
     r.key = key
+    -- Clicking the row itself (not an icon) picks its bar.
+    r:EnableMouse(true)
+    r:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" and key ~= HIDDEN then EV.DesignerUI:Select(BarKey(key)) end
+    end)
     r.bg = T.Fill(r, "BACKGROUND", "surfaceSunk", 0.6)
     r.bg:SetAllPoints()
     T.TokenBorder(r, "border")
@@ -209,6 +240,14 @@ local function Build(stage)
         EV.DesignerUI:Commit()
     end)
     grid.reset:SetPoint("LEFT", grid.blizz, "RIGHT", 8, 0)
+
+    -- The picked bar's row and the picked cooldown carry the accent.
+    function grid.Paint(sel)
+        for key, r in pairs(rows) do
+            T.SetBorderToken(r, (key ~= HIDDEN and sel == BarKey(key)) and "accent" or "border")
+        end
+        for _, t in ipairs(tiles) do if t:IsShown() then PaintTile(t) end end
+    end
 end
 
 --- Lay the rows and tiles out from the arrangement as it is now.
@@ -254,6 +293,7 @@ local function Draw()
         y = y - h - 30
     end
     for i = n + 1, #tiles do tiles[i]:Hide() end
+    grid.Paint(EV.DesignerUI:Selected())
 end
 
 --------------------------------------------------------------------------------
@@ -350,12 +390,48 @@ Drop = function()
 end
 
 --------------------------------------------------------------------------------
+--  Elements: each bar, the timer list, and each cooldown (picked on the grid)
+--------------------------------------------------------------------------------
+function Elements()
+    local list = {}
+    for _, def in ipairs(M.BARS) do
+        list[#list + 1] = {
+            key = BarKey(def.key), label = def.label,
+            sub = L["Everything about this bar. Where it sits on screen is edit mode."],
+            Options = function(p) ns.BarSettings(p, def) end,
+            Reset = function() ns.ResetBar(def) end,
+        }
+    end
+    list[#list + 1] = {
+        key = "timers", label = L["Linked timers"],
+        Options = function(p) ns.TimerList(p, function(commit) EV.DesignerUI:RebuildInspector(commit) end) end,
+    }
+    local contents = Contents()
+    local seen = {}
+    for _, items in pairs(contents) do
+        for _, it in ipairs(items) do
+            local spell = it.group == "cd" and SpellOf(it.f)
+            local key = spell and IconKey(it.id)
+            if key and not seen[key] then
+                seen[key] = true
+                list[#list + 1] = {
+                    key = key, label = Name(it.f) or L["Cooldown"], unlisted = true,
+                    sub = L["Drag it on the grid to move it. Its bar's settings are in the list."],
+                    Options = function(p) ns.IconTimer(p, spell) end,
+                }
+            end
+        end
+    end
+    return list
+end
+
+--------------------------------------------------------------------------------
 --  The surface
 --------------------------------------------------------------------------------
 EV.Designers:Register{
     key = "cooldowns", title = L["Cooldowns"], module = "Cooldowns", kind = "grid",
     page = "cooldowns",
-    help = L["Drag icons to reorder them, move a cooldown between the Essential and Utility bars, or drop one in the tray to hide it from our bars. This is saved for your class and spec."],
+    help = L["Drag icons to reorder them, move a cooldown between the Essential and Utility bars, or drop one in the tray to hide it. The order is saved for your class and spec. Click a row for its bar's settings, or a cooldown for its linked timer."],
     note = L["Which spells are tracked is the game's choice: Choose tracked spells opens its settings."],
     Tabs = function() return { { value = "spec", text = L["This spec"] } } end,
     BuildGrid = function(stage)
@@ -368,19 +444,37 @@ EV.Designers:Register{
         C_Timer.After(0, function() if grid:IsShown() then Draw() end end)
     end,
     HideGrid = function() if grid then grid:Hide() end end,
-    Elements = function() return {} end,
+    Paint = function(sel) if grid and grid:IsShown() then grid.Paint(sel) end end,
+    Elements = function() return Elements() end,
     -- An untouched spec has no entry, and a restore to that state removes
     -- it again rather than leaving an empty one in your settings.
     -- Each snapshot remembers whose it is, so switching spec with the window
     -- open can't pour one spec's arrangement into another.
+    -- Bars and timers go back into the tables they came from: the
+    -- inspector's rows hold those tables, not copies.
     Snapshot = function()
         local a = M:Arrangement(false)
-        return { spec = M.SpecKey(), data = a and EV.CopyTable(a) or nil }
+        return { spec = M.SpecKey(), data = a and EV.CopyTable(a) or nil,
+                 bars = EV.CopyTable(M.db.bars), timers = EV.CopyTable(M:Timers()) }
     end,
     Restore = function(_, snap)
         if not snap then return end
         M.db.arrange[snap.spec or M.SpecKey()] = snap.data and EV.CopyTable(snap.data) or nil
-        M:LayoutAll()
+        if snap.bars then
+            for key, saved in pairs(snap.bars) do
+                local db = M.db.bars[key]
+                if db then
+                    wipe(db)
+                    for k, v in pairs(saved) do db[k] = type(v) == "table" and EV.CopyTable(v) or v end
+                end
+            end
+        end
+        if snap.timers then
+            local list = M:Timers()
+            wipe(list)
+            for i, t in ipairs(snap.timers) do list[i] = EV.CopyTable(t) end
+        end
+        M:Refresh()
     end,
-    Apply = function() M:LayoutAll() end,
+    Apply = function() M:Refresh() end,
 }
