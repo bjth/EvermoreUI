@@ -99,8 +99,21 @@ Small comforts while the bag addon is built.
   merchant, quest log and the rest by their title bar, and they open where
   you left them. Reset them all on the Quality of Life page.
 - **The whole world map**: the parts of each zone you haven't explored yet
-  are revealed too, as if you had. Tint them darker on the Quality of Life
-  page if you want to tell them apart; switch it off on the Modules page.
+  are revealed too, as if you had. Switch it on or off on the Quality of
+  Life page, and tint them darker there if you want to tell them apart.
+- **Weather density**: choose how much rain, snow and dust the game draws,
+  from low to very high, on the Quality of Life page or from the cloud next to
+  the sun and moon on the minimap. Switching it off puts your old setting
+  back.
+
+### Changed
+- **Up/Down in the chat box** remembers what you've sent through a reload
+  or relog: your last 50 lines per window, for this character. Forget kept
+  history on the Chat page clears them too.
+
+### Fixes
+- The minimap clock's tooltip shows realm and local time in your theme's
+  text colour, not red.
 
 ## 0.11.0
 

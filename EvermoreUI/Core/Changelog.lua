@@ -37,7 +37,14 @@ EvermoreUI.CHANGELOG = {
                 "**Bank**: your bank in the same style when you visit one, with the same sections, search and sort, and your account bank alongside where the game allows. Right-click items in your bags to put them in whichever bank is showing, or use Deposit all. Buy bank tabs and move gold in and out of the account bank from the same window. The game's own bank window is a button away.",
                 "**Empty a bag**: Alt + click a bag on the bag bar to move everything in it into free space in your other bags, topping up part stacks first and keeping arrows, shards and herbs in their own bags. Then swap it out.",
                 "**Move Blizzard's windows**: drag the character sheet, spellbook, merchant, quest log and the rest by their title bar, and they open where you left them. Reset them all on the Quality of Life page.",
-                "**The whole world map**: the parts of each zone you haven't explored yet are revealed too, as if you had. Tint them darker on the Quality of Life page if you want to tell them apart; switch it off on the Modules page.",
+                "**The whole world map**: the parts of each zone you haven't explored yet are revealed too, as if you had. Switch it on or off on the Quality of Life page, and tint them darker there if you want to tell them apart.",
+                "**Weather density**: choose how much rain, snow and dust the game draws, from low to very high, on the Quality of Life page or from the cloud next to the sun and moon on the minimap. Switching it off puts your old setting back.",
+            } },
+            { title = "Changed", items = {
+                "**Up/Down in the chat box** remembers what you've sent through a reload or relog: your last 50 lines per window, for this character. Forget kept history on the Chat page clears them too.",
+            } },
+            { title = "Fixes", items = {
+                "The minimap clock's tooltip shows realm and local time in your theme's text colour, not red.",
             } },
         },
     },
