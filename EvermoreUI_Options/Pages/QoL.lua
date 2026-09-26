@@ -123,6 +123,20 @@ EV.Options:RegisterPage{
                  L["Some NPCs ask for their menu to be shown on purpose. This overrides that. It is where most of the remaining clicks are, and also the only place this can skip something you wanted to read."],
                  { disabled = function() return not M.db.autoGossip end }))
 
+        local Map = EV:GetModule("MapReveal", true)
+        if Map then
+            p:Section(L["World map"])
+            if not Map:IsEnabled() then
+                p:Note(L["Showing the whole map is switched off on the Modules page."], 0.7)
+            else
+                p:Note(L["The parts of each zone you haven't explored are shown on the world map, a little darker."], 0.7)
+                p:Dual({ type = "slider", text = L["Unexplored brightness"], min = 0.2, max = 1, step = 0.05,
+                         fmt = function(v) return math.floor(v * 100 + 0.5) .. "%" end,
+                         get = function() return Map.db.shade end,
+                         set = function(v) Map.db.shade = v; Map:Refresh() end }, nil)
+            end
+        end
+
         local Win = EV:GetModule("Windows", true)
         if Win then
             p:Section(L["Windows"])
