@@ -129,11 +129,16 @@ EV.Options:RegisterPage{
             if not Map:IsEnabled() then
                 p:Note(L["Showing the whole map is switched off on the Modules page."], 0.7)
             else
-                p:Note(L["The parts of each zone you haven't explored are shown on the world map, a little darker."], 0.7)
-                p:Dual({ type = "slider", text = L["Unexplored brightness"], min = 0.2, max = 1, step = 0.05,
+                p:Note(L["The whole map is revealed, including the parts of each zone you haven't explored."], 0.7)
+                p:Dual({ type = "toggle", text = L["Tint unexplored areas"],
+                         tooltip = L["Draw the parts you haven't explored darker, so you can still tell them apart."],
+                         get = function() return Map.db.tint end,
+                         set = function(v) Map.db.tint = v; Map:Refresh() end },
+                       { type = "slider", text = L["Tint brightness"], min = 0.2, max = 0.95, step = 0.05,
                          fmt = function(v) return math.floor(v * 100 + 0.5) .. "%" end,
+                         disabled = function() return not Map.db.tint end,
                          get = function() return Map.db.shade end,
-                         set = function(v) Map.db.shade = v; Map:Refresh() end }, nil)
+                         set = function(v) Map.db.shade = v; Map:Refresh() end })
             end
         end
 
