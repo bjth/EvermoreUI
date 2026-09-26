@@ -8,8 +8,12 @@ Small comforts while the bag addon is built.
 - **Bags**: all your bags in one window, split into sections: new items,
   gear sets, equipment, consumables, quest items, herbs, ore, leather and
   cloth for gatherers, trade goods and the rest, junk last. Search, sort,
-  your gold and free space at a glance. Switch sections on and off under
-  Interface > Bags. Replaces Blizzard's bag windows.
+  your gold and free space at a glance. Replaces Blizzard's bag windows.
+- **Your own sections**: make sections with rules (item type, quality,
+  name, tooltip text, soulbound, slot, item level, gear sets, can't be
+  sold, item IDs), matching every rule or any. Drop an item on a section's
+  title to keep it there. Reorder, fold and switch sections off; sort by
+  quality, item level, name or ID; item level on gear. Interface > Bags.
 - **Empty a bag**: Alt + click a bag on the bag bar to move everything in
   it into free space in your other bags, topping up part stacks first and
   keeping arrows, shards and herbs in their own bags. Then swap it out.

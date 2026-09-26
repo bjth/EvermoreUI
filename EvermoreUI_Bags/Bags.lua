@@ -18,11 +18,19 @@ if EV_BLOCKED then return end
 --  did to Blizzard's windows, ours opens or closes to match and theirs is
 --  hidden again.
 --
---  Categories are rules checked in match order; the first that fits wins.
---  Each can be switched off, and its items fall through to the next that
---  fits (Herbs off: herbs go to Trade goods). Sections are drawn in display
---  order. Empty space shows as one slot per kind of bag, with a count, so
---  there's always somewhere to drop an item.
+--  Sections. Where an item goes, first that fits:
+--    1. a section you dropped that item on (drag an item onto a section's
+--       title in the bags to put it there)
+--    2. your own sections, in the order they're shown, by their rules
+--       (Rules.lua)
+--    3. the built-in sections, in match order (junk and quest before
+--       equipment, and so on)
+--    4. Everything else
+--  Any section can be switched off; its items fall through to the next that
+--  fits (Herbs off: herbs go to Trade goods). Sections are drawn in the
+--  order set on the options page, and can be folded by clicking the title.
+--  Empty space shows as one slot per kind of bag, with a count, so there's
+--  always somewhere to drop an item.
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 if not (EvermoreUI and EvermoreUI.NewModule) then return end
@@ -72,7 +80,13 @@ local M = EV:NewModule("Bags", {
     columns    = 10,
     size       = 36,
     spacing    = 4,
-    categories = CategoryDefaults(),   -- [key] = on
+    categories = CategoryDefaults(),   -- [key] = on (built-in sections)
+    custom     = {},                   -- your sections: { key, name, on, match, rules, items }
+    assign     = {},                   -- [itemID] = section key, dropped there by hand
+    order      = {},                   -- section keys, top to bottom
+    collapsed  = {},                   -- [key] = true
+    sort       = "quality",            -- within a section: quality, name, ilvl, id
+    ilvl       = true,                 -- item level on gear
     point      = { "BOTTOMRIGHT", -60, 110 },
 })
 M.title = "Bags"
@@ -119,13 +133,118 @@ local function Read(bag, slot)
     return i
 end
 
-local function CategoryOf(i)
-    local on = M.db.categories
-    for _, c in ipairs(CATEGORIES) do
-        if on[c.key] ~= false and c.test(i) then return c end
+local Rules = ns.Rules
+
+local builtinByKey = {}
+for _, c in ipairs(CATEGORIES) do builtinByKey[c.key] = c end
+builtinByKey.other = OTHER
+
+--- Every section, top to bottom: { key, label, builtin = cat | custom = sec }.
+--- The saved order is kept; sections it doesn't know yet join where they
+--- belong (yours at the top, built-ins by their usual place).
+function M.All()
+    local db = M.db
+    local out, seen = {}, {}
+    local customByKey = {}
+    for _, sec in ipairs(db.custom) do customByKey[sec.key] = sec end
+    local function Add(key)
+        if seen[key] then return end
+        local b, c = builtinByKey[key], customByKey[key]
+        if not (b or c) then return end
+        seen[key] = true
+        out[#out + 1] = { key = key, label = c and c.name or b.label, builtin = b, custom = c }
     end
-    return OTHER
+    -- New sections of yours (not in the saved order yet) go at the top.
+    local known = {}
+    for _, key in ipairs(db.order) do known[key] = true end
+    for _, sec in ipairs(db.custom) do if not known[sec.key] then Add(sec.key) end end
+    for _, key in ipairs(db.order) do Add(key) end
+    local builtins = {}
+    for _, c in ipairs(CATEGORIES) do builtins[#builtins + 1] = c end
+    builtins[#builtins + 1] = OTHER
+    table.sort(builtins, function(x, y) return x.order < y.order end)
+    for _, c in ipairs(builtins) do Add(c.key) end
+    return out
 end
+
+--- Save the current top-to-bottom order (after a move in the options).
+function M.SetOrder(list)
+    local keys = {}
+    for i, e in ipairs(list) do keys[i] = e.key end
+    M.db.order = keys
+end
+
+function M.IsOn(key)
+    local db = M.db
+    if builtinByKey[key] then return key == "other" or db.categories[key] ~= false end
+    for _, sec in ipairs(db.custom) do if sec.key == key then return sec.on ~= false end end
+    return false
+end
+
+function M.NewSection(name)
+    local db = M.db
+    local key = ("c%d%03d"):format(time(), math.random(0, 999))
+    local sec = { key = key, name = name or L["New section"], on = true, match = "all", rules = {}, items = {} }
+    db.custom[#db.custom + 1] = sec
+    return sec
+end
+
+function M.DeleteSection(key)
+    local db = M.db
+    for n, sec in ipairs(db.custom) do
+        if sec.key == key then table.remove(db.custom, n); break end
+    end
+    for id, k in pairs(db.assign) do if k == key then db.assign[id] = nil end end
+end
+
+--- Put an item in a section by hand (or take it out again with key = nil).
+function M.Assign(itemID, key)
+    if type(itemID) ~= "number" then return end
+    M.db.assign[itemID] = key
+end
+
+local function CategoryOf(i, all)
+    local db = M.db
+    local byHand = db.assign[i.id]
+    if byHand and M.IsOn(byHand) then
+        for _, e in ipairs(all) do if e.key == byHand then return e end end
+    end
+    for _, e in ipairs(all) do
+        if e.custom and e.custom.on ~= false and Rules.Matches(e.custom, i) then return e end
+    end
+    for _, c in ipairs(CATEGORIES) do
+        if db.categories[c.key] ~= false and c.test(i) then
+            for _, e in ipairs(all) do if e.key == c.key then return e end end
+        end
+    end
+    for _, e in ipairs(all) do if e.key == "other" then return e end end
+end
+
+local SORTS = {
+    quality = function(a, b)
+        local qa, qb = a.i.quality or 0, b.i.quality or 0
+        if qa ~= qb then return qa > qb end
+        if a.i.id ~= b.i.id then return a.i.id < b.i.id end
+        return (a.i.count or 1) > (b.i.count or 1)
+    end,
+    name = function(a, b)
+        local na = C_Item.GetItemNameByID(a.i.id) or ""
+        local nb = C_Item.GetItemNameByID(b.i.id) or ""
+        if na ~= nb then return na < nb end
+        return (a.i.count or 1) > (b.i.count or 1)
+    end,
+    ilvl = function(a, b)
+        local la, lb = Rules.ItemLevel(a.i), Rules.ItemLevel(b.i)
+        if la ~= lb then return la > lb end
+        if a.i.id ~= b.i.id then return a.i.id < b.i.id end
+        return (a.i.count or 1) > (b.i.count or 1)
+    end,
+    id = function(a, b)
+        if a.i.id ~= b.i.id then return a.i.id < b.i.id end
+        return (a.i.count or 1) > (b.i.count or 1)
+    end,
+}
+M.SORTS = SORTS
 
 --------------------------------------------------------------------------------
 --  Window
@@ -199,12 +318,63 @@ local function Paint(b, i)
     end
 end
 
+--- A section title. Click folds the section; dropping an item on it puts
+--- that item in this section from now on (the item goes back where it was).
 local function Header(n)
     local h = headers[n]
     if h then return h end
-    h = T.Text(content, "small", "textMuted", true)
+    h = CreateFrame("Button", nil, content)
+    h:SetHeight(HEAD - 2)
+    h.text = T.Text(h, "small", "textMuted", true)
+    h.text:SetPoint("LEFT", 0, 0)
+    local hl = h:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, 0.05)
+    local function Drop(self)
+        local kind, itemID = GetCursorInfo()
+        if kind ~= "item" or not self.key then return false end
+        M.Assign(itemID, self.key)
+        ClearCursor()
+        M:Build()
+        return true
+    end
+    h:SetScript("OnReceiveDrag", Drop)
+    h:SetScript("OnClick", function(self)
+        if Drop(self) or not self.key then return end
+        M.db.collapsed[self.key] = not M.db.collapsed[self.key] or nil
+        M:Build()
+    end)
+    h:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+        GameTooltip:SetText(self.label or "")
+        GameTooltip:AddLine(L["Click to fold or unfold."], 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(L["Drop an item here to keep it in this section."], 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+    h:SetScript("OnLeave", function() GameTooltip:Hide() end)
     headers[n] = h
     return h
+end
+
+local ilvlText = setmetatable({}, { __mode = "k" })
+local function ItemLevelText(b, i, size)
+    local t = ilvlText[b]
+    local lvl = M.db.ilvl and i and (i.class == WEAPON or i.class == ARMOR) and (i.quality or 0) >= 2
+        and Rules.ItemLevel(i) or 0
+    if lvl <= 1 then
+        if t then t:Hide() end
+        return
+    end
+    if not t then
+        t = b:CreateFontString(nil, "OVERLAY")
+        t:SetPoint("TOPLEFT", 2, -2)
+        ilvlText[b] = t
+    end
+    t:SetFont(EV.Media:Fetch("font"), max(9, floor(size * 0.3)), "OUTLINE")
+    local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[i.quality]
+    if c then t:SetTextColor(c.r, c.g, c.b) else t:SetTextColor(1, 1, 1) end
+    t:SetText(lvl)
+    t:Show()
 end
 
 local freeText = {}
@@ -216,6 +386,9 @@ function M:Build()
     local db = self.db
     local size, gap, cols = db.size, db.spacing, max(4, db.columns)
 
+    local all = M.All()
+    local position = {}
+    for n, e in ipairs(all) do position[e.key] = n end
     local sections, byKey = {}, {}
     local empties, freeCount = {}, {}
     local used = {}
@@ -225,7 +398,7 @@ function M:Build()
             local b = Button(bag, slot)
             used[b] = true
             if i then
-                local c = CategoryOf(i)
+                local c = CategoryOf(i, all)
                 local s = byKey[c.key]
                 if not s then
                     s = { cat = c, items = {} }
@@ -238,18 +411,13 @@ function M:Build()
                 freeCount[fam] = (freeCount[fam] or 0) + 1
                 if not empties[fam] then empties[fam] = b end
                 Paint(b, nil)
+                ItemLevelText(b, nil, size)
             end
         end
     end
-    table.sort(sections, function(a, b) return a.cat.order < b.cat.order end)
-    for _, s in ipairs(sections) do
-        table.sort(s.items, function(a, b)
-            local qa, qb = a.i.quality or 0, b.i.quality or 0
-            if qa ~= qb then return qa > qb end
-            if a.i.id ~= b.i.id then return a.i.id < b.i.id end
-            return (a.i.count or 1) > (b.i.count or 1)
-        end)
-    end
+    table.sort(sections, function(a, b) return (position[a.cat.key] or 999) < (position[b.cat.key] or 999) end)
+    local sorter = SORTS[db.sort] or SORTS.quality
+    for _, s in ipairs(sections) do table.sort(s.items, sorter) end
 
     -- Lay out.
     local y = 0
@@ -257,22 +425,27 @@ function M:Build()
     local shown = {}
     for n, s in ipairs(sections) do
         local h = Header(n)
+        local folded = db.collapsed[s.cat.key]
+        h.key, h.label = s.cat.key, s.cat.label
         h:ClearAllPoints()
         h:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -y)
-        h:SetText(s.cat.label .. "  |cff808080" .. #s.items .. "|r")
+        h:SetWidth(width)
+        h.text:SetText((folded and "+ " or "") .. s.cat.label .. "  |cff808080" .. #s.items .. "|r")
         h:Show()
         y = y + HEAD
-        for k, e in ipairs(s.items) do
+        for k, e in ipairs(folded and {} or s.items) do
             local r, c = floor((k - 1) / cols), (k - 1) % cols
             local b = e.b
             b:SetSize(size, size)
             b:ClearAllPoints()
             b:SetPoint("TOPLEFT", content, "TOPLEFT", c * (size + gap), -(y + r * (size + gap)))
             Paint(b, e.i)
+            ItemLevelText(b, e.i, size)
             b:Show()
             shown[b] = true
         end
-        y = y + ceil(#s.items / cols) * (size + gap) + 6
+        if not folded then y = y + ceil(#s.items / cols) * (size + gap) end
+        y = y + 6
     end
     for n = #sections + 1, #headers do headers[n]:Hide() end
 

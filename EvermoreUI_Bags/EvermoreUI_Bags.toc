@@ -8,4 +8,5 @@
 ## Category: |cffd4924eEvermore|rUI
 ## Group: EvermoreUI
 
+Rules.lua
 Bags.lua
