@@ -84,7 +84,7 @@ local function Window(p)
     p:Dual(T("inputOnTop", L["Input at the top"], L["Puts the input box at the top of the panel, under the tabs."]),
            S("editHeight", L["Input height"], 16, 40, 1, Px))
     p:Dual(S("editFontSize", L["Input text size"], 0, 24, 1, function(v) return v == 0 and L["Same as chat"] or v end),
-           T("recall", L["Up/Down recalls messages"], L["Plain Up and Down step through what you've sent. Alt+Up/Down still works as Blizzard's."]))
+           T("recall", L["Up/Down recalls messages"], L["Plain Up and Down step through your last 50 sent lines, kept through a reload. Alt+Up/Down still works as Blizzard's."]))
 
     p:Section(L["Idle fade"])
     p:Dual(T("idleFade", L["Fade when quiet"], L["Fades the chat when nothing's happening, and brings it straight back on a message, hover or typing."]),
@@ -127,9 +127,10 @@ local function Messages(p)
     p:Dual(S("history", L["Lines kept through a reload"], 0, 500, 25, nil,
              L["Each chat window keeps its last this-many lines, so a /reload or relog doesn't wipe them. 0 turns it off. Kept for this character only; restricted-content lines are never kept."]),
            { type = "button", text = L["Forget kept history"], label = L["Clear"], width = 100,
-             tooltip = L["Deletes the saved lines for this character. What's on screen now stays until you reload."],
+             tooltip = L["Deletes the saved lines for this character, and what you've sent for Up/Down to recall. What's on screen now stays until you reload."],
              onClick = function()
                  if ns and ns.Engine and ns.Engine.ClearHistory then ns.Engine.ClearHistory() end
+                 if ns and ns.ClearRecall then ns.ClearRecall() end
                  EV:Print(L["Chat history cleared."])
              end })
 end

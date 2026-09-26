@@ -244,10 +244,46 @@ end
 -- Plain Up/Down recall of what you sent (the Midnight box only recalls with
 -- Alt). Physical key input only; never in restricted content, never secure
 -- slash commands (text we put in the box would make their send tainted).
+--
+-- Each box's list lives in this character's saved data, so it survives a
+-- reload or relog. The saved table is the live list, not a copy: Remember
+-- writes straight into it.
+local RECALL_MAX = 50
+
+local function RecallStore() return EV.DB:GetCharData("chatRecall") end
+
+local function RecallList(eb)
+    local key = eb:GetName()
+    if not key then return {} end
+    local store = RecallStore()
+    local saved = store[key]
+    local list = {}
+    if type(saved) == "table" then
+        -- Only plain strings come back, newest RECALL_MAX of them.
+        for i = math.max(1, #saved - RECALL_MAX + 1), #saved do
+            if type(saved[i]) == "string" and saved[i] ~= "" then list[#list + 1] = saved[i] end
+        end
+    end
+    store[key] = list
+    return list
+end
+
+--- Forget every box's sent lines for this character. Lists are emptied in
+--- place, so boxes already holding them keep working.
+function ns.ClearRecall()
+    for _, list in pairs(RecallStore()) do
+        if type(list) == "table" then wipe(list) end
+    end
+    for i = 1, NUM_CHAT_WINDOWS or 10 do
+        local eb = _G["ChatFrame" .. i .. "EditBox"]
+        if eb then CFD(eb).index = 0 end
+    end
+end
+
 local function InstallRecall(eb)
     local d = CFD(eb)
     if d.recall then return end
-    d.recall, d.history, d.index = true, {}, 0
+    d.recall, d.history, d.index = true, RecallList(eb), 0
     if eb.SetAltArrowKeyMode then eb:SetAltArrowKeyMode(false) end
     eb:HookScript("OnKeyDown", function(self, key)
         if not M.db.recall or (key ~= "UP" and key ~= "DOWN") or IsAltKeyDown() then return end
@@ -263,7 +299,6 @@ end
 --------------------------------------------------------------------------------
 --  Sent-line memory for Up/Down recall
 --------------------------------------------------------------------------------
-local RECALL_MAX = 50
 
 --- Worth remembering? Checked for type and secrecy before anything compares
 --- it: this runs one step before the line is sent, and an error here would
