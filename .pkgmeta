@@ -20,6 +20,7 @@ move-folders:
   EvermoreUI/EvermoreUI_Skins: EvermoreUI_Skins
   EvermoreUI/EvermoreUI_QoL: EvermoreUI_QoL
   EvermoreUI/EvermoreUI_Cooldowns: EvermoreUI_Cooldowns
+  EvermoreUI/EvermoreUI_Bags: EvermoreUI_Bags
 
 ignore:
   - tools
