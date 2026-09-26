@@ -2,7 +2,8 @@ if EV_BLOCKED then return end
 --------------------------------------------------------------------------------
 --  Info.lua
 --  Laid over the map: the zone on a plate straddling the bottom edge (PvP
---  colours, day / night glyph, click for the world map), coordinates top
+--  colours, day / night glyph, weather button, click for the world map),
+--  coordinates top
 --  left, the clock top centre, and a difficulty badge top right while
 --  you're in an instance.
 --
@@ -17,7 +18,7 @@ local L = EV.L
 local T = EV.Theme
 local floor = math.floor
 
-local zone, zonePlate, clock, coords, badge, diel
+local zone, zonePlate, clock, coords, badge, diel, sky
 
 local function Font(fs, size)
     fs:SetFont(T.FontPath(), size or M.db.fontSize, "")
@@ -44,6 +45,7 @@ local function UpdateZone()
     zone:SetTextColor(T.RGBA(token))
     if zonePlate then
         local w = (zone:GetStringWidth() or 0) + 20 + ((diel and diel:IsShown()) and 16 or 0)
+                  + ((sky and sky:IsShown()) and 16 or 0)
         zonePlate:SetWidth(math.min(math.floor(w + 0.5), M.db.size - 16))
     end
 end
@@ -92,12 +94,21 @@ local function UpdateClock()
     if C_Timer.NewTimer then clockTimer = C_Timer.NewTimer(wait, UpdateClock) end
 end
 
+--- A two-column tooltip line in theme colours. AddDoubleLine takes six
+--- colour values (left r, g, b then right r, g, b), so passing T.RGBA's
+--- four straight in turns the right-hand text red.
+local function Pair(left, right, leftToken, rightToken)
+    local lr, lg, lb = T.RGBA(leftToken)
+    local rr, rg, rb = T.RGBA(rightToken)
+    GameTooltip:AddDoubleLine(left, right, lr, lg, lb, rr, rg, rb)
+end
+
 local function ClockTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_BOTTOMLEFT", 0, -4)
     GameTooltip:SetText(TimeText(), T.RGBA("text"))
     if GameTime_GetGameTime and GameTime_GetLocalTime then
-        GameTooltip:AddDoubleLine(L["Realm time"], GameTime_GetGameTime(true), T.RGBA("textMuted"))
-        GameTooltip:AddDoubleLine(L["Local time"], GameTime_GetLocalTime(true), T.RGBA("textMuted"))
+        Pair(L["Realm time"], GameTime_GetGameTime(true), "textMuted", "text")
+        Pair(L["Local time"], GameTime_GetLocalTime(true), "textMuted", "text")
     end
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine(L["Click: clock settings and alarm. Right-click: stopwatch."], T.RGBA("textMuted"))
@@ -229,6 +240,60 @@ local function UpdateDiel(isDay)
 end
 
 --------------------------------------------------------------------------------
+--  Weather: a cloud beside the sun / moon. Click for a menu of densities.
+--  The setting itself belongs to Quality of Life (it keeps your old value
+--  and puts it back), so the button only shows while that module is on.
+--------------------------------------------------------------------------------
+local WEATHER_NAMES = { [0] = L["Low"], L["Medium"], L["High"], L["Very high"] }
+
+local function QoL()
+    local q = EV:GetModule("QoL", true)
+    return q and q:IsEnabled() and q.SetWeather and q or nil
+end
+
+local function UpdateWeather()
+    if not sky then return end
+    local on = M.db.zone and M.db.weather and QoL() ~= nil
+    sky:SetShown(on)
+    if not on then return end
+    local held = QoL():GetWeather()
+    sky.glyph:SetVertexColor(T.RGBA(sky.hover and "accent" or (held and "text" or "textMuted")))
+end
+ns.UpdateWeather = function() if sky then ns.RefreshInfo() end end
+
+local function WeatherTooltip(self)
+    local q = QoL()
+    if not q then return end
+    local held, current = q:GetWeather()
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+    GameTooltip:SetText(L["Weather"], T.RGBA("text"))
+    local level = held or current
+    local name = level and (WEATHER_NAMES[level] or tostring(level)) or "?"
+    Pair(L["Density"], held and name or (name .. " " .. L["(game setting)"]), "textMuted", held and "accent" or "text")
+    GameTooltip:AddLine(L["Click to change."], T.RGBA("textMuted"))
+    GameTooltip:Show()
+end
+
+local function WeatherMenu(owner)
+    local q = QoL()
+    if not q then return end
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then
+        -- No menu API: step through the levels instead.
+        local held, current = q:GetWeather()
+        q:SetWeather(((held or current or 0) + 1) % 4)
+        return
+    end
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(L["Weather"])
+        for level = 0, 3 do
+            root:CreateRadio(WEATHER_NAMES[level],
+                function() return (q:GetWeather()) == level end,
+                function() q:SetWeather(level) end)
+        end
+    end)
+end
+
+--------------------------------------------------------------------------------
 --  Build and layout
 --------------------------------------------------------------------------------
 function ns.AdoptInfo()
@@ -265,6 +330,19 @@ function ns.AdoptInfo()
     end)
     diel:SetScript("OnLeave", function() GameTooltip:Hide() end)
     diel:Hide()
+
+    sky = CreateFrame("Button", nil, zonePlate)
+    sky:SetSize(14, 14)
+    sky:SetFrameLevel(zb:GetFrameLevel() + 1)
+    sky:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    sky.glyph = sky:CreateTexture(nil, "OVERLAY")
+    sky.glyph:SetSize(12, 12)
+    sky.glyph:SetPoint("CENTER")
+    sky.glyph:SetTexture(ns.GLYPH .. "map_weather.png")
+    sky:SetScript("OnClick", function(self) GameTooltip:Hide(); WeatherMenu(self) end)
+    sky:SetScript("OnEnter", function(self) self.hover = true; UpdateWeather(); WeatherTooltip(self) end)
+    sky:SetScript("OnLeave", function(self) self.hover = false; UpdateWeather(); GameTooltip:Hide() end)
+    sky:Hide()
 
     -- Coordinates, top left; the clock, top centre. Shadowed text over the map.
     coords = o:CreateFontString(nil, "OVERLAY")
@@ -311,6 +389,7 @@ function ns.AdoptInfo()
         UpdateZone()
         UpdateBadge()
         UpdateDiel()
+        UpdateWeather()
     end)
 
     local ev = CreateFrame("Frame")
@@ -325,6 +404,7 @@ function ns.AdoptInfo()
         if e == "DIEL_CYCLE_CHANGED" then UpdateDiel(arg); return UpdateZone() end
         if e == "CVAR_UPDATE" then
             if arg == "timeMgrUseMilitaryTime" or arg == "timeMgrUseLocalTime" then UpdateClock() end
+            if type(arg) == "string" and arg:lower() == "weatherdensity" then UpdateWeather() end
             return
         end
         UpdateZone()
@@ -350,10 +430,19 @@ end
 
 function ns.RefreshInfo()
     UpdateDiel()
-    -- The day / night glyph takes the plate's left; the name sits to its right.
+    UpdateWeather()
+    -- The day / night glyph and the weather button take the plate's left, in
+    -- that order; the name sits to their right.
+    local left = nil
+    sky:ClearAllPoints()
+    if diel:IsShown() then left = diel end
+    if sky:IsShown() then
+        if left then sky:SetPoint("LEFT", left, "RIGHT", 2, 0) else sky:SetPoint("LEFT", zonePlate, "LEFT", 5, 0) end
+        left = sky
+    end
     zone:ClearAllPoints()
-    if diel:IsShown() then
-        zone:SetPoint("LEFT", diel, "RIGHT", 3, 0)
+    if left then
+        zone:SetPoint("LEFT", left, "RIGHT", 3, 0)
         zone:SetPoint("RIGHT", zonePlate, "RIGHT", -8, 0)
     else
         zone:SetPoint("LEFT", zonePlate, "LEFT", 8, 0)

@@ -189,5 +189,16 @@ EV.Options:RegisterPage{
         p:Dual(T("quietErrors", L["Quieter error messages"],
                  L["Stops the red lines that repeat while you press a key too early: not ready yet, not enough energy or mana, out of range, no target. Other errors still show."],
                  { set = function(v) M.db.quietErrors = v; Apply() end }), nil)
+
+        local WEATHER = { [0] = L["Low"], L["Medium"], L["High"], L["Very high"] }
+        p:Section(L["Weather"])
+        p:Dual(T("weather", L["Set weather density"],
+                 L["Choose how much rain, snow and dust the game draws, from low to very high. Switching this off puts your old setting back."],
+                 { set = function(v) M.db.weather = v; Apply() end }),
+               { type = "slider", text = L["Density"], min = 0, max = 3, step = 1,
+                 fmt = function(v) return WEATHER[math.floor(v + 0.5)] or tostring(v) end,
+                 disabled = function() return not M.db.weather end,
+                 get = Get("weatherDensity"),
+                 set = function(v) M.db.weatherDensity = v; Apply() end })
     end,
 }

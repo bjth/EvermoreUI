@@ -40,7 +40,9 @@ EV.Options:RegisterPage{
                       function() return not M.db.zone end))
         p:Dual(Toggle("diel", L["Day and night"], L["A sun or moon on the zone plate for Forever's day and night cycle."],
                       function() return not M.db.zone end),
-               Toggle("coords", L["Coordinates"], L["Top left. Only updates while you're moving."]))
+               Toggle("weather", L["Weather"], L["A cloud beside it: click to set how much rain, snow and dust the game draws. Needs the Quality of Life module."],
+                      function() return not M.db.zone end))
+        p:Row(Toggle("coords", L["Coordinates"], L["Top left. Only updates while you're moving."]))
         p:Dual(Toggle("clock", L["Clock"], L["Top centre. Uses the Time Manager's settings for local or realm time and 24-hour format."]),
                Toggle("buttons", L["Buttons"], L["Tracking, calendar, mail, crafting orders and addons, down the right edge."]))
         p:Row({ type = "slider", text = L["Font size"], min = 9, max = 18, step = 1, get = Get("fontSize"), set = Set("fontSize") })

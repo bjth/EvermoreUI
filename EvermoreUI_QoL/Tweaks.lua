@@ -14,6 +14,9 @@ if EV_BLOCKED then return end
 --                  UIErrorsFrame:SetMessageTypeEnabled, for the red lines that
 --                  repeat while you mash a key ("Ability is not ready yet",
 --                  "Not enough energy", "Out of range"). Real errors still show.
+--  Weather         weatherDensity, 0 (low) to 3 (very high). Your previous value
+--                  is kept and put back, like the camera. The minimap's
+--                  weather button sets it through QoL:SetWeather.
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 if not (EvermoreUI and EvermoreUI.NewModule) then return end
@@ -92,10 +95,57 @@ local function ApplyErrors()
 end
 
 --------------------------------------------------------------------------------
+--  Weather density
+--------------------------------------------------------------------------------
+local WEATHER_CVAR = "weatherDensity"
+
+local function ApplyWeather()
+    local db = DB()
+    if not db then return end
+    local g = EV.DB:GetGlobal()
+    if db.weather then
+        if g.weatherBefore == nil then
+            local ok, v = pcall(GetCVar, WEATHER_CVAR)
+            g.weatherBefore = ok and v or false
+        end
+        local level = math.max(0, math.min(3, math.floor(tonumber(db.weatherDensity) or 1)))
+        pcall(SetCVar, WEATHER_CVAR, tostring(level))
+    elseif g.weatherBefore ~= nil then
+        if g.weatherBefore then pcall(SetCVar, WEATHER_CVAR, g.weatherBefore) end
+        g.weatherBefore = nil
+    end
+    EV:SendMessage("EV_WEATHER_CHANGED")
+end
+
+--- The density we're holding the game to (0-3), or nil when it's the game's
+--- own setting; the game's current value second.
+function ns.GetWeather()
+    local db = DB()
+    local ok, v = pcall(GetCVar, WEATHER_CVAR)
+    local current = ok and tonumber(v) or nil
+    if db and db.weather then return db.weatherDensity, current end
+    return nil, current
+end
+
+--- 0-3 to hold the weather there, nil to hand it back to the game.
+function ns.SetWeather(level)
+    local db = DB()
+    if not db then return end
+    if level == nil then
+        db.weather = false
+    else
+        db.weather = true
+        db.weatherDensity = math.max(0, math.min(3, math.floor(level)))
+    end
+    ApplyWeather()
+end
+
+--------------------------------------------------------------------------------
 function ns.ApplyTweaks()
     HookDelete()
     ApplyCamera()
     ApplyErrors()
+    ApplyWeather()
 end
 
 function ns.EnableTweaks(M)
