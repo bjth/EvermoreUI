@@ -328,7 +328,11 @@ local function Text(parent, justify)
     local fs = parent:CreateFontString(nil, "OVERLAY")
     fs:SetJustifyH(justify or "LEFT")
     fs:SetWordWrap(false)
-    return fs   -- face, size and edge are set in Layout (EV.Fonts:StyleText)
+    -- A font from birth. Layout sets the real face, size and edge (EV.Fonts:
+    -- StyleText), but a frame can be shown (and so updated) before its first
+    -- layout, and SetText on a font string with no font throws.
+    EV.Fonts:StyleText(fs, 12, "both", true)
+    return fs
 end
 
 function UF.Create(key, unit)

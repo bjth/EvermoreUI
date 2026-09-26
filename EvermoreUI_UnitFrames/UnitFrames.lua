@@ -183,9 +183,9 @@ function M:ApplyFrame(key)
     if not f then return end
     if EV:Locked() then pendingLayout = true; return end
     if InCombatLockdown() then pendingLayout = true end   -- loading: again after combat
-    UF.Layout(f, cfg)
-    ns.CastBar.Layout(f, cfg)
-    ns.UnitAuras.Layout(f, cfg)
+    -- Visibility first, before anything else is laid out: if a later step
+    -- ever fails, a target or target-of-target frame must still be handed to
+    -- the unit watch, not left standing on screen with no unit ("Offline").
     if cfg.enabled then
         if f.unit == "player" then
             f:Show()
@@ -196,6 +196,9 @@ function M:ApplyFrame(key)
         if f.unit ~= "player" then UnregisterUnitWatch(f) end
         f:Hide()
     end
+    UF.Layout(f, cfg)
+    ns.CastBar.Layout(f, cfg)
+    ns.UnitAuras.Layout(f, cfg)
     EV.Movers:Apply("UF_" .. key)
     if f.castbar then EV.Movers:Apply("UF_" .. key .. "Cast") end
     UF.UpdateAll(f, cfg)
@@ -279,6 +282,9 @@ function M:OnEnable()
     local function MaxHealth(_, _, unit) ForUnit(unit, function(f, c) UF.UpdateHealth(f, c) end) end
     local function Power(_, _, unit) ForUnit(unit, UF.UpdatePower) end
     local function Name(_, _, unit) ForUnit(unit, UF.UpdateName) end
+    -- Declared here, defined below: the faction handler calls it, and a
+    -- local declared after a closure is a global inside that closure.
+    local Indicators
     local function Colour(_, _, unit)
         -- Aggro too: turning hostile or friendly changes which question the
         -- glow asks (Frame.lua, UF.UpdateAggro).
@@ -343,7 +349,7 @@ function M:OnEnable()
     self:RegisterEvent("UNIT_PET", function(_, _, unit)
         if unit == "player" then Retoken("pet") end
     end)
-    local function Indicators()
+    Indicators = function()
         for _, f in pairs(frames) do
             if f:IsShown() then UF.UpdateIndicators(f, self.db[f.key]) end
         end
@@ -363,7 +369,7 @@ function M:OnEnable()
     -- Target of target has no events of its own; poll it while it's up.
     C_Timer.NewTicker(0.2, function()
         local f = frames.targettarget
-        if f and f:IsShown() then
+        if f and f:IsShown() and UnitExists("targettarget") then
             local c = self.db.targettarget
             UF.UpdateHealthColour(f, c); UF.UpdateHealth(f, c); UF.UpdatePower(f, c); UF.UpdateName(f, c)
         end

@@ -126,6 +126,7 @@ local function Start(f, channel)
     -- Reading them with one destructure paints every channel as shielded,
     -- because a spellID is a truthy number.
     local ok, name, texture, startAt, endAt, notInterruptible
+    local _   -- the skipped returns; a bare _ would write the global, which taints
     if channel then
         if type(UnitChannelInfo) ~= "function" then return end
         ok, name, _, texture, startAt, endAt, _, notInterruptible = pcall(UnitChannelInfo, unit)

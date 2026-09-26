@@ -152,6 +152,7 @@ local function Start(h, channel, isUpdate)
     if not (cfg and cc and cc.enabled and cfg.enabled) then return end
 
     local ok, name, texture, startAt, endAt, notInterruptible, castID
+    local _   -- the skipped returns; a bare _ would write the global, which taints
     if channel then
         if type(UnitChannelInfo) ~= "function" then return end
         ok, name, _, texture, startAt, endAt, _, notInterruptible = pcall(UnitChannelInfo, unit)
@@ -303,6 +304,11 @@ function CB.Build(f, preview)
     h.text:SetWordWrap(false)
     h.timer = h.over:CreateFontString(nil, "OVERLAY")
     h.timer:SetJustifyH("RIGHT")
+    -- A font straight away, not first in Layout: a bar that's off never gets
+    -- laid out, but Stop still clears its text, and SetText on a font string
+    -- with no font throws (target of target's bar is off from the start).
+    EV.Fonts:StyleText(h.text, 11, "both", true)
+    EV.Fonts:StyleText(h.timer, 11, "both", true)
 
     -- What edit mode moves when the bar is detached.
     if not preview then
