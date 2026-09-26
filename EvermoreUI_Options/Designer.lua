@@ -26,6 +26,10 @@ if EV_BLOCKED then return end
 --    Elements(tab, preview) -> { element, ... }
 --    Snapshot(tab) -> table   Restore(tab, snap)   Apply(tab)
 --    note                                      one line under the canvas
+--    help                                      inspector text with nothing picked
+--  A grid surface (kind = "grid") has no preview or elements; it draws into
+--  the canvas itself with BuildGrid(stage, tab) and hides with HideGrid(),
+--  and calls EV.DesignerUI:Commit() after each change it makes.
 --
 --  ELEMENT
 --    key, label
@@ -114,6 +118,7 @@ function UI:Commit()
     if #undo > 60 then table.remove(undo, 1) end
     lastState = surface.Snapshot(tab)
     surface.Apply(tab)
+    if surface.kind == "grid" and surface.BuildGrid then surface.BuildGrid(stage, tab) end
     RefreshAll()
 end
 
@@ -132,6 +137,7 @@ function UI:Undo()
     u.surface.Restore(u.tab, u.snap)
     lastState = u.surface.Snapshot(u.tab)
     Relayout()
+    if surface.kind == "grid" and surface.BuildGrid then surface.BuildGrid(stage, tab) end
     RefreshAll()
 end
 
@@ -458,7 +464,7 @@ local function SyncInspector()
     local e = selected and Element(selected)
     if not e then
         inspector.title:SetText(surface and surface.title or "")
-        inspector.sub:SetText(L["Pick something on the frame, or from the list."])
+        inspector.sub:SetText(surface and surface.help or L["Pick something on the frame, or from the list."])
         inspector.reset:Hide()
         inspector.scroll:SetContentHeight(1)
         return
@@ -529,7 +535,12 @@ function RefreshAll()
     if not win or not win:IsShown() then return end
     elements = (surface and surface.Elements and surface.Elements(tab, preview)) or {}
     if selected and not Element(selected) then selected = nil end
-    if preview then SyncHandles() end
+    if preview then
+        SyncHandles()
+    else
+        for _, h in pairs(handles) do h:Hide() end
+        wipe(handles)
+    end
     SyncList()
     SyncInspector()
     win.undo:SetDisabled(#undo == 0)
@@ -763,6 +774,10 @@ local function Build()
     win:SetScript("OnHide", function()
         if drag then UI.EndDrag() end
         GameTooltip:Hide()
+    end)
+    win:SetScript("OnShow", function()
+        -- A grid surface draws from live state; bring it up to date.
+        if surface and surface.kind == "grid" and surface.BuildGrid then surface.BuildGrid(stage, tab) end
     end)
 end
 

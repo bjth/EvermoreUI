@@ -32,6 +32,11 @@ full frames addon.
   copy of any unit frame, resize them by their corner, nudge with the arrow
   keys. Save, Discard and undo, as in edit mode. `/evui design`, or Open
   designer on the Unit Frames page.
+- **Arrange your cooldowns**: the designer's Cooldowns tab shows each bar
+  as a row of icons. Drag to reorder, move a cooldown between the Essential
+  and Utility bars, or drop it in the tray to hide it from our bars. Saved
+  per class and spec; which spells are tracked stays in the game's own
+  Cooldown Manager settings, a button away.
 
 ### Changed
 - **More ways to style a frame**: border from 0 to 8 pixels in any colour,

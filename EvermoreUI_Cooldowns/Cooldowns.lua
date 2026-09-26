@@ -70,6 +70,10 @@ end
 local M = EV:NewModule("Cooldowns", {
     timers = {},        -- [CLASS] = { { spell = id, seconds = n }, ... }
     timersSeeded = {},  -- [CLASS] = true once the class starters are in
+    -- Your arrangement from the designer, per class and spec:
+    -- [key] = { order = { [cooldownID] = n }, bar = { [cooldownID] = barKey },
+    --           hidden = { [cooldownID] = true } }
+    arrange = {},
     bars = {
         essential = BarDefaults(42, 8, "CENTER", "DOWN", true),
         utility   = BarDefaults(32, 10, "CENTER", "DOWN", true),
@@ -124,6 +128,83 @@ local function Items(def, all)
     table.sort(out, function(a, b) return (a.layoutIndex or 0) < (b.layoutIndex or 0) end)
     return out
 end
+
+--------------------------------------------------------------------------------
+--  Your arrangement
+--
+--  The designer lets you reorder icons, move a cooldown between the
+--  Essential and Utility bars, and hide one from our bars. All of it is ours,
+--  keyed by cooldownID, and applied here when we place items: Blizzard's
+--  Cooldown Manager settings are never written, and its items still only
+--  ever get SetPoint, SetSize and SetAlpha. Which spells are tracked at all
+--  stays Blizzard's choice, in its own settings.
+--
+--  Buff icons show and hide themselves, so they only move within the buff
+--  bar. The two cooldown bars share their items.
+--------------------------------------------------------------------------------
+local function SpecKey()
+    local _, class = UnitClass("player")
+    local ok, spec = pcall(GetSpecialization)
+    if ok and type(spec) == "number" and not (issecretvalue and issecretvalue(spec)) and spec > 0 then
+        return (class or "?") .. "-" .. spec
+    end
+    return class or "?"
+end
+M.SpecKey = SpecKey
+
+function M:Arrangement(create)
+    local all = self.db.arrange
+    local k = SpecKey()
+    if not all[k] and create then all[k] = { order = {}, bar = {}, hidden = {} } end
+    local a = all[k]
+    if a then a.order, a.bar, a.hidden = a.order or {}, a.bar or {}, a.hidden or {} end
+    return a
+end
+
+local function IdOf(f)
+    local id = f.cooldownID
+    if type(id) == "number" and not (issecretvalue and issecretvalue(id)) then return id end
+end
+M.IdOf = IdOf
+
+local COOLDOWN_DEFS = {}
+for _, def in ipairs(BARS) do if not def.buff then COOLDOWN_DEFS[#COOLDOWN_DEFS + 1] = def end end
+
+--- The bar an item belongs on: yours if you moved it, else its own viewer's.
+--- nil when you've hidden it.
+function M.BarOf(f, src)
+    local a = M:Arrangement(false)
+    local id = IdOf(f)
+    if a and id then
+        if a.hidden[id] then return nil end
+        if not src.buff and a.bar[id] then return a.bar[id] end
+    end
+    return src.key
+end
+
+--- Items a bar shows, in your order (then Blizzard's). all: include buffs
+--- that are currently inactive.
+local function Members(def, all)
+    local a = M:Arrangement(false)
+    local out = {}
+    for _, src in ipairs(def.buff and { def } or COOLDOWN_DEFS) do
+        for _, f in ipairs(Items(src, true)) do
+            if M.BarOf(f, src) == def.key and (all or f:IsShown()) then out[#out + 1] = f end
+        end
+    end
+    if a then
+        table.sort(out, function(x, y)
+            local ix, iy = IdOf(x), IdOf(y)
+            local ox = ix and a.order[ix] or (10000 + (x.layoutIndex or 0))
+            local oy = iy and a.order[iy] or (10000 + (y.layoutIndex or 0))
+            if ox ~= oy then return ox < oy end
+            return (x.layoutIndex or 0) < (y.layoutIndex or 0)
+        end)
+    end
+    return out
+end
+M.Members = Members
+M.Items = function(def, all) return Items(def, all) end
 
 function M.BlizzardOn()
     return GetCVar and GetCVar("cooldownViewerEnabled") == "1"
@@ -451,8 +532,13 @@ end
 
 local function Place(bar, def)
     local db = M.db.bars[def.key]
-    local all = Items(def, true)
-    local shown = def.buff and Items(def, false) or all
+    local all = Members(def, true)
+    local shown = def.buff and Members(def, false) or all
+
+    -- Your hidden ones from this bar's own viewer go off screen.
+    for _, f in ipairs(Items(def, true)) do
+        if M.BarOf(f, def) == nil then Skin(f, def); Park(f) end
+    end
 
     local size, gap = db.size, db.spacing
     local per = max(1, db.perRow)
@@ -507,7 +593,19 @@ local function Place(bar, def)
     end
 end
 
+local PlaceOne
+
 function Relayout(def)
+    -- The two cooldown bars share items (you can move one across), so
+    -- Blizzard laying out either viewer re-places both.
+    if not def.buff then
+        for _, d in ipairs(COOLDOWN_DEFS) do PlaceOne(d) end
+    else
+        PlaceOne(def)
+    end
+end
+
+function PlaceOne(def)
     if not M:IsEnabled() then return end
     local db = M.db.bars[def.key]
     local bar = holders[def.key]
