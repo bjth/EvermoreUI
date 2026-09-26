@@ -1,0 +1,16 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Chat
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: A clean chat panel: its own text, tabs and sidebar, idle fade, timestamps, short channel names, links and copy
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Core.lua
+Engine.lua
+Tabs.lua
+Links.lua
+Sidebar.lua
+Chat.lua

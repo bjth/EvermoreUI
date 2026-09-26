@@ -1,0 +1,14 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Auras
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Movable buffs and debuffs, and reminders for the buffs you forget.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Presets.lua
+Container.lua
+Auras.lua
+Reminders.lua

@@ -1,0 +1,22 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Quality of Life
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Auto repair, sell greys, fast loot and quest accept/hand-in. Hold Shift to skip.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+QoL.lua
+Vendor.lua
+Restock.lua
+Loot.lua
+Quests.lua
+Training.lua
+Durability.lua
+Tweaks.lua
+LootRolls.lua
+ReadyCheck.lua
+LootStats.lua
+LootLuck.lua

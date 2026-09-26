@@ -1,0 +1,13 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Micro Menu & Bags
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Blizzard's micro menu and bag buttons in EvermoreUI bars: flat glyphs, our layout, look and movers.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Core.lua
+Micro.lua
+Bags.lua

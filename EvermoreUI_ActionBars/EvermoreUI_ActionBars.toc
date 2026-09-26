@@ -1,0 +1,17 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Action Bars
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Blizzard's action buttons in EvermoreUI bars: our layout, look and movers, with Blizzard still doing all the secure work (paging, keybinds, casting).
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Core.lua
+Skin.lua
+Paging.lua
+Actions.lua
+Keybind.lua
+Editor.lua
+Bars.lua

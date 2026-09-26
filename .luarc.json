@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "Lua 5.1",
+  "diagnostics.globals": [
+    "EvermoreUI",
+    "EvermoreUIDB",
+    "EvermoreUICharDB",
+    "EV_BLOCKED",
+    "SLASH_EVERMOREUI1",
+    "SLASH_EVERMOREUI2"
+  ],
+  "diagnostics.disable": ["lowercase-global"],
+  "workspace.ignoreDir": [".release", "tools"]
+}

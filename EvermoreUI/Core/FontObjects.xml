@@ -1,0 +1,61 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+<!--
+    Slug font objects, shared by every surface in the suite.
+
+    Moved here from EvermoreUI_Nameplates so unit frames (and anything after
+    them) render text the same way. Nameplates is load-on-demand; these have
+    to exist before any module asks for them. EV.Fonts:StyleText is the one
+    caller that picks between them (Core/Fonts.lua).
+
+    This file exists because slug rendering is not reachable from Lua. It is a
+    <Font> attribute (Blizzard_SharedXML/UI.xsd line 514, default false) and
+    there is no setter in the documented API, so a FontString built with
+    fs:SetFont(path, size, flags) is not slug, whatever path you hand it.
+
+    Every nameplate font Blizzard ships is. SystemFont_NamePlate is FRIZQT__
+    at height 9 with slug true; SystemFont_NamePlateCastBar and
+    SystemFont_NamePlateLevel are height 10, slug, outline NORMAL
+    (Blizzard_Fonts_Shared/Shared/GameFonts.xml lines 297, 371, 389).
+    Thirty-five font objects in the client use it, and Blizzard's own
+    documentation says what the alternative costs: "if used on non-slug fonts
+    may cause significant pixelation of the font text"
+    (UISharedDocumentation.lua line 14).
+
+    Slug rasterises from the glyph outlines on the GPU rather than from a
+    bitmap cache built at integer sizes, so it stays accurate at sub-pixel
+    positions. A nameplate is placed by the 3D projection and sits at a
+    fractional position on every frame, which is exactly the case it is for.
+
+    The height here is only a starting value. Every caller follows
+    SetFontObject with SetTextHeight, which changes the height and leaves the
+    rest of the font object alone, slug included, so the size slider still
+    works against a fixed set of objects.
+
+    One object per bundled face, because the face is fixed in XML. A font
+    chosen from LibSharedMedia that we have no object for falls back to
+    SetFont and loses slug. That is a real downgrade, so it is stated in the
+    Lua rather than hidden.
+-->
+    <!-- Plain objects keep a shadow; outlined ones do NOT. Blizzard never
+         combines the two on a nameplate: every slug nameplate font they ship
+         has no shadow at all (GameFonts.xml, SystemFont_NamePlate,
+         SystemFont_NamePlate_Outlined, SystemFont_NamePlateCastBar and
+         SystemFont_NamePlateLevel), and the only nameplate fonts that do carry
+         a shadow are the non-slug ones. An outline plus a shadow at eleven
+         pixels puts two dark rings around strokes barely more than a pixel
+         wide, and the glyph closes up. -->
+    <Font name="EvermoreSlugFont" font="Interface\AddOns\EvermoreUI\Media\Fonts\RobotoCondensed-SemiBold.ttf" height="11" slug="true" virtual="true">
+        <Shadow x="1" y="-1"><Color r="0" g="0" b="0" a="1"/></Shadow>
+    </Font>
+    <Font name="EvermoreSlugFontOutline" font="Interface\AddOns\EvermoreUI\Media\Fonts\RobotoCondensed-SemiBold.ttf" height="11" slug="true" outline="NORMAL" virtual="true"/>
+
+    <Font name="EvermoreSlugFontBarlow" font="Interface\AddOns\EvermoreUI\Media\Fonts\Barlow-Medium.ttf" height="11" slug="true" virtual="true">
+        <Shadow x="1" y="-1"><Color r="0" g="0" b="0" a="1"/></Shadow>
+    </Font>
+    <Font name="EvermoreSlugFontBarlowOutline" font="Interface\AddOns\EvermoreUI\Media\Fonts\Barlow-Medium.ttf" height="11" slug="true" outline="NORMAL" virtual="true"/>
+
+    <Font name="EvermoreSlugFontFriz" font="Fonts\FRIZQT__.TTF" height="11" slug="true" virtual="true">
+        <Shadow x="1" y="-1"><Color r="0" g="0" b="0" a="1"/></Shadow>
+    </Font>
+    <Font name="EvermoreSlugFontFrizOutline" font="Fonts\FRIZQT__.TTF" height="11" slug="true" outline="NORMAL" virtual="true"/>
+</Ui>

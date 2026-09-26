@@ -1,0 +1,17 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Nameplates
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Our own nameplates on Blizzard's plates: health, cast, tracked dots, threat colouring and target highlighting. Event driven, nothing polled.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Core.lua
+Colours.lua
+Health.lua
+Power.lua
+Cast.lua
+Auras.lua
+Extras.lua

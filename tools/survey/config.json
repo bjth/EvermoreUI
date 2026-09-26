@@ -1,0 +1,10 @@
+{
+  "export": "C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_\\BlizzardInterfaceCode",
+  "gameType": "camelot",
+  "family": "mainline",
+  "addonRoot": "../..",
+  "exportAlternatives": [
+    "~/mnt/BlizzardInterfaceCode"
+  ],
+  "_help": "export: Blizzard's exported code (/console ExportInterfaceFiles code). exportAlternatives: other places to look. addonRoot: the repo root, relative to this file."
+}

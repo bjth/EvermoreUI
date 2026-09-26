@@ -1,0 +1,17 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Unit Frames
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Clean, resizable unit frames: player, target, target of target, focus, pet
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Values.lua
+Frame.lua
+UnitFrames.lua
+Classic.lua
+ClickCast.lua
+AuraBox.lua
+GroupFrames.lua

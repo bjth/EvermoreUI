@@ -1,0 +1,14 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Tooltips
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Tooltips and right-click menus in the EvermoreUI style: class colours, item level, quality borders, movable or cursor anchor
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Tooltips.lua
+Units.lua
+Anchor.lua
+Price.lua

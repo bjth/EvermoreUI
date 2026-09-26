@@ -1,0 +1,15 @@
+<Bindings>
+	<!-- Quest item bar (EvermoreUI Objectives). Names: Core\Bindings.lua -->
+	<Binding name="CLICK EvermoreUIQuestItem1:LeftButton" header="EVERMOREUIQUESTITEMS" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem2:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem3:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem4:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem5:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem6:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem7:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem8:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem9:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem10:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem11:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+	<Binding name="CLICK EvermoreUIQuestItem12:LeftButton" category="BINDING_HEADER_EVERMOREUI"/>
+</Bindings>

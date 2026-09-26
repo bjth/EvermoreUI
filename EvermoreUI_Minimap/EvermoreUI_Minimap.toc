@@ -1,0 +1,14 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Minimap
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: A square minimap in the EvermoreUI style: zone header, clock, coordinates and a row of flat buttons, with Blizzard's minimap underneath doing the drawing.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Core.lua
+Info.lua
+Buttons.lua
+Flyout.lua

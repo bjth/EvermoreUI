@@ -1,0 +1,17 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Skins
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Blizzard's own windows in the EvermoreUI palette. Skins their templates, never their layout.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Core.lua
+Fonts.lua
+Parts.lua
+Packs.lua
+WindowPacks.lua
+Discover.lua
+Dev.lua

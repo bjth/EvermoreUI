@@ -1,0 +1,7 @@
+.release/
+*.zip
+.vscode/
+
+_deploy/
+_backup/
+__pycache__/

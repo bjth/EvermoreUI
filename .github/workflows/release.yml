@@ -1,0 +1,41 @@
+name: Release
+
+# Push a tag to publish. The tag name decides the channel on CurseForge and
+# Wago: "v0.9.0-alpha1" -> alpha, "v0.9.0-beta1" -> beta, "v0.9.0" -> release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # GitHub release + zip
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the packager builds the changelog from history
+
+      # The source TOCs also list 120100 so the suite can be tested on live
+      # retail. Shipped files are Forever only: without this the packager
+      # would tag every upload as Retail too.
+      - name: Forever-only interface
+        run: |
+          find . -name '*.toc' -not -path './.git/*' -print0 \
+            | xargs -0 sed -i -E 's/^(## Interface:.*), *120100/\1/'
+          grep -h '^## Interface' $(find . -name '*.toc' -not -path './.git/*') | sort -u
+
+      # The in-game What's New window reads the changelog from a Lua file;
+      # rebuild it so the shipped notes are always this release's.
+      - name: Release notes for the What's New window
+        run: python3 tools/changelog/build.py
+
+      # Forever support (game type "forever", CurseForge id 88568) was merged
+      # on 17 Sep 2026 and isn't in a tagged packager release yet. Pin to a
+      # tag once one ships.
+      - uses: BigWigsMods/packager@master

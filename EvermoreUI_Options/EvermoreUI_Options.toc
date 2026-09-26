@@ -1,0 +1,42 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Options
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: EvermoreUI settings window. Loads on demand via /evui.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## LoadOnDemand: 1
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+# Layout metrics (colours and controls come from core), then the page
+# builder and the window.
+Theme.lua
+Page.lua
+Window.lua
+EditMode.lua
+
+# Pages, in sidebar order within each group
+Pages\General.lua
+Pages\Colours.lua
+Pages\Profiles.lua
+Pages\Modules.lua
+Pages\UnitFrames.lua
+Pages\SwingTimer.lua
+Pages\GroupFrames.lua
+Pages\ClickCast.lua
+Pages\Nameplates.lua
+Pages\ActionBars.lua
+Pages\Cooldowns.lua
+Pages\Auras.lua
+Pages\Reminders.lua
+Pages\Minimap.lua
+Pages\Objectives.lua
+Pages\DataBars.lua
+Pages\MicroMenu.lua
+Pages\Group.lua
+Pages\Chat.lua
+Pages\Tooltips.lua
+Pages\Skins.lua
+Pages\QoL.lua
+Pages\Experimental.lua

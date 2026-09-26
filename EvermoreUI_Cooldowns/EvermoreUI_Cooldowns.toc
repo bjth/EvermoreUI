@@ -1,0 +1,12 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Cooldowns
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Your cooldowns and tracked buffs in EvermoreUI bars, built on the game's own Cooldown Manager.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## OptionalDeps: Blizzard_CooldownViewer
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Cooldowns.lua

@@ -1,0 +1,34 @@
+package-as: EvermoreUI
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+move-folders:
+  EvermoreUI/EvermoreUI: EvermoreUI
+  EvermoreUI/EvermoreUI_Options: EvermoreUI_Options
+  EvermoreUI/EvermoreUI_UnitFrames: EvermoreUI_UnitFrames
+  EvermoreUI/EvermoreUI_Nameplates: EvermoreUI_Nameplates
+  EvermoreUI/EvermoreUI_ActionBars: EvermoreUI_ActionBars
+  EvermoreUI/EvermoreUI_Auras: EvermoreUI_Auras
+  EvermoreUI/EvermoreUI_Minimap: EvermoreUI_Minimap
+  EvermoreUI/EvermoreUI_Objectives: EvermoreUI_Objectives
+  EvermoreUI/EvermoreUI_DataBars: EvermoreUI_DataBars
+  EvermoreUI/EvermoreUI_MicroMenu: EvermoreUI_MicroMenu
+  EvermoreUI/EvermoreUI_Chat: EvermoreUI_Chat
+  EvermoreUI/EvermoreUI_Tooltips: EvermoreUI_Tooltips
+  EvermoreUI/EvermoreUI_Skins: EvermoreUI_Skins
+  EvermoreUI/EvermoreUI_QoL: EvermoreUI_QoL
+  EvermoreUI/EvermoreUI_Cooldowns: EvermoreUI_Cooldowns
+
+ignore:
+  - tools
+  - _deploy
+  - _backup
+  - branding
+  - .github
+  - README.md
+  - CHANGELOG.md
+  - CONTRIBUTING.md
+  - .luarc.json
+  - .gitattributes

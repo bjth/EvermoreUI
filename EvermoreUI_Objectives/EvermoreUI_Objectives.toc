@@ -1,0 +1,16 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Objectives
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Blizzard's objective tracker in an EvermoreUI panel: our position, width and height, scrolling, levels and progress bars, zone tracking, alerts and a quest item bar.
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Core.lua
+List.lua
+Panel.lua
+Quests.lua
+Items.lua
+Diag.lua

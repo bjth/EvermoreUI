@@ -1,0 +1,65 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r
+## Notes: Core framework for the EvermoreUI suite
+## Author: Ben
+## Version: @project-version@
+## SavedVariables: EvermoreUIDB
+## LoadSavedVariablesFirst: 1
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## AddonCompartmentFunc: EvermoreUI_OnAddonCompartmentClick
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+## X-Curse-Project-ID: 1711741
+## X-Website: https://github.com/bjth/EvermoreUI
+## X-Issues: https://github.com/bjth/EvermoreUI/issues
+
+# Capability gate. MUST be first: probes the client and arms EV_BLOCKED,
+# which line 1 of every other file in the suite checks.
+Core\Gate.lua
+
+# Namespace, strings, helpers
+Core\Init.lua
+Core\Bindings.lua
+Core\Keys.lua
+
+# Module framework and lifecycle
+Core\Framework.lua
+
+# Central SavedVariables + profiles
+Core\Serialize.lua
+Core\DB.lua
+
+# Shared services
+Core\Pixel.lua
+Core\Media.lua
+Core\Theme.lua
+Core\Palette.lua
+Core\FontObjects.xml
+Core\Fonts.lua
+Core\Movers.lua
+
+# Probes that need the game world (secure snippets)
+Core\Probes.lua
+
+# Slash commands
+Core\Durability.lua
+Core\Alts.lua
+Core\Report.lua
+Core\Slash.lua
+Core\Perf.lua
+Core\GameMenu.lua
+Core\Experimental.lua
+
+# Our own control library (options, modules and custom interfaces share it)
+UI\Base.lua
+UI\Buttons.lua
+UI\Toggles.lua
+UI\Inputs.lua
+UI\Dropdown.lua
+UI\ScrollBar.lua
+UI\Containers.lua
+UI\TextDialog.lua
+UI\Prompt.lua
+UI\Gallery.lua
+Core\Changelog.lua
+Core\WhatsNew.lua

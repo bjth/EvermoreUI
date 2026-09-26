@@ -1,0 +1,12 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Data Bars
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Experience bar, framerate and latency (reputation and honour to follow)
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+DataBars.lua
+Stats.lua

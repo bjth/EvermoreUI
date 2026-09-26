@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in EvermoreUI is broken or behaving oddly.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. In game, type **/evui bug**, press Ctrl+C in the window that opens, and paste it below. It tells us your version, modules, other addons and any recent errors, which saves a lot of back and forth.
+  - type: dropdown
+    id: module
+    attributes:
+      label: Which part of the UI?
+      options:
+        - Unit Frames
+        - Nameplates
+        - Action Bars
+        - Auras
+        - Minimap
+        - Objective Tracker
+        - Data Bars
+        - Micro Menu / Bag Bar
+        - Chat
+        - Tooltips
+        - Window Skins
+        - Quality of Life
+        - Options window / Edit Mode
+        - Profiles / settings
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: And what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen?
+      description: Steps, if you know them. "Happens after a dungeon", "only on my hunter" and the like all help.
+      placeholder: |
+        1. Log in on a level 20 warrior
+        2. Enter combat
+        3. ...
+  - type: textarea
+    id: report
+    attributes:
+      label: /evui bug report
+      description: Paste the text from /evui bug here.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: Drag images straight in here.
