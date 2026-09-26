@@ -32,6 +32,9 @@ Small comforts while the bag addon is built.
 - **Move Blizzard's windows**: drag the character sheet, spellbook,
   merchant, quest log and the rest by their title bar, and they open where
   you left them. Reset them all on the Quality of Life page.
+- **The whole world map**: the parts of each zone you haven't explored yet
+  are shown too, a little darker. Brightness on the Quality of Life page;
+  switch it off on the Modules page.
 
 ## 0.11.0
 

@@ -14,6 +14,7 @@ EvermoreUI.CHANGELOG = {
                 "**Bank**: your bank in the same style when you visit one, with the same sections, search and sort, and your account bank alongside where the game allows. Right-click items in your bags to put them in whichever bank is showing, or use Deposit all. Buy bank tabs and move gold in and out of the account bank from the same window. The game's own bank window is a button away.",
                 "**Empty a bag**: Alt + click a bag on the bag bar to move everything in it into free space in your other bags, topping up part stacks first and keeping arrows, shards and herbs in their own bags. Then swap it out.",
                 "**Move Blizzard's windows**: drag the character sheet, spellbook, merchant, quest log and the rest by their title bar, and they open where you left them. Reset them all on the Quality of Life page.",
+                "**The whole world map**: the parts of each zone you haven't explored yet are shown too, a little darker. Brightness on the Quality of Life page; switch it off on the Modules page.",
             } },
         },
     },
