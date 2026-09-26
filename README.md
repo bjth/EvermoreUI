@@ -31,6 +31,9 @@ Type **/evui bug** in game, copy what it shows, and paste it into a
 your version, modules, other addons and recent errors, so we can get straight
 to the fix. Ideas and "this annoys me" are just as welcome.
 
+Or bring it to the [Discord](https://discord.evermoreui.com): post in
+#bug-reports, #ideas or #help and the team will pick it up from there.
+
 ---
 
 # Development
