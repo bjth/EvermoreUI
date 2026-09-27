@@ -349,15 +349,21 @@ function Kit:Nudge(obj, dx, dy)
     return self
 end
 
---- Set a size, remembering the original.
+--- Set a size, remembering the original. A nil side is left as it is NOW,
+--- not put back to Blizzard's original: a button Blizzard sizes to its text
+--- (SetTextToFit, the professions Create buttons) was being shrunk back to
+--- its XML width on every re-run and re-widened by Blizzard a moment later,
+--- a visible jump on every opening.
 function Kit:Size(obj, w, h)
     if not Alive(obj) or not obj.SetSize then return self end
     if Locked(obj) then
         Later(function() self:Size(obj, w, h) end)
         return self
     end
-    local origin = Remember(obj)
-    obj:SetSize(w or origin.w or obj:GetWidth(), h or origin.h or obj:GetHeight())
+    Remember(obj)
+    if w and h then obj:SetSize(w, h)
+    elseif w then obj:SetWidth(w)
+    elseif h then obj:SetHeight(h) end
     return self
 end
 
