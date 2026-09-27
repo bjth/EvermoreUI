@@ -546,6 +546,10 @@ R{
             d.box:SetSize(RL.box, RL.box)
             d.box:SetPoint("CENTER")
             d.box:EnableMouse(false)
+            -- Under the button, so the glyph (a region of the button) draws
+            -- over the box's fill. As a child one level up it covered the X,
+            -- and the filter's reset showed as an empty square.
+            d.box:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
         end
         p:Fill(RL.rest.fill, nil, nil, d.box)
         p:Border(RL.rest.edge, nil, d.box)
@@ -1922,6 +1926,138 @@ R{
             S.D(div).muted = nil
             div:SetAlpha(1)
         end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9p. Professions pieces (Blizzard_ProfessionsTemplates)
+--
+--     rankBar        ProfessionsRankBarTemplate: the skill bar across the top
+--                    of the professions window. A per-profession flipbook fill
+--                    (Skillbar_Fill_Flipbook_<kit>, set in Update) masked to the
+--                    skill (the Mask's WIDTH is the progress, GetMaskWidth), a
+--                    flare, a bevelled background and frame. Ours: the mask
+--                    kept (it is the progress), the fill flat copper, the flare,
+--                    background and frame cleared, a sunk well of ours round
+--                    the fill's rect.
+--     filterDropdown WowStyle1FilterDropdownTemplate (Classic): a Background
+--                    atlas (common-dropdown-classic-b-button, in S.ORNATE) and
+--                    a Text, no Arrow, so the dropdown part never saw it and
+--                    "Filter" floated as bare gold text. Ours: our dropdown.
+--     recipeRow      ProfessionsRecipeListRecipeTemplate: the gold
+--                    Professions_Recipe_Active / _Hover line art cleared; the
+--                    listItem Look, on while Blizzard shows SelectedOverlay.
+--                    The label keeps Blizzard's colour: it is the recipe's
+--                    difficulty (orange, yellow, green, grey).
+--     skillBarLegacy ProfessionsStatusBarArtTemplate: a category's skill bar,
+--                    UI-Character-Skills-Bar in its BarBorder (in
+--                    S.ORNATE_FILES). Flat, in a well.
+--------------------------------------------------------------------------------
+local function Well(host, around, sub)
+    local d = S.D(host)
+    if d.well then return d.well end
+    local w = { track = S.Ours(host:CreateTexture(nil, "BACKGROUND", nil, sub or 1)), edges = {} }
+    w.track:SetAllPoints(around)
+    for i = 1, 4 do
+        local e = S.Ours(host:CreateTexture(nil, "ARTWORK", nil, -8))
+        if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e) end
+        w.edges[i] = e
+    end
+    local e, tr = w.edges, w.track
+    e[1]:SetPoint("BOTTOMLEFT", tr, "TOPLEFT");   e[1]:SetPoint("BOTTOMRIGHT", tr, "TOPRIGHT")
+    e[2]:SetPoint("TOPLEFT", tr, "BOTTOMLEFT");   e[2]:SetPoint("TOPRIGHT", tr, "BOTTOMRIGHT")
+    e[3]:SetPoint("TOPRIGHT", tr, "TOPLEFT");     e[3]:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
+    e[4]:SetPoint("TOPLEFT", tr, "TOPRIGHT");     e[4]:SetPoint("BOTTOMLEFT", tr, "BOTTOMRIGHT")
+    local function Paint()
+        local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(host)) or 1
+        e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
+        tr:SetColorTexture(S.Colour("surfaceSunk"))
+        for _, t in ipairs(e) do t:SetColorTexture(S.Colour("border")) end
+    end
+    Paint()
+    T.Watch(tr, Paint)
+    d.well = w
+    return w
+end
+S.Well = Well
+
+R{
+    name = "rankBar",
+    keys = { "Background", "Fill", "Flare", "Mask", "Border", "Rank" },
+    paint = function(f, p)
+        StripArt(f.Background)
+        StripArt(f.Border)
+        StripArt(f.Flare)
+        local fill = f.Fill
+        local busy
+        local function Flat(t)
+            if busy then return end
+            busy = true
+            t:SetTexture(FLAT)
+            t:SetVertexColor(S.Colour("accent"))
+            busy = false
+        end
+        Flat(fill)
+        pcall(hooksecurefunc, fill, "SetAtlas", Flat)
+        T.Watch(fill, Flat)
+        Well(f, fill, 1)
+        if f.Rank and f.Rank.Text then p:Label(f.Rank.Text, "text", true) end
+    end,
+}
+
+R{
+    name = "filterDropdown",
+    keys = { "ResetButton", "Background", "Text" },
+    without = { "Arrow" },
+    paint = function(dd, p)
+        p:Fade()
+        StripArt(dd.Background)
+        p:Fill("surface2")
+        p:Border("borderStrong")
+        p:Label(dd.Text)
+        local d = S.D(dd)
+        if not d.chev and T.Chevron then
+            d.chev = S.Ours(T.Chevron(dd, LOOK.dropdown.chevron))
+            d.chev:SetPoint("RIGHT", dd, "RIGHT", -6, 0)
+            d.chev:Point("down")
+        end
+        p:States(LOOK.dropdown, {
+            label = dd.Text, chev = d.chev,
+            on = function() return type(dd.IsMenuOpen) == "function" and dd:IsMenuOpen() end,
+        })
+        p:After("OnMenuOpened", function() if d.Repaint then d.Repaint() end end)
+        p:After("OnMenuClosed", function() if d.Repaint then d.Repaint() end end)
+    end,
+}
+
+R{
+    name = "recipeRow",
+    type = "Button",
+    keys = { "SkillUps", "LockedIcon", "SelectedOverlay", "HighlightOverlay", "Label" },
+    paint = function(b, p)
+        StripArt(b.SelectedOverlay)
+        StripArt(b.HighlightOverlay)
+        p:Fill("surface2", 0)
+        p:Label(b.Label, false)
+        if b.Count then p:Label(b.Count, false) end
+        local sel, d = b.SelectedOverlay, S.D(b)
+        p:States(LOOK.listItem, { on = function() return sel:IsShown() end })
+        for _, m in ipairs({ "Show", "Hide", "SetShown" }) do
+            pcall(hooksecurefunc, sel, m, function() if d.Repaint then d.Repaint() end end)
+        end
+    end,
+}
+
+R{
+    name = "skillBarLegacy",
+    type = "StatusBar",
+    keys = { "BorderLeft", "BorderRight", "BorderMid", "Rank" },
+    paint = function(bar, p)
+        StripArt(bar.BorderLeft); StripArt(bar.BorderRight); StripArt(bar.BorderMid)
+        local ok, tex = pcall(bar.GetStatusBarTexture, bar)
+        if ok and tex then tex:SetTexture(FLAT) end
+        Well(bar, bar, -1)
+        if bar.Rank then p:Label(bar.Rank, "text") end
     end,
 }
 

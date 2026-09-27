@@ -77,6 +77,12 @@ meter in our style, and cooldown icons that tell you more.
 - **Reputation, Skills, Currency and Statistics**: flat group headers with
   an arrow, flat progress bars in a well, a copper highlight on the row
   you've picked, and the detail pane's rule in our colours.
+- **Professions.** The skill bar sits on a tool bar under the title, flat
+  copper in a well. The recipe list is a panel with its search box and a
+  proper filter button on one line, and plain rows with a copper highlight
+  for the recipe you've picked (recipe colours still show how hard each
+  one is). Create All, the count and Create sit on a footer under the
+  recipe. The profession tabs down the side match the character window's.
 - **Page arrows** in every window that uses the spellbook's (mail, the
   merchant, collections) are flat buttons with a chevron.
 

@@ -868,3 +868,104 @@ P{
         end
     end,
 }
+
+--------------------------------------------------------------------------------
+--  ProfessionsFrame (Blizzard_Professions, Camelot ProfessionsFrame.xml and
+--  Blizzard_ProfessionsCrafting.xml, Camelot overrides in
+--  Blizzard_ProfessionsCrafting.lua)
+--
+--  The pieces are parts (rankBar, filterDropdown, recipeRow, skillBarLegacy,
+--  the list headers, reagent item buttons, side tabs). The layout, from
+--  Blizzard's numbers:
+--
+--    RankBar           TOPLEFT x=110 y=-40 (SetRankBarAnchors, re-run on every
+--                      profession): on a tool bar band from our title bar down
+--                      to where the recipe list starts (y=-72), centred on it.
+--    RecipeList        TOPLEFT x=5 y=-72 to the bottom, 304 wide (OverrideArt):
+--                      its Professions-background-summarylist art and inset
+--                      nine-slice go; our panel, like the schematic beside it.
+--      SearchBox       20 tall next to a 22px filter; both 24, one line.
+--    SchematicForm     beside the list, with Create All, the count spinner
+--                      and Create below it on the page's bottom edge: a footer
+--                      band under the schematic for them.
+--    Side tabs         ProfessionsOverviewTab at TOPRIGHT y=-60 with seven
+--                      profession tabs chained under it; the character
+--                      window's tabs, sized and set flush the same way.
+--
+--  Two things are built after the window's first walk and are dressed when
+--  they appear: the profession tabs (RefreshRightTabs shows them) and
+--  everything in the schematic for a recipe (its reagent slots, the track
+--  check box: Init runs per recipe).
+--------------------------------------------------------------------------------
+local PROF = { list = 72, pad = 8, control = 24, gap = 6 }
+
+P{
+    name  = "ProfessionsFrame",
+    addon = "Blizzard_Professions",
+    apply = function(f, k)
+        local page = f.CraftingPage
+        local top = (S.TITLE_BAND or 20) + 2
+
+        -- Side tabs: the character window's treatment.
+        local over = f.ProfessionsOverviewTab
+        if over then
+            k:Move(over, "TOPLEFT", f, "TOPRIGHT", T.LOOK.sideTab.gap, -(top + 6))
+            ModeTab(k, over)
+        end
+        local function Tabs()
+            for _, tab in ipairs(f.rightProfessionTabs or {}) do
+                if S.Alive(tab) then
+                    S.Walk(tab, 0)
+                    ModeTab(k, tab)
+                end
+            end
+        end
+        Tabs()
+        k:After(f, "RefreshRightTabs", Tabs)
+
+        if not page then return end
+
+        -- The tool bar, holding the skill bar.
+        local bar = Band(page, "toolbar", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(PROF.list - top - 2)
+        end)
+        local rank = page.RankBar
+        if rank then
+            local function Seat() k:Move(rank, "CENTER", bar, "CENTER", 0, 3) end
+            Seat()
+            k:After(page, "SetRankBarAnchors", Seat)
+        end
+
+        -- The recipe list: a panel, search and filter on one line.
+        local list = page.RecipeList
+        if list then
+            if list.BackgroundNineSlice then k:Fade(list.BackgroundNineSlice) end
+            k:Panel(list, "surface0")
+            local filter, search = list.FilterDropdown, list.SearchBox
+            if filter then
+                k:Size(filter, nil, PROF.control)
+                k:Move(filter, "TOPRIGHT", list, "TOPRIGHT", -PROF.pad, -PROF.pad)
+            end
+            if search and filter then
+                k:Size(search, nil, PROF.control)
+                k:Anchors(search, { { "TOPLEFT", list, "TOPLEFT", PROF.pad, -PROF.pad },
+                                    { "RIGHT", filter, "LEFT", -PROF.gap, 0 } })
+            end
+        end
+
+        -- The footer under the schematic, for Create All, the count and Create.
+        local form = page.SchematicForm
+        if form then
+            Band(page, "footer", "top", function(b)
+                b:SetPoint("TOPLEFT", form, "BOTTOMLEFT", 0, -1)
+                b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            end)
+            -- A recipe's slots and controls are built and shown per recipe.
+            k:After(form, "Init", function()
+                C_Timer.After(0, function() if form:IsShown() then S.Walk(form, 0) end end)
+            end)
+        end
+    end,
+}
