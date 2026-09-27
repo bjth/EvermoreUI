@@ -139,7 +139,7 @@ local function Main(shapesPath, root, mode, emit)
     local made = {}
     local function Build(o, name, parent)
         local obj = setmetatable({}, Class)
-        info[obj] = { t = o.t, a = o.a, f = o.f, name = name, parent = parent, slots = {} }
+        info[obj] = { t = o.t, a = o.a, f = o.f, name = name, parent = parent, slots = {}, kids = {} }
         -- KeyValues become plain fields on the frame, as the client sets them.
         for k, v in pairs(o.kv or {}) do rawset(obj, k, v) end
         for _, c in ipairs(o.ch or {}) do
@@ -152,6 +152,7 @@ local function Main(shapesPath, root, mode, emit)
                 end
             end
             local child = Build(c, cname, obj)
+            info[obj].kids[#info[obj].kids + 1] = child
             if c.k and not c.k:find("[%.%$]") then rawset(obj, c.k, child) end
             if c.role then info[obj].slots[c.role] = child end
             if cname then _G[cname] = child; made[#made + 1] = cname end
@@ -203,19 +204,15 @@ local function Main(shapesPath, root, mode, emit)
     local function IsFrame(o) return not TEXTURE[o.t] and not FONT[o.t] end
 
     --- Walk the stand-in `obj` built from shape `o`, calling fn on every frame
-    --- below the root. `ownOnly` stops at children the shape inherited.
+    --- below the root, keyed or not. `ownOnly` stops at children the shape
+    --- inherited.
     local function Descend(obj, o, ownOnly, fn)
-        for _, c in ipairs(o.ch or {}) do
-            if IsFrame(c) and (c.own or not ownOnly) then
-                local child = c.k and rawget(obj, c.k)
-                if not child then
-                    -- Built but unkeyed: find it through its global or skip.
-                    child = nil
-                end
-                if child then
-                    fn(child, c)
-                    Descend(child, c, ownOnly, fn)
-                end
+        local kids = info[obj].kids
+        for i, c in ipairs(o.ch or {}) do
+            local child = kids[i]
+            if child and IsFrame(c) and (c.own or not ownOnly) then
+                fn(child, c)
+                Descend(child, c, ownOnly, fn)
             end
         end
     end

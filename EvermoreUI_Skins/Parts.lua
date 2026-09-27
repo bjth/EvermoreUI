@@ -331,7 +331,7 @@ end
 S.IsOrnate = IsOrnate
 
 --------------------------------------------------------------------------------
---  0a. Tooltips           layoutType Tooltip*, 46 templates
+--  0a. Tooltips           layoutType Tooltip*, 48 templates
 --      CLAIMED AND LEFT ALONE, on purpose. EvermoreUI_Tooltips already skins
 --      GameTooltip, the shopping tooltips, ItemRefTooltip and the shared
 --      backdrop, including fading their NineSlice. Before this part existed
@@ -1064,7 +1064,7 @@ R{
 }
 
 --------------------------------------------------------------------------------
---  9b. Legacy scroll bar  Slider-based, 11 templates
+--  9b. Legacy scroll bar  Slider-based, 10 templates
 --      MinimalScrollBar (the modern one, an EventFrame with a Track) is part
 --      9. Everything older is a Slider with ScrollUpButton/ScrollDownButton
 --      and a ThumbTexture, and nothing claimed any of it: the Track
@@ -1127,7 +1127,7 @@ R{
 }
 
 --------------------------------------------------------------------------------
--- 10. Inset               layoutType "InsetFrameTemplate", 19 templates / 49 inherits
+-- 10. Inset               InsetFrameTemplate, 49 inherits; by layoutType, 19 templates
 --
 --     This part matched NOTHING until 21 Sep. Its fingerprint was
 --     art = { Bg = "ui%-background%-marble" }, and InsetFrameTemplate's Bg is
@@ -1152,7 +1152,7 @@ R{
 }
 
 --------------------------------------------------------------------------------
--- 11. Dialog border       layoutType "Dialog", 5 templates / 44 inherits
+-- 11. Dialog border       DialogBorderTemplate, 44 inherits; by layoutType, 5 templates
 --     Dead for the same reason as the inset: its Bg is
 --     Interface\DialogFrame\UI-DialogBox-Background, a file.
 --------------------------------------------------------------------------------
@@ -1245,7 +1245,7 @@ local function HasFurniture(f)
     return false
 end
 
--- 12. Window: Blizzard's own label. 30 templates.
+-- 12. Window: Blizzard's own label. 35 templates.
 R{
     name = "window",
     layout = { "PortraitFrameTemplate", "PortraitFrameTemplateMinimizable",

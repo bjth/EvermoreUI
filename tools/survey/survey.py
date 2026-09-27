@@ -162,12 +162,14 @@ def diff_manifests(old, new):
 
 
 # The header over each part quotes what it covers, from the survey that was
-# current when it was written: "UIPanelButtonTemplate, 284 inherits", or for
-# a layoutType part, 'layoutType "Dialog", 5 templates'. Quoted numbers go
-# stale on a client patch, so the survey checks them.
-HEADER_RE = re.compile(r"^--\s*\d+[a-z]?\.\s+.+?\s{2,}(.+)$")
-HEADER_TEMPLATE_RE = re.compile(r"^([A-Za-z_]\w*), (\d+) inherits")
-HEADER_LAYOUT_RE = re.compile(r'^layoutType "(\w+)", (\d+) templates')
+# current when it was written: "UIPanelButtonTemplate, 284 inherits" (that
+# template has 284 inherit sites and this part claims it) or "19 templates"
+# (this part claims 19). Quoted numbers go stale on a client patch, so the
+# survey checks every one it can read. A header is a comment line that opens
+# with the part's number: "--  4. Panel button ...", "-- 12. Window: ...".
+HEADER_RE = re.compile(r"^--\s*\d+[a-z]?\.\s+(.+)$")
+HEADER_TEMPLATE_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]+), (\d+) inherits")
+HEADER_COUNT_RE = re.compile(r"\b(\d+) templates\b")
 
 
 def read_headers(addons):
@@ -180,13 +182,11 @@ def read_headers(addons):
         for line in fh:
             h = HEADER_RE.match(line.rstrip())
             if h:
-                rest = h.group(1).strip()
-                t = HEADER_TEMPLATE_RE.match(rest)
-                lay = HEADER_LAYOUT_RE.match(rest)
-                if t:
+                rest = h.group(1)
+                for t in HEADER_TEMPLATE_RE.finditer(rest):
                     pending.append(("template", t.group(1), int(t.group(2))))
-                elif lay:
-                    pending.append(("layout", lay.group(1), int(lay.group(2))))
+                for c in HEADER_COUNT_RE.finditer(rest):
+                    pending.append(("count", None, int(c.group(1))))
                 continue
             n = PART_RE.match(line)
             if n and pending:
@@ -208,8 +208,8 @@ def check_headers(addons, claimed, counts):
                 bad.append("%s: header names %s, which is claimed by %s"
                            % (part, name, claimed.get(name) or "nothing"))
         elif per_part.get(part, 0) != n:
-            bad.append('%s: header says %d templates with layoutType "%s", it claims %d'
-                       % (part, n, name, per_part.get(part, 0)))
+            bad.append("%s: header says %d templates, it claims %d"
+                       % (part, n, per_part.get(part, 0)))
     return bad
 
 
