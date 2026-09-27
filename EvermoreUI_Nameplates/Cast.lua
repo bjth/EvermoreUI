@@ -220,6 +220,7 @@ ns.Widget{
 
     Build = function(f)
         local bar = CreateFrame("StatusBar", nil, f)
+        EV.Pixel:Bar(bar)
         bar:Hide()
         bar:SetMinMaxValues(0, 1)
         bar.bg = bar:CreateTexture(nil, "BACKGROUND")

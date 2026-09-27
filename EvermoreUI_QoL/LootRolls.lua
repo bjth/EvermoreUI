@@ -124,6 +124,7 @@ local function NewRow()
     r.bind = T.Text(r, "caption", "warning", true)
 
     r.timer = CreateFrame("StatusBar", nil, r)
+    EV.Pixel:Bar(r.timer)
     r.timer:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
     r.timer:SetPoint("BOTTOMLEFT", 1, 1)
     r.timer:SetPoint("BOTTOMRIGHT", -1, 1)

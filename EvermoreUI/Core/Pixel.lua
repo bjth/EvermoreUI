@@ -110,7 +110,8 @@ end
 --   * A frame tree walk at load. With a full UI loaded that is well over ten
 --     thousand frames and a large share of login time, and the only widget
 --     type such a walk would reach that the metatable hooks below miss is
---     StatusBar, which is hooked explicitly.
+--     StatusBar, whose bars of ours are hooked one at a time (Pixel:Bar, below;
+--     the metatable hook tainted Blizzard's secure bars).
 --
 --  The cache is keyed on the REGION, never on the StatusBar that owns it, so a
 --  runtime fill swap unsnaps the new texture instead of being skipped as
@@ -199,7 +200,6 @@ local function HookType(obj)
     if mt.SetTexture          then hooksecurefunc(mt, "SetTexture", NoSnap) end
     if mt.SetColorTexture     then hooksecurefunc(mt, "SetColorTexture", NoSnap) end
     if mt.SetAtlas            then hooksecurefunc(mt, "SetAtlas", NoSnap) end
-    if mt.SetStatusBarTexture then hooksecurefunc(mt, "SetStatusBarTexture", NoSnap) end
 end
 
 do
@@ -209,11 +209,30 @@ do
     HookType(probe:CreateFontString())
     HookType(probe:CreateMaskTexture())
     HookType(CreateFrame("ScrollFrame"))
-    -- StatusBar has to be seeded with a fill before its inner texture exists.
-    local sb = CreateFrame("StatusBar")
-    sb:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    HookType(sb)
-    HookType(sb:GetStatusBarTexture())
+end
+
+--- Our own status bars, one at a time.
+---
+--- StatusBar's SetStatusBarTexture used to be hooked here at the metatable,
+--- like the image setters above, so a fill swapped at run time was unsnapped
+--- wherever it happened. That table is shared with every status bar
+--- Blizzard's secure code drives, and under Forever's secret-value rules the
+--- hooked method counted as ours when that code called it with secrets in
+--- play: the taint log showed "An attempt to call a secret value was blocked
+--- because of taint from EvermoreUI - SetStatusBarTexture()" from the cast
+--- bar (CastingBarFrame.lua UpdateBarFillTexture) on every cast, and the XP
+--- bar's first update at login failed with "attempt to call a nil value".
+---
+--- So each bar of ours is hooked on its own, which never touches Blizzard's
+--- bars: call this once, right after CreateFrame("StatusBar"). Blizzard's own
+--- bars keep the client's default snapping.
+local barred = setmetatable({}, { __mode = "k" })
+function Pixel:Bar(bar)
+    if bar == nil or barred[bar] then return bar end
+    barred[bar] = true
+    hooksecurefunc(bar, "SetStatusBarTexture", NoSnap)
+    NoSnap(bar)
+    return bar
 end
 
 --------------------------------------------------------------------------------

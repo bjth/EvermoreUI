@@ -275,6 +275,7 @@ function CB.Build(f, preview)
     EV.Pixel.NoSnap(h.bg)
 
     h.bar = CreateFrame("StatusBar", nil, h)
+    EV.Pixel:Bar(h.bar)
     h.bar.holder = h
     h.bar:SetMinMaxValues(0, 1)
     h.bar:SetValue(0)

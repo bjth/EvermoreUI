@@ -59,6 +59,7 @@ local function Build()
     frame.no:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 14)
 
     frame.timer = CreateFrame("StatusBar", nil, frame)
+    EV.Pixel:Bar(frame.timer)
     frame.timer:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
     frame.timer:SetStatusBarColor(T.RGBA("accent", 0.9))
     frame.timer:SetPoint("BOTTOMLEFT", 1, 1)

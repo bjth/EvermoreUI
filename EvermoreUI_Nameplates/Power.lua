@@ -186,6 +186,7 @@ ns.Widget{
 
     Build = function(f)
         local bar = CreateFrame("StatusBar", nil, f)
+        EV.Pixel:Bar(bar)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
         bar:Hide()

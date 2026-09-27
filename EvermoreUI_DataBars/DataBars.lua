@@ -200,6 +200,7 @@ end
 --------------------------------------------------------------------------------
 local function Layer(parent, level)
     local sb = CreateFrame("StatusBar", nil, parent)
+    EV.Pixel:Bar(sb)
     sb:SetAllPoints()
     sb:SetFrameLevel(level)
     sb:SetMinMaxValues(0, 1)

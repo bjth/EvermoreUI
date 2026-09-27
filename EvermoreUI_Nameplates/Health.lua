@@ -162,6 +162,7 @@ ns.Widget{
         EV.Pixel.NoSnap(f.bg)
 
         local bar = CreateFrame("StatusBar", nil, f)
+        EV.Pixel:Bar(bar)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(1)
         bar.bg = bar:CreateTexture(nil, "BACKGROUND")
