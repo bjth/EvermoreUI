@@ -258,7 +258,12 @@ end
 --------------------------------------------------------------------------------
 local function lin(v) return v <= 0.03928 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4 end
 function T.Luminance(c) return 0.2126 * lin(c[1]) + 0.7152 * lin(c[2]) + 0.0722 * lin(c[3]) end
+
+--- WCAG contrast ratio. Each side is a colour ({ r, g, b }) or a token name,
+--- which reads the live palette (the Colours page checks your own colours).
 function T.Contrast(a, b)
+    if type(a) == "string" then a = T.C[a] or T.C.text end
+    if type(b) == "string" then b = T.C[b] or T.C.text end
     local la, lb = T.Luminance(a), T.Luminance(b)
     if la < lb then la, lb = lb, la end
     return (la + 0.05) / (lb + 0.05)
@@ -432,18 +437,6 @@ function T.ImportCustom(ui)
         end
     end
     T.Apply(st.contrast)
-end
-
---- WCAG contrast ratio between two tokens, for the Colours page's check.
-function T.Contrast(a, b)
-    local function lum(token)
-        local r, g, bl = T.RGBA(token)
-        local function ch(v) return v <= 0.03928 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4 end
-        return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(bl)
-    end
-    local la, lb = lum(a), lum(b)
-    if la < lb then la, lb = lb, la end
-    return (la + 0.05) / (lb + 0.05)
 end
 
 T.Apply("standard")
