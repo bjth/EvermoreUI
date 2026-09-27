@@ -507,14 +507,16 @@ R{
             d.on, d.disabled = on and true or false, off and true or false
             local r = T.Resolve(LOOK.tab, d)
             if d.fill then d.fill:SetColorTexture(T.C4(r.fill)) end
-            if r.edge then T.SetEdge(tab, r.edge) end
+            -- A pack that draws its own box in the tab (the spellbook's
+            -- school tabs) sets `edgeless`, and the tab's border stays down.
+            if r.edge and not d.edgeless then T.SetEdge(tab, r.edge) end
             if tab.Text then tab.Text:SetTextColor(T.C4(r.text)) end
         end
         d.Sync = Sync
         S.HookPanelTabs()
         p:Hook("OnEnter", function() d.hover = true; Sync() end)
         p:Hook("OnLeave", function() d.hover = false; Sync() end)
-        if d.fill then T.Watch(d.fill, Sync) end
+        S.Own(Sync, tab, tab.Text)
         p:Hook("OnShow", function() Seat(); Sync() end)
         p:Hook("OnClick", function() C_Timer.After(0, function() Seat(); Sync() end) end)
         Seat()
@@ -612,7 +614,7 @@ R{
         p:Hook("OnEnter", function() d.hover = true; Sync() end)
         p:Hook("OnLeave", function() d.hover = false; Sync() end)
         p:Label(b.Text)
-        T.Watch(d.ring, Sync)
+        S.Own(Sync, d.ring)
         Sync()
     end,
 }
@@ -686,7 +688,7 @@ R{
         p:Hook("OnEnter", function() d.hover = true; Sync() end)
         p:Hook("OnLeave", function() d.hover = false; Sync() end)
         p:Label(b.Text)
-        T.Watch(d.box, Sync)
+        S.Own(Sync, d.box, d.boxFrame)
         Sync()
     end,
 }

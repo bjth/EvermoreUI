@@ -429,6 +429,7 @@ local function IconTab(k, tab)
     local d = S.D(tab)
     -- panelTab painted the whole 44px rect; that box goes, ours replaces it.
     if d.fill then d.fill:SetAlpha(0) end
+    d.edgeless = true     -- panelTab's Sync leaves the border down from now on
     EV.Pixel:ShowEdges(tab, false)
     if not d.iconBox then
         local box = CreateFrame("Frame", nil, tab)

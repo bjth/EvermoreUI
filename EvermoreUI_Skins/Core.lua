@@ -207,6 +207,42 @@ function Painter:FadeSlice(slice)
     return self
 end
 
+--- A colour for a painter: a token, or any Look colour spec (a mix, a token
+--- with an alpha). `alpha` overrides the spec's own.
+local specScratch = {}
+local function Colour(spec, alpha)
+    if type(spec) ~= "table" then return T.RGBA(spec or "text", alpha) end
+    local r, g, b, a = T.C4(T.SpecRGBA(spec, specScratch))
+    return r, g, b, alpha or a
+end
+S.Colour = Colour
+
+--- Who repaints an object on a theme change, once a part paints its state.
+---
+--- Fill, Border, Label and Glyph each paint a rest colour and watch for the
+--- theme. On a control that also paints its state (States, or a part's own
+--- Sync), that left two painters on one colour, and which ran last on a
+--- theme change was down to pairs() order: a checked box could come back
+--- with a plain edge, a selected tab with a muted label. The state painter
+--- registers here as the owner of the object and its label, and the rest
+--- painters defer to it whichever order they are called in.
+local owners = setmetatable({}, { __mode = "k" })
+function S.Own(fn, ...)
+    for i = 1, select("#", ...) do
+        local obj = select(i, ...)
+        if type(obj) == "table" then
+            owners[obj] = fn
+            T.Watch(obj, fn)
+            local rec = EV.Pixel:EdgesOf(obj)
+            if rec then T.Watch(rec.edges[1], fn) end
+            local d = data[obj]
+            if d and d.fill then T.Watch(d.fill, fn) end
+            if d and d.glyph then T.Watch(d.glyph, fn) end
+        end
+    end
+end
+function S.Owner(obj) return owners[obj] end
+
 --- Our flat surface, behind everything the object draws.
 ---
 --- `on` paints a DIFFERENT object. That exists because a frame can be chrome
@@ -226,8 +262,14 @@ function Painter:Fill(token, alpha, sub, on)
     -- that recolour it (States, panelTab) and the packs that hide it.
     d.fill = d.fill or Ours(EV.Pixel:Fill(obj, "BACKGROUND", sub or -7))
     d.fillToken, d.fillAlpha = token, alpha
-    d.fill:SetColorTexture(T.RGBA(token, alpha))
-    T.Watch(d.fill, function(t) t:SetColorTexture(T.RGBA(d.fillToken, d.fillAlpha)) end)
+    d.fill:SetColorTexture(Colour(token, alpha))
+    local own = owners[obj]
+    if own then
+        T.Watch(d.fill, own)
+        own()
+    else
+        T.Watch(d.fill, function(t) t:SetColorTexture(Colour(d.fillToken, d.fillAlpha)) end)
+    end
     return self
 end
 
@@ -250,10 +292,16 @@ function Painter:Border(token, alpha, on)
     end
     d.edgeToken, d.edgeAlpha = token or "border", alpha
     local function Paint()
-        EV.Pixel:SetEdgeColor(obj, T.RGBA(d.edgeToken, d.edgeAlpha))
+        EV.Pixel:SetEdgeColor(obj, Colour(d.edgeToken, d.edgeAlpha))
     end
     Paint()
-    T.Watch(edges[1], Paint)
+    local own = owners[obj]
+    if own then
+        T.Watch(edges[1], own)
+        own()
+    else
+        T.Watch(edges[1], Paint)
+    end
     d.border = edges
     return self
 end
@@ -278,14 +326,20 @@ function Painter:Label(fs, token, bold)
     if token ~= false then
         local d = S.D(fs)
         d.token = token or "text"
-        fs:SetTextColor(T.RGBA(d.token))
-        T.Watch(fs, S.RepaintText)
+        local own = owners[fs]
+        if own then
+            T.Watch(fs, own)
+            own()
+        else
+            fs:SetTextColor(Colour(d.token))
+            T.Watch(fs, S.RepaintText)
+        end
     end
     return self
 end
 
 --- Theme repaint for a font string we coloured: its token lives in S.D.
-function S.RepaintText(fs) fs:SetTextColor(T.RGBA(S.D(fs).token or "text")) end
+function S.RepaintText(fs) fs:SetTextColor(Colour(S.D(fs).token or "text")) end
 
 --- One of our glyphs, centred on the object.
 function Painter:Glyph(name, size, token)
@@ -300,9 +354,15 @@ function Painter:Glyph(name, size, token)
     local s = size or 10
     d.glyph:SetSize(s, s)
     d.glyphToken = token or "text"
-    d.glyph:SetVertexColor(T.RGBA(d.glyphToken))
-    T.Watch(d.glyph)
-    d.glyph.Paint = function(self2) self2:SetVertexColor(T.RGBA(d.glyphToken)) end
+    d.glyph:SetVertexColor(Colour(d.glyphToken))
+    d.glyph.Paint = function(self2) self2:SetVertexColor(Colour(d.glyphToken)) end
+    local own = owners[obj]
+    if own then
+        T.Watch(d.glyph, own)
+        own()
+    else
+        T.Watch(d.glyph)
+    end
     return self
 end
 
@@ -361,8 +421,10 @@ function Painter:States(look, opts)
     for _, m in ipairs({ "Enable", "Disable", "SetEnabled" }) do
         if type(obj[m]) == "function" then pcall(hooksecurefunc, obj, m, Repaint) end
     end
-    -- The theme repaints through the same path.
-    if d.fill then T.Watch(d.fill, Repaint) else T.Watch(obj, Repaint) end
+    -- The theme repaints through the same path, and only through it: this
+    -- owns the object, its box and its label (see S.Own).
+    local o = d.stateOpts
+    S.Own(Repaint, obj, o.edgesOn, o.label, o.glyph)
     Repaint()
     return self
 end
