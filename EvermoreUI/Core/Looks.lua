@@ -106,10 +106,11 @@ L.windowTab = {                                -- an icon tab on a window's edge
     hover    = { fill = "surface2", icon = "text" },
     onHover  = { fill = "surface0" },
     bar = 2,                                   -- the accent bar's width on the tab's outer edge
+    inset = 2,                                 -- a black ring inside the edge, round the icon
 }
 L.sideTab = {                                  -- a mode tab down a window's edge (the character window's):
-    box = 36, icon = 28, gap = -1,             -- windowTab faces, this size, over the window's
-                                               -- one-pixel border so the chosen tab opens into it
+    box = 36, icon = 30, gap = -1,             -- icon = box less the edge and the inset ring                                               -- windowTab faces, `gap` over the window's one-pixel
+                                               -- border so the chosen tab opens into it
 }
 L.section = {                                  -- a section heading inside a pane: its name between two rules
     rest = { text = "title", rule = "border" },

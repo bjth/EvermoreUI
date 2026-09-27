@@ -2175,6 +2175,13 @@ function S.TabFace(f, open, icon)
     if not d.tabFill then
         d.tabFill = S.Ours(EV.Pixel:Fill(f, "BACKGROUND", -7))
         EV.Pixel:Edges(f)
+        -- The icon sits in a black ring inside the edge (LOOK.windowTab.inset),
+        -- so the art has a frame of its own whatever the tab's state.
+        local one = EV.Pixel:One(f)
+        d.tabInset = S.Ours(f:CreateTexture(nil, "BACKGROUND", nil, -6))
+        d.tabInset:SetPoint("TOPLEFT", f, "TOPLEFT", one, -one)
+        d.tabInset:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -one, one)
+        d.tabInset:SetColorTexture(0, 0, 0, 1)
         d.tabBar = S.Ours(f:CreateTexture(nil, "BORDER", nil, 6))
         local far = FAR_SIDE[open] or "right"
         if far == "right" or far == "left" then

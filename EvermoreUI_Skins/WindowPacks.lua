@@ -486,7 +486,6 @@ P{
 --  The page art (the parchment) can be hidden with a Skins setting.
 --------------------------------------------------------------------------------
 local TAB_H = 32                 -- TabSystemButtonTemplate's height
-local TAB_ICON = TAB_H - 8       -- inside a 1px border with a 3px gap
 local TAB_W = 44                 -- the square-mode button: icon + 8
 
 local BOOK = {
@@ -541,7 +540,10 @@ local function IconTab(k, tab)
     for _, key in ipairs({ "SquareBackground", "SquareBackgroundActive", "SquareBackgroundActiveGlow" }) do
         if tab[key] then S.Mute(tab[key]) end
     end
-    k:Size(tab.Icon, TAB_ICON, TAB_ICON)
+    -- The icon fills the box inside its edge and the black ring. Sized, not
+    -- anchored: SetTabSelected re-anchors it CENTER on the button every time.
+    local side = TAB_H - 2 * EV.Pixel:One(tab) * (1 + T.LOOK.windowTab.inset)
+    k:Size(tab.Icon, side, side)
     S.Crop(tab.Icon)   -- the suite's crop, past the icon's own baked edge
     if tab.IconMask then
         k:Anchors(tab.IconMask, { { "TOPLEFT", tab.Icon, "TOPLEFT", 0, 0 },
