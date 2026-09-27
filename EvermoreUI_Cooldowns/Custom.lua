@@ -22,7 +22,9 @@ if EV_BLOCKED then return end
 --  container (EV.AuraContainer), which filters in its own secure code and so
 --  keeps working in combat. It matches by spell ID, and every rank of a buff
 --  has its own, so each name brings in every rank in your spellbook plus any
---  rank seen on you (remembered in the entry's `seen`).
+--  rank seen on you (remembered in the entry's `seen`). Each buff is its own
+--  group in the container, in your order, which is how the order you set
+--  in the designer holds: the engine only sorts within a group.
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 if not (EvermoreUI and EvermoreUI.NewModule) then return end
@@ -356,11 +358,12 @@ local function BookIDs(name, into)
     end
 end
 
---- The spell IDs the bar lets through, as a set, and how many buffs that is.
-local function MineIDs()
-    local ids, n = {}, 0
+--- The spell IDs of each named buff, in your order: one set per buff, so
+--- the bar can keep that order (a group each in the container).
+local function MineGroups()
+    local groups = {}
     for _, e in ipairs(M:MyBuffs()) do
-        n = n + 1
+        local ids = {}
         if type(e.spell) == "number" then ids[e.spell] = true end
         local name = M.MyBuffName(e)
         if name then
@@ -369,8 +372,9 @@ local function MineIDs()
             if ok and type(info) == "table" and Plain(info.spellID) then ids[info.spellID] = true end
         end
         for id in pairs(e.seen or {}) do ids[id] = true end
+        if next(ids) then groups[#groups + 1] = ids end
     end
-    return ids, n
+    return groups
 end
 
 --- Out of combat, note the rank IDs of your named buffs that are on you.
@@ -401,9 +405,10 @@ end
 function ns.LayoutMine()
     if not mine then return end
     local db = M.db.bars.mine
-    local ids, n = MineIDs()
+    local groups = MineGroups()
+    local n = #groups
     local C = EV.AuraContainer
-    if not (M:IsEnabled() and db.enabled and n > 0 and next(ids) and C and C.Supported()) then
+    if not (M:IsEnabled() and db.enabled and n > 0 and C and C.Supported()) then
         mine:SetSize(40, 20)
         if inside then C.Hide(inside) end
         mine:SetAlpha(0)
@@ -420,7 +425,7 @@ function ns.LayoutMine()
     -- A container only changes shape out of combat; in combat the one
     -- already built carries on.
     if not (InCombatLockdown() and inside.container) then
-        C.Build(inside, cfg, { unit = "player", filter = "HELPFUL", include = ids })
+        C.Build(inside, cfg, { unit = "player", filter = "HELPFUL", groups = groups })
     end
     local alpha = M.Opacity(db)
     mine:SetAlpha(alpha or 0)

@@ -209,7 +209,7 @@ local function Tile(i)
             GameTooltip:AddLine(self.name, 1, 1, 1)
             GameTooltip:AddLine(self.item.extra == "add"
                 and L["Add a trinket, an item or a spell to your cooldown bars."]
-                or L["Click to change which buffs this bar shows, and how it looks."], 0.75, 0.78, 0.82, true)
+                or L["Drag along the row to change the order. Click for the bar's settings."], 0.75, 0.78, 0.82, true)
             GameTooltip:Show()
             return
         end
@@ -229,7 +229,7 @@ local function Tile(i)
         if DropOn(self.row) then return end
         GameTooltip:Hide()
         EV.DesignerUI:Select(PickFor(self.item))
-        if self.item.extra then return end   -- picked, never dragged
+        if self.item.extra == "add" then return end   -- picked, never dragged
         dragging = { tile = self, item = self.item, from = self.row }
         grid.ghost.icon:SetTexture(self.icon:GetTexture())
         grid.ghost:Show()
@@ -351,7 +351,7 @@ local function Draw()
     for i, e in ipairs(M:MyBuffs()) do
         local name = M.MyBuffName(e)
         local ok, tex = pcall(C_Spell.GetSpellTexture, type(e.spell) == "number" and e.spell or name)
-        mine[i] = { extra = "mine", name = name, tex = ok and not issecret(tex) and tex or 134400 }
+        mine[i] = { extra = "mine", index = i, name = name, tex = ok and not issecret(tex) and tex or 134400 }
     end
     contents.mine = mine
 
@@ -403,7 +403,7 @@ local function Draw()
             t:SetAlpha(1)
             t:Show()
             -- Only real icons are places to drop between.
-            if not it.extra then r.slots[#r.slots + 1] = t end
+            if it.extra ~= "add" then r.slots[#r.slots + 1] = t end
         end
         y = y - h - 30
     end
@@ -430,8 +430,10 @@ local function Target(x, y, d)
     for key, r in pairs(rows) do
         if r:IsShown() and Inside(r, x, y) then
             local it = d.item
+            -- Your buffs reorder within their own row, and nothing else goes there.
+            if (it.extra == "mine") ~= (key == "mine") then return nil end
             -- Buffs stay in their row (or the tray); cooldowns can't go there.
-            if key ~= HIDDEN then
+            if key ~= HIDDEN and key ~= "mine" then
                 local def
                 for _, d in ipairs(M.BARS) do if d.key == key then def = d end end
                 if not def or (def.buff and it.group ~= "buff") or (not def.buff and it.group == "buff") then
@@ -500,6 +502,15 @@ Drop = function()
         for i, t in ipairs(r.slots) do if t == d.tile then cur = i end end
         if cur and (index == cur or index == cur + 1) then return end
         if cur and index > cur then index = index - 1 end
+    end
+    if d.item.extra == "mine" then
+        -- The order of Your buffs is the order of your list.
+        local list = M:MyBuffs()
+        local e = table.remove(list, d.item.index)
+        if not e then return end
+        table.insert(list, max(1, min(index, #list + 1)), e)
+        EV.DesignerUI:Commit()
+        return
     end
     Move(d.item, key, index)
 end

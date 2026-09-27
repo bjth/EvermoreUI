@@ -145,6 +145,9 @@ end
 --  Build
 --  spec = { unit, filter, include = {[id]=true}, exclude = {...},
 --           cancel, tooltip, dispel, sort = "time" | "default", maxDuration }
+--  spec.groups = { {[id]=true}, ... } instead of include: one aura group per
+--  set, each showing at most one aura, added in that order so the icons
+--  keep it (the engine sorts within a group, not across groups).
 --------------------------------------------------------------------------------
 local SIG_FIELDS = { "size", "spacing", "perRow", "max", "growX", "growY",
                      "showSwipe", "showTimer", "timerSize" }
@@ -166,6 +169,7 @@ local function Signature(cfg, spec)
     end
     parts[#parts + 1] = IdList(spec.include)
     parts[#parts + 1] = IdList(spec.exclude)
+    for _, g in ipairs(spec.groups or {}) do parts[#parts + 1] = "g:" .. IdList(g) end
     return table.concat(parts, "|")
 end
 
@@ -209,21 +213,38 @@ function C.Build(holder, cfg, spec)
 
     local SM, SD = AuraContainerSortMethod, AuraContainerSortDirection
     local sortMethod = SM and (spec.sort == "time" and SM.Expiration or SM.Default) or 0
-    local ok, err = pcall(c.AddAuraGroup, c, "main", spec.filter, {
-        maxFrameCount = cfg.max,
-        sortMethod = sortMethod,
-        sortDirection = SD and SD.Normal or 0,
-        candidateFilters = cand,
-        initializeFrame = function(b) InitButton(b, cfg, spec) end,
-        layout = {
-            elementWidth = cfg.size, elementHeight = cfg.size,
-            elementSpacing = cfg.spacing, lineSpacing = cfg.spacing,
-        },
-    })
-    if not ok then
-        geterrorhandler()("EvermoreUI: AddAuraGroup failed: " .. tostring(err))
-        c:Hide()
-        return false
+    local layout = {
+        elementWidth = cfg.size, elementHeight = cfg.size,
+        elementSpacing = cfg.spacing, lineSpacing = cfg.spacing,
+    }
+    local init = function(b) InitButton(b, cfg, spec) end
+    local groups = {}
+    if spec.groups then
+        for i, g in ipairs(spec.groups) do
+            if next(g) then
+                local cg = {}
+                for k, v in pairs(cand) do cg[k] = v end
+                cg.includeSpellIDs = g
+                groups[#groups + 1] = { name = "g" .. i, max = 1, cand = cg }
+            end
+        end
+    else
+        groups[1] = { name = "main", max = cfg.max, cand = cand }
+    end
+    for _, g in ipairs(groups) do
+        local ok, err = pcall(c.AddAuraGroup, c, g.name, spec.filter, {
+            maxFrameCount = g.max,
+            sortMethod = sortMethod,
+            sortDirection = SD and SD.Normal or 0,
+            candidateFilters = g.cand,
+            initializeFrame = init,
+            layout = layout,
+        })
+        if not ok then
+            geterrorhandler()("EvermoreUI: AddAuraGroup failed: " .. tostring(err))
+            c:Hide()
+            return false
+        end
     end
 
     -- Unit last.
