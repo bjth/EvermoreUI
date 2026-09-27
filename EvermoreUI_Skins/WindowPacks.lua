@@ -507,6 +507,15 @@ local function IconTabState(tab)
     local d = S.D(tab)
     if not (d.iconBox and d.iconBox.Paint) then return end
     d.iconBox.Paint(tab.isSelected, tab.IsMouseOver and tab:IsMouseOver())
+    -- The icon is anchored BOTTOM in the XML, and SetTabSelected adds a
+    -- CENTER point on top of it every time. With both, the icon was pinned
+    -- to the button's bottom and stretched up to its centre line: low in the
+    -- tab, with a gap over it. One point, the centre of the square.
+    local icon = tab.Icon
+    if icon then
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", tab, "CENTER", 0, 0)
+    end
 end
 
 --- A school tab as a tab: a square of the button's height standing on the
