@@ -127,19 +127,29 @@ end
 --------------------------------------------------------------------------------
 --  Session and rate. Stored per character outside profiles so a /reload keeps
 --  the session going. Timestamps use time() so they survive the reload.
+--
+--  Only a /reload carries a session on, and only one seen in the last few
+--  minutes (`seen`, refreshed as the bar updates and at logout). Everything
+--  else starts afresh: the game's "initial login" flag isn't relied on, as
+--  a session could otherwise run on from one day into the next.
 --------------------------------------------------------------------------------
+local STALE = 10 * 60
 local WINDOW = 20 * 60
 local session          -- { start, xp, samples = { {t, xp}, ... } }
 local last = {}        -- cur, max, level from the previous update
 
 local function StartSession(keep)
     session = EV.DB:GetCharData("DataBarsSession")
-    if not keep or not session.start then
+    local fresh = type(session.seen) == "number" and (time() - session.seen) < STALE
+    if not (keep and fresh) or not session.start then
         session.start, session.xp, session.samples = time(), 0, {}
     end
     session.samples = session.samples or {}
     session.xp = session.xp or 0
+    session.seen = time()
 end
+
+local function Seen() if session then session.seen = time() end end
 
 local function RecordGain(amount)
     local s = session.samples
@@ -565,8 +575,11 @@ function M:OnEnable()
     local quests = function() self:QueueQuestScan() end
 
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function(_, _, isLogin, isReload)
-        if not session or isLogin or isReload then
-            StartSession(not isLogin and not (isReload and self.db.xp.resetSessionOnReload))
+        -- The first loading screen of this UI: a reload carries the session
+        -- on (unless told not to, or it's gone stale); anything else is a
+        -- new session. Later loading screens are just zoning.
+        if not session then
+            StartSession(isReload and not self.db.xp.resetSessionOnReload)
         end
         if isLogin or isReload or not played.at then RequestPlayedQuietly() end
         ScanQuests()
@@ -578,6 +591,8 @@ function M:OnEnable()
         C_Timer.After(0, RestorePlayedPrinter)
         self:UpdateXP()
     end)
+    self:RegisterEvent("PLAYER_LOGOUT", Seen)
+    C_Timer.NewTicker(60, Seen)
     self:RegisterEvent("PLAYER_XP_UPDATE", update)
     self:RegisterEvent("UPDATE_EXHAUSTION", update)
     self:RegisterEvent("DISABLE_XP_GAIN", update)

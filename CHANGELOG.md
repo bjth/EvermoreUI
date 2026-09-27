@@ -1,5 +1,40 @@
 # EvermoreUI
 
+## 0.12.5
+
+Your own cooldowns: the bars now take what the game's Cooldown Manager
+doesn't track.
+
+### New
+- **Your own icons** in the cooldown bars: a trinket slot, any item with a
+  cooldown (potions, Healthstones, engineering gear) or a spell the game
+  doesn't list. They drag, reorder and hide like the rest. Items show how
+  many you carry and grey out when you have none; a trinket shows while it
+  has a Use. Drag one from your bags or spellbook onto a row in the
+  designer's Cooldowns tab, or press the + at the end of a row.
+- **Bars of your own**, as many as you like, each with a name. A buff bar
+  shows just the buffs you name, in your order: your seals on one, the raid
+  buffs you care about on another. Pick them from the buffs on you, drag a
+  spell onto the row, or type a name; every rank counts, and it keeps
+  working in combat. An icon bar holds whatever you put on it: your
+  trinkets and potions, or any cooldown dragged across from the game's
+  bars. Each has its own size, layout and visibility, and its own place in
+  edit mode. New bar in the designer's Cooldowns tab.
+
+### Changed
+- **A new icon**: a copper E, in the addon list and on the project page.
+
+### Fixes
+- The Buffs & Debuffs page said this client couldn't show them and hid its
+  settings. The buffs themselves were fine; the page is back.
+- A lone ":" under the chat when the input box was left showing without
+  focus. The "Say:" part now only shows while you type.
+- Channel names in the chat input no longer end in "::".
+- The experience bar's session time starts again when you log in; it could
+  run on from the day before. A /reload still carries it on.
+- The sample party and raid frames in the designer showed the empty part
+  of each health bar white.
+
 ## 0.12.0
 
 The unit frames catch up with the rest of the suite: everything Blizzard's

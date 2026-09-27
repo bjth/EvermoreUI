@@ -199,6 +199,18 @@ local function EditHeaderFont(eb)
     end
 end
 
+--- The "Say:" header belongs to typing. A box left showing without focus
+--- (the game's classic chat style, or a box restored after a reload) would
+--- otherwise show the header on its own, often just its ": " when the
+--- channel part is blank.
+local function HeaderShown(eb, on)
+    if on == nil then on = eb.HasFocus and eb:HasFocus() or false end
+    for _, fs in ipairs({ eb.header, eb.headerSuffix }) do
+        if fs and fs.SetAlpha then fs:SetAlpha(on and 1 or 0) end
+    end
+end
+ns.HeaderShown = HeaderShown
+
 function ns.PlaceEditBox(cf)
     local eb = ns.EditBoxOf(cf)
     if not eb then return end
@@ -216,6 +228,7 @@ function ns.PlaceEditBox(cf)
     ns.ApplyShadow(eb)
     eb:SetTextInsets(G.padX(), G.padX(), 0, 0)
     EditHeaderFont(eb)
+    HeaderShown(eb)
 end
 
 -- With the input on top, our text gives up the strip the box covers, but
@@ -280,6 +293,36 @@ function ns.ClearRecall()
     end
 end
 
+--- The game cuts a channel header down to half the box and adds a second
+--- ": " after it (UpdateHeader). Our box is narrower and our font bigger than
+--- the defaults, so ordinary channel names crossed that line and read
+--- "[2. General - Zone]::". When the whole header fits with room left to
+--- type, it's shown whole with no second colon, and the text starts after it.
+local function FitHeader(eb)
+    local header, suffix = eb.header, eb.headerSuffix
+    if not (header and suffix and suffix:IsShown()) then return end
+    local want = header.GetUnboundedStringWidth and header:GetUnboundedStringWidth() or header:GetStringWidth()
+    local box = (eb:GetRight() or 0) - (eb:GetLeft() or 0)
+    if type(want) ~= "number" or issecret(want) or want <= 0 or want > box - 80 then return end
+    header:SetWidth(0)
+    suffix:Hide()
+    -- The language tag (if this client has one) sits after the header; the
+    -- game's own call places it and says how wide it is.
+    local lang = 0
+    if eb.UpdateLanguageHeader then
+        local ok, w = pcall(eb.UpdateLanguageHeader, eb)
+        if ok and type(w) == "number" then lang = w end
+    end
+    eb:SetTextInsets(15 + header:GetWidth() + lang, 13, 0, 0)
+end
+
+local function InstallHeaderFit(eb)
+    local d = CFD(eb)
+    if d.headerFit or type(eb.UpdateHeader) ~= "function" then return end
+    d.headerFit = true
+    hooksecurefunc(eb, "UpdateHeader", FitHeader)
+end
+
 local function InstallRecall(eb)
     local d = CFD(eb)
     if d.recall then return end
@@ -317,13 +360,15 @@ end
 
 -- Edit box state from Blizzard's chat events, permanent windows only.
 local EDIT_BOX_EVENTS = {
-    OnEditBoxShow = function() ns.RefreshInputStrips() end,
+    OnEditBoxShow = function(eb) HeaderShown(eb); ns.RefreshInputStrips() end,
     OnEditBoxHide = function() ns.RefreshInputStrips() end,
     OnEditBoxFocusGained = function(eb)
         EditHeaderFont(eb)
+        HeaderShown(eb, true)
         ns.Activity(true)
     end,
     OnEditBoxFocusLost = function(eb)
+        HeaderShown(eb, false)
         CFD(eb).index = 0
         ns.Activity(false)
     end,
@@ -365,6 +410,7 @@ local function SkinEditBox(cf)
         if ns.IsPermanent(cf) then
             ChatStateCallbacks()
             InstallRecall(eb)
+            InstallHeaderFit(eb)
             eb:HookScript("OnChar", function() ns.Activity() end)
         end
     end

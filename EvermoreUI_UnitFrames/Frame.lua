@@ -688,6 +688,12 @@ end
 --------------------------------------------------------------------------------
 --  Updates
 --------------------------------------------------------------------------------
+--- The empty part of a health bar, for samples drawn without a unit.
+function UF.HealthBG(cfg)
+    local bg = BarBG(cfg)
+    return bg[1], bg[2], bg[3], BG_ALPHA
+end
+
 function UF.UpdateHealthColour(f, cfg)
     local c = UF.HealthColour(f.unit, cfg.healthColour, cfg.barShade, RGB(cfg.healthCustom, nil))
     f.health:SetStatusBarColor(c[1], c[2], c[3], 1)

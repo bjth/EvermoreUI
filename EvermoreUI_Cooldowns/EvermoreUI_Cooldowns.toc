@@ -10,5 +10,6 @@
 ## Group: EvermoreUI
 
 Cooldowns.lua
+Custom.lua
 Settings.lua
 Designer.lua

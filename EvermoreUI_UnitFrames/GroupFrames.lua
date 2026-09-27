@@ -515,6 +515,12 @@ local function Sample(f, kind, i, c, first)
     if c.healthColour == "green" then f.health:SetStatusBarColor(0.2 * k, 0.8 * k, 0.2 * k, 1)
     elseif c.healthColour == "dark" then f.health:SetStatusBarColor(0.16, 0.16, 0.16, 1)
     else f.health:SetStatusBarColor((r or 0.5) * k, (g or 0.5) * k, (b or 0.5) * k, 1) end
+    -- The empty part, as the real frames colour it (they do it from the unit).
+    if c.healthColour == "dark" then
+        f.health.bg:SetVertexColor((r or 0.5) * k, (g or 0.5) * k, (b or 0.5) * k, 0.55)
+    else
+        f.health.bg:SetVertexColor(UF.HealthBG(c))
+    end
     f.power:SetMinMaxValues(0, 100)
     f.power:SetValue(70)
     f.power:SetStatusBarColor(0.18 * k, 0.45 * k, 1 * k, 1)

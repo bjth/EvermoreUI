@@ -26,6 +26,10 @@ local ROWS = {
     { value = "DOWN", text = L["Downwards"] },
     { value = "UP",   text = L["Upwards"] },
 }
+local SIDE_GROW = {
+    { value = "RIGHT", text = L["Rightwards"] },
+    { value = "LEFT",  text = L["Leftwards"] },
+}
 local SHOW = {
     { value = "always", text = L["Always"] },
     { value = "fade",   text = L["Faded out of combat"] },
@@ -54,7 +58,7 @@ function ns.BarSettings(p, def)
     local function S(k) return function(v) db[k] = v; Refresh() end end
     local off = function() return not db.enabled end
 
-    if M:IsEnabled() and M.Problem then
+    if M:IsEnabled() and M.Problem and not def.own then
         local problem = M.Problem(def)
         if problem and not M.BlizzardOn() then
             p:Banner(problem, L["Switch it on"], function() M.SetBlizzardOn(true); Refresh() end)
@@ -64,13 +68,17 @@ function ns.BarSettings(p, def)
     end
 
     p:Section(L["General"])
-    p:Row{ type = "toggle", text = L["Use this bar"],
-           tooltip = L["Off leaves these icons where the game puts them. Takes effect after a reload."],
-           get = G("enabled"),
-           set = function(v)
-               db.enabled = v
-               if EV.Options and EV.Options.MarkReloadNeeded then EV.Options:MarkReloadNeeded() end
-           end }
+    if def.own then
+        p:Row{ type = "toggle", text = L["Use this bar"], get = G("enabled"), set = S("enabled") }
+    else
+        p:Row{ type = "toggle", text = L["Use this bar"],
+               tooltip = L["Off leaves these icons where the game puts them. Takes effect after a reload."],
+               get = G("enabled"),
+               set = function(v)
+                   db.enabled = v
+                   if EV.Options and EV.Options.MarkReloadNeeded then EV.Options:MarkReloadNeeded() end
+               end }
+    end
     p:Row{ type = "dropdown", text = L["Show"], values = SHOW,
            get = G("visibility"), set = S("visibility"), disabled = off }
     p:Row{ type = "slider", text = L["Fade to"], min = 0, max = 1, step = 0.05,
@@ -82,7 +90,9 @@ function ns.BarSettings(p, def)
     p:Row{ type = "slider", text = L["Icon size"], min = 16, max = 72, step = 1, get = G("size"), set = S("size"), disabled = off }
     p:Row{ type = "slider", text = L["Spacing"], min = 0, max = 16, step = 1, get = G("spacing"), set = S("spacing"), disabled = off }
     p:Row{ type = "slider", text = L["Icons per row"], min = 1, max = 20, step = 1, get = G("perRow"), set = S("perRow"), disabled = off }
-    p:Row{ type = "dropdown", text = L["Icons run"], values = GROW, get = G("grow"), set = S("grow"), disabled = off }
+    -- The engine lays out Your buffs from one corner, so it can't centre them.
+    p:Row{ type = "dropdown", text = L["Icons run"], values = def.own and SIDE_GROW or GROW,
+           get = G("grow"), set = S("grow"), disabled = off }
     p:Row{ type = "dropdown", text = L["New rows go"], values = ROWS, get = G("rows"), set = S("rows"), disabled = off }
     p:Row{ type = "button", text = L["Position on screen"], label = L["Reset"], width = 90,
            onClick = function() EV.Movers:Reset("CD_" .. def.key) end }
@@ -112,8 +122,9 @@ end
 function ns.ResetBar(def)
     local M = ns.module
     local db = M.db.bars[def.key]
+    if not db then return end
     wipe(db)
-    EV.DB.Merge(db, M.defaults.bars[def.key])
+    EV.DB.Merge(db, def.own and ns.NewDefaults(def.user and def.user.kind) or M.defaults.bars[def.key])
     Refresh()
 end
 
@@ -183,4 +194,180 @@ function ns.TimerList(p, rebuild)
                    rebuild(false)  -- the dropdown's own change is recorded
                end }
     end
+end
+
+--------------------------------------------------------------------------------
+--  Your own icons
+--------------------------------------------------------------------------------
+--- Bars your own icons can go on: the game's two and your icon bars.
+local function BarsForNew()
+    local out = {
+        { value = "essential", text = L["Essential cooldowns"] },
+        { value = "utility",   text = L["Utility cooldowns"] },
+    }
+    for _, d in ipairs(ns.UserDefs and ns.UserDefs() or {}) do
+        if not d.buff then out[#out + 1] = { value = d.key, text = d.label } end
+    end
+    return out
+end
+
+--- Everything you've added, with Remove, and the ways to add more.
+--- rebuild(commit) redraws the rows when the list changes; commit is true
+--- when no control records the change itself (buttons and text boxes do
+--- not; dropdowns do).
+function ns.CustomSettings(p, rebuild)
+    local M = ns.module
+    local list = M:CustomList()
+    -- The + at the end of a row opens this with that row's bar chosen.
+    local target = ns.addTarget or "essential"
+    if not M.CanTake(target) then target = "essential" end
+    p:Section(L["Your own icons"])
+    p:Note(L["Trinkets, potions and other items, and spells the game's Cooldown Manager doesn't list. They sit in your cooldown bars and drag about like the rest; the list is for this class, where they sit is per spec."], 0.7)
+    if #list == 0 then p:Note(L["Nothing added yet."], 0.6) end
+    for _, e in ipairs(list) do
+        local f
+        for _, x in ipairs(ns.CustomFrames and ns.CustomFrames() or {}) do if x.evUID == e.uid then f = x end end
+        local label = f and f.evLabel or ("#" .. tostring(e.id))
+        if f and f.evWhat and f.evWhat ~= label then label = label .. "  |cff8a8f99" .. f.evWhat .. "|r" end
+        p:Row{ type = "button", text = label, label = L["Remove"], width = 90,
+               onClick = function() M:RemoveCustom(e.uid); rebuild(true) end }
+    end
+    p:Section(L["Add"])
+    p:Note(L["Quickest: drag an item from your bags, or a spell from your spellbook, onto a cooldown row."], 0.6)
+    p:Row{ type = "dropdown", text = L["Goes on"], values = BarsForNew,
+          get = function() return target end, set = function(v) target = v; ns.addTarget = v end }
+    p:Row{ type = "dropdown", text = L["A trinket slot"],
+           values = { { value = 13, text = ns.TRINKETS[13] }, { value = 14, text = ns.TRINKETS[14] } },
+           tooltip = L["Shows whatever trinket is in that slot, while it has a Use."],
+           get = function() return nil end,
+           set = function(v) M:AddCustom("slot", v, target); rebuild(false) end }
+    p:Row{ type = "input", text = L["An item"], width = 170,
+           placeholder = L["Name, ID or link"],
+           tooltip = L["A potion, Healthstone or anything else with a cooldown. By name it has to be in your bags; an ID or a shift-clicked link always works."],
+           get = function() return "" end,
+           set = function(v)
+               local id = M.ResolveItem(v)
+               if id then M:AddCustom("item", id, target); rebuild(true)
+               elseif v ~= "" then EV:Print(L["No item found by that name. Try its ID or shift-click it in."]) end
+           end }
+    p:Row{ type = "input", text = L["A spell"], width = 170,
+           placeholder = L["Name, ID or link"],
+           tooltip = L["A spell of yours the game's Cooldown Manager doesn't track. By name you need to know it."],
+           get = function() return "" end,
+           set = function(v)
+               local id = M.ResolveSpell(v)
+               if id then M:AddCustom("spell", id, target); rebuild(true)
+               elseif v ~= "" then EV:Print(L["No spell of yours by that name. Try its ID."]) end
+           end }
+end
+
+--- One of your own icons, picked on the grid.
+function ns.CustomIconSettings(p, f, done)
+    local M = ns.module
+    local e = f.evEntry
+    p:Section(f.evWhat or L["Your own icon"])
+    local explain = {
+        slot = L["Whatever trinket is in this slot, shown while it has a Use."],
+        item = L["Greyed when you have none left; the number is how many you carry."],
+        spell = L["Shown once you know the spell."],
+    }
+    p:Note(explain[e.kind] or "", 0.7)
+    if not f.evActive then p:Note(L["Nothing to show right now, so it's hidden in game."], 0.6) end
+    p:Row{ type = "button", text = L["Take it out of your bars"], label = L["Remove"], width = 90,
+           onClick = function() M:RemoveCustom(e.uid); done() end }
+    if e.kind == "spell" then ns.IconTimer(p, e.id) end
+end
+
+--------------------------------------------------------------------------------
+--  Your own bars
+--------------------------------------------------------------------------------
+--- Making bars.
+function ns.NewBarSettings(p, made)
+    local M = ns.module
+    local name = ""
+    p:Section(L["Your bars"])
+    p:Note(L["Bars of your own, as many as you like: a buff bar shows the buffs you name (your seals, or the raid buffs you want to see), an icon bar holds whatever you put on it (your trinkets and potions, or any cooldown dragged across)."], 0.7)
+    local list = M:UserBars()
+    if #list == 0 then p:Note(L["None yet."], 0.6) end
+    for _, b in ipairs(list) do
+        p:Note("|cffd4924e" .. (b.kind == "buffs" and L["Buffs"] or L["Icons"]) .. "|r  " .. (b.name or ""), 0.9)
+    end
+    p:Section(L["New bar"])
+    p:Row{ type = "input", text = L["Name"], width = 170, placeholder = L["Seals, Raid buffs, Potions..."],
+           get = function() return name end, set = function(v) name = v end }
+    p:Row{ type = "button", text = L["Shows buffs you name"], label = L["New buff bar"], width = 130,
+           onClick = function() local b = M:NewBar("buffs", name); made(b) end }
+    p:Row{ type = "button", text = L["Holds icons you put on it"], label = L["New icon bar"], width = 130,
+           onClick = function() local b = M:NewBar("icons", name); made(b) end }
+end
+
+--- One of your bars: its name, what it shows, how it looks, and Delete.
+function ns.UserBarSettings(p, def, rebuild, deleted)
+    local M = ns.module
+    local b = def.user
+    p:Section(L["Bar"])
+    p:Row{ type = "input", text = L["Name"], width = 170,
+           get = function() return b.name or "" end,
+           set = function(v) M:RenameBar(b, v); rebuild(true) end }
+    if b.kind == "buffs" then
+        ns.BuffList(p, b, rebuild)
+    else
+        p:Note(L["Drag cooldowns here from the other rows, drop items and spells on its row, or add your own with the + at the end of it."], 0.7)
+    end
+    ns.BarSettings(p, def)
+    p:Section(L["Delete"])
+    p:Row{ type = "button", text = L["Delete this bar"], label = L["Delete"], width = 90, confirm = true,
+           tooltip = L["Anything on it goes back to where it came from."],
+           onClick = function() M:DeleteBar(b); deleted() end }
+end
+
+--- A buff bar's buffs: the list, the ones on you now, and add by name.
+function ns.BuffList(p, b, rebuild)
+    local M = ns.module
+    local list = b.buffs or {}
+    b.buffs = list
+    p:Section(L["Buffs"])
+    p:Note(L["Just the buffs you name, whoever cast them. Drawn by the game, so it keeps working in combat. Every rank counts. Drag them along the row to change the order."], 0.7)
+    if EV.AuraContainer and not EV.AuraContainer.Supported() then
+        p:Note(L["This client doesn't provide the aura containers this bar needs."], 0.6)
+    end
+    if #list == 0 then p:Note(L["No buffs named yet."], 0.6) end
+    for i, e in ipairs(list) do
+        p:Row{ type = "button", text = M.BuffName(e) or "?", label = L["Remove"], width = 90,
+               onClick = function() M.RemoveBarBuff(b, i); Refresh(); rebuild(true) end }
+    end
+    -- Buffs on you right now (out of combat, where they can be read), to
+    -- add with a click.
+    local have = {}
+    for _, e in ipairs(list) do
+        local n = M.BuffName(e)
+        if n then have[n:lower()] = true end
+    end
+    local now, seen = {}, {}
+    local issecret = issecretvalue or function() return false end
+    for i = 1, 40 do
+        local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+        if not ok or not a then break end
+        if type(a.name) == "string" and not issecret(a.name) and not issecret(a.spellId)
+           and not have[a.name:lower()] and not seen[a.name] then
+            seen[a.name] = true
+            now[#now + 1] = a
+        end
+    end
+    if #now > 0 then
+        p:Section(L["On you now"])
+        for _, a in ipairs(now) do
+            p:Row{ type = "button", text = a.name, label = L["Add"], width = 90,
+                   onClick = function() M.AddBarBuff(b, a.spellId); Refresh(); rebuild(true) end }
+        end
+    end
+    p:Section(L["Add by name"])
+    p:Note(L["Or drag a spell from your spellbook onto the bar's row."], 0.6)
+    p:Row{ type = "input", text = L["Add a buff"], width = 170,
+           placeholder = L["Name, ID or link"],
+           tooltip = L["Its name covers every rank. Seal of Righteousness, for example."],
+           get = function() return "" end,
+           set = function(v)
+               if v ~= "" and M.AddBarBuff(b, v) then Refresh(); rebuild(true) end
+           end }
 end
