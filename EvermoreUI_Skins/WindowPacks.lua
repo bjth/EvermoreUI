@@ -910,6 +910,7 @@ P{
         local over = f.ProfessionsOverviewTab
         if over then
             k:Move(over, "TOPLEFT", f, "TOPRIGHT", T.LOOK.sideTab.gap, -(top + 6))
+            S.Walk(over, 0)
             ModeTab(k, over)
         end
         local function Tabs()
@@ -922,6 +923,14 @@ P{
         end
         Tabs()
         k:After(f, "RefreshRightTabs", Tabs)
+
+        -- The overview (the book page) fills its cards in Lua as it is shown.
+        local book = f.BookPage
+        if book then
+            k:Hook(book, "OnShow", function(self2)
+                C_Timer.After(0, function() if self2:IsShown() then S.Walk(self2, 0) end end)
+            end)
+        end
 
         if not page then return end
 
@@ -954,6 +963,10 @@ P{
                                     { "RIGHT", filter, "LEFT", -PROF.gap, 0 } })
             end
         end
+
+        -- The count between the arrows, centred in its box.
+        local count = page.CreateMultipleInputBox
+        if count and count.SetJustifyH then count:SetJustifyH("CENTER") end
 
         -- The footer under the schematic, for Create All, the count and Create.
         local form = page.SchematicForm

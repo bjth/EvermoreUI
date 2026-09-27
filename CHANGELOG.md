@@ -82,7 +82,10 @@ meter in our style, and cooldown icons that tell you more.
   proper filter button on one line, and plain rows with a copper highlight
   for the recipe you've picked (recipe colours still show how hard each
   one is). Create All, the count and Create sit on a footer under the
-  recipe. The profession tabs down the side match the character window's.
+  recipe, with the count centred. The profession tabs down the side match
+  the character window's. Reagent and result icons use the icon style. The
+  overview's cards are plain cards, their spells in the icon style and
+  Unlearn a small red cross button.
 - **Page arrows** in every window that uses the spellbook's (mail, the
   merchant, collections) are flat buttons with a chevron.
 

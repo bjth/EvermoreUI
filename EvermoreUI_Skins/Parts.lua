@@ -546,14 +546,23 @@ R{
             d.box:SetSize(RL.box, RL.box)
             d.box:SetPoint("CENTER")
             d.box:EnableMouse(false)
-            -- Under the button, so the glyph (a region of the button) draws
-            -- over the box's fill. As a child one level up it covered the X,
-            -- and the filter's reset showed as an empty square.
-            d.box:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
         end
+        -- Over whatever it sits on (the filter button's corner): a badge.
+        local okP, par = pcall(b.GetParent, b)
+        if okP and par and par.GetFrameLevel then b:SetFrameLevel(par:GetFrameLevel() + 5) end
         p:Fill(RL.rest.fill, nil, nil, d.box)
         p:Border(RL.rest.edge, nil, d.box)
         p:Glyph("close", RL.glyphSize, RL.rest.glyph)
+        -- The glyph lives on the box, over its solid fill: on the button it
+        -- sat under the box (a child frame draws over its parent), and the
+        -- reset showed as an empty square.
+        local glyph = S.D(b).glyph
+        if glyph and glyph:GetParent() ~= d.box then
+            glyph:SetParent(d.box)
+            glyph:SetDrawLayer("OVERLAY", 7)
+            glyph:ClearAllPoints()
+            glyph:SetPoint("CENTER", d.box, "CENTER")
+        end
         local boxFill = S.D(d.box).fill
         p:States(RL, { edgesOn = d.box, after = function(r)
             if boxFill and r.fill then boxFill:SetColorTexture(T.C4(r.fill)) end
@@ -1440,7 +1449,16 @@ R{
 --     colour and visibility become our edge. Common (white) keeps the plain
 --     edge, as our bags do.
 --------------------------------------------------------------------------------
-local function ItemIcon(b) return b.icon or b.Icon or S.Sub(b, "IconTexture") end
+-- The ItemButton intrinsic declares `icon`; some templates add their own
+-- `Icon` over it and draw into that one instead (ProfessionsButtonTemplate:
+-- "Substitution for the icon in ItemButton"), leaving `icon` empty. Styling
+-- `icon` there left every reagent slot's real icon uncropped. When a template
+-- carries both, `Icon` is the one it draws.
+local function ItemIcon(b)
+    local I, i = rawget(b, "Icon"), rawget(b, "icon")
+    if type(I) == "table" and I.SetTexCoord then return I end
+    return i or b.Icon or b.icon or S.Sub(b, "IconTexture")
+end
 
 R{
     name = "itemButton",
@@ -1452,6 +1470,12 @@ R{
         S.Mute(ib)
         if S.Alive(b.BorderFrame) then S.PainterFor(b.BorderFrame):Fade() end
         p:Fill(LOOK.slot.rest.fill)
+        -- A round mask (CircularGiantItemButtonTemplate's CircleMask, the
+        -- professions output) would cut our square icon to a disc.
+        for _, key in ipairs({ "CircleMask", "IconMask" }) do
+            local m = rawget(b, key)
+            if m and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, m) end
+        end
         local well = S.IconWell(icon)
         if not well then return end
         local d = S.D(b)
@@ -2058,6 +2082,90 @@ R{
         if ok and tex then tex:SetTexture(FLAT) end
         Well(bar, bar, -1)
         if bar.Rank then p:Label(bar.Rank, "text") end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9q. Professions overview (Blizzard_ProfessionsBook, Camelot templates)
+--
+--     professionCard  PrimaryProfessionTemplate / SecondaryProfessionTemplate:
+--                     a card whose Background atlas (Profession-overview-Card,
+--                     -Card-<name> once learned, set in Lua) carries the
+--                     parchment, an illustration and a gold frame, with
+--                     transparent margins the layout relies on: the cards are
+--                     anchored overlapping (secondaries x=-6, primaries y=+5).
+--                     Ours: the art cleared for good, and the kit's tile inset
+--                     into that margin, so neighbours keep an even gap.
+--     professionSpell ProfessionButtonTemplate: the ability icons on a card,
+--                     framed by Profession-square-frame (IconTextureOverlay,
+--                     set on every update). Ours: the suite's icon style, lit
+--                     under the mouse.
+--     unlearnButton   the red crossmark beside a primary's bar: a small box of
+--                     ours with the close glyph, in the danger Look.
+--------------------------------------------------------------------------------
+local CARD_INSET = 6
+
+R{
+    name = "professionCard",
+    keys = { "Background", "ProfessionName", "missingHeader", "missingText", "StatusBar" },
+    paint = function(f, p)
+        StripArt(f.Background)
+        local d = S.D(f)
+        if not d.card then
+            d.card = S.Ours(CreateFrame("Frame", nil, f))
+            d.card:SetPoint("TOPLEFT", f, "TOPLEFT", CARD_INSET, -CARD_INSET)
+            d.card:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -CARD_INSET, CARD_INSET)
+            d.card:SetFrameLevel(f:GetFrameLevel())
+            d.card:EnableMouse(false)
+        end
+        p:Fill(LOOK.tile.rest.fill, nil, nil, d.card)
+        p:Border("border", nil, d.card)
+        p:Label(f.ProfessionName, "title", true)
+        p:Label(f.missingHeader, "title", true)
+        p:Label(f.missingText, "textMuted")
+        if f.specialization then p:Label(f.specialization, "textMuted") end
+    end,
+}
+
+R{
+    name = "professionSpell",
+    type = "CheckButton",
+    keys = { "IconTexture", "IconTextureOverlay", "spellString" },
+    paint = function(b, p)
+        StripArt(b.IconTextureOverlay)
+        if b.highlightTexture then StripArt(b.highlightTexture) end
+        S.Blank(b)
+        local icon = b.IconTexture
+        S.IconWell(icon)
+        p:Label(b.spellString, "text")
+        if b.subSpellString then p:Label(b.subSpellString, "textMuted") end
+        local d = S.D(b)
+        local function Sync()
+            if d.hover then
+                local e = T.Resolve(LOOK.slot, d).edge
+                EV.Icons:SetState(icon, e[1], e[2], e[3], e[4])
+            else
+                EV.Icons:SetState(icon, nil)
+            end
+        end
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
+    end,
+}
+
+R{
+    name = "unlearnButton",
+    type = "Button",
+    keys = { "Icon", "Overlay" },
+    art  = { Icon = "crossmark" },
+    paint = function(b, p)
+        StripArt(b.Icon)
+        StripArt(b.Overlay)
+        S.Blank(b)
+        p:Fill(LOOK.buttonDanger.rest.fill)
+        p:Border(LOOK.buttonDanger.rest.edge)
+        p:Glyph("close", LOOK.close.glyphSize, "danger")
+        p:States(LOOK.buttonDanger)
     end,
 }
 
