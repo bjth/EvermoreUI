@@ -13,13 +13,13 @@ if EV_BLOCKED then return end
 --    ctrl.onChanged(ctrl)     set by the owner; fired after a user change
 --    ctrl:SetTooltip(title, body)
 --
---  Visual states (never colour alone):
---    rest     surface2 fill, borderStrong edge (>= 3:1 against the panel)
---    hover    surface3 fill, brighter edge
---    pressed  sunk fill, content nudged down 1px
---    focus    accent edge (inputs, open dropdowns)
---    selected accent bar or fill
---    disabled 45% opacity
+--  What each state looks like is not decided here: every control resolves
+--  its colours through its Look (Core/Looks.lua, T.Resolve), the same recipe
+--  the skins paint Blizzard's templates with. A control keeps its state in
+--  _hover, _pressed, _focus, _selected, _disabled and passes itself as the
+--  state. Pressed also nudges content down 1px; that is movement, not colour.
+--  A control whose Look paints a full disabled state sets _look, and is not
+--  faded; any other control fades to 45% when disabled.
 --------------------------------------------------------------------------------
 local EV = EvermoreUI
 local T = EV.Theme
@@ -46,7 +46,8 @@ function Control:SetDisabled(off)
     off = off and true or false
     self._disabled = off
     if self._blocker then self._blocker:SetShown(off) end
-    self:SetAlpha(off and 0.45 or 1)
+    -- A control with a Look paints its own disabled state.
+    self:SetAlpha((off and not self._look) and 0.45 or 1)
     if off then self._hover, self._pressed = false, false end
     if self.Paint then self:Paint() end
 end
@@ -106,29 +107,47 @@ end
 --------------------------------------------------------------------------------
 --  Surfaces shared by several controls
 --------------------------------------------------------------------------------
---- The standard control box: fill + 1px edge. Returns fill texture; the
---- edge is the frame's pixel border.
-function U.Box(frame, token)
-    local fill = T.Fill(frame, "BACKGROUND", token or "surface2")
+--- The standard control box: fill + 1px edge, in the rest state of a Look
+--- (the plain control box by default). Returns the fill texture; the edge
+--- is the frame's pixel border.
+function U.Box(frame, look)
+    if type(look) == "string" then look = T.LOOK[look] end
+    local r = T.Resolve(look or T.LOOK.control)
+    local fill = T.Solid(frame, "BACKGROUND", T.C4(r.fill))
     fill:SetAllPoints()
     T.TokenBorder(frame, "borderStrong")
+    T.SetEdge(frame, r.edge)
     return fill
 end
 
---- Paint a control box for its state.
-function U.PaintBox(ctrl, fill, opts)
-    opts = opts or {}
-    local token = opts.rest or "surface2"
-    if ctrl._pressed then token = "surfaceSunk"
-    elseif ctrl._hover or opts.hot then token = opts.hover or "surface3" end
-    fill:SetColorTexture(T.RGBA(token))
-    if opts.focus then
-        T.SetBorderToken(ctrl, "accent")
-    elseif ctrl._hover then
-        T.SetBorderColor(ctrl, T.Mix("borderStrong", "text", 0.35))
-    else
-        T.SetBorderToken(ctrl, "borderStrong")
+--- Paint a control box for its state, through its Look. `state` defaults to
+--- the control itself. Returns the resolved colours (text, glyph and the
+--- rest), valid until the next resolve.
+function U.PaintBox(ctrl, fill, look, state)
+    local r = T.Resolve(look or T.LOOK.button, state or ctrl)
+    fill:SetColorTexture(T.C4(r.fill))
+    T.SetEdge(ctrl, r.edge)
+    return r
+end
+
+--- A surface of ours in a surface Look (window, raised, inset, control):
+--- its fill and its border, kept in step with the theme. For module frames
+--- that are panels rather than controls, so they don't compose one from raw
+--- tokens. alpha overrides the fill's.
+function U.Surface(frame, look, alpha)
+    if type(look) == "string" then look = T.LOOK[look] end
+    look = look or T.LOOK.raised
+    local fill = EV.Pixel:Fill(frame, "BACKGROUND", -8)
+    T.TokenBorder(frame, "border")
+    local function Paint()
+        local r = T.Resolve(look)
+        local c1, c2, c3, c4 = T.C4(r.fill)
+        fill:SetColorTexture(c1, c2, c3, alpha or c4)
+        T.SetEdge(frame, r.edge)
     end
+    Paint()
+    T.Watch(fill, Paint)
+    return fill
 end
 
 --- A texture from our own media (circle, ring, check, search, close).

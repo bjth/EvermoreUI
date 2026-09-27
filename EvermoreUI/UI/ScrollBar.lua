@@ -19,18 +19,19 @@ if EV_BLOCKED then return end
 --  Modes: "auto"/"always" (shown whenever there's something to scroll),
 --  "scrolled" (only while away from the resting end, or dragging), "never".
 --
---  Look: a slim track in surface2 with a borderStrong thumb. Hover lifts the
---  thumb to textMuted and widens it; dragging turns it accent. Click the
---  track to jump there and keep dragging. Call bar:Update() whenever the
+--  Look (T.LOOK.scrollbar): a slim track with a thumb that lifts and widens
+--  on hover and turns accent while dragged. Click the track to jump there
+--  and keep dragging. Call bar:Update() whenever the
 --  source changes; the owner handles its own mouse wheel.
 --------------------------------------------------------------------------------
 local EV = EvermoreUI
 local T, U = EV.Theme, EV.UI
 local max, min, floor = math.max, math.min, math.floor
 
-local WIDTH = 6        -- the hit area and track
-local THIN = 4         -- the thumb at rest
-local MIN_THUMB = 24
+local LOOK = T.LOOK.scrollbar
+local WIDTH = LOOK.width       -- the hit area and track
+local THIN = LOOK.thin         -- the thumb at rest
+local MIN_THUMB = LOOK.minThumb
 
 function U.ScrollBar(parent, source, opts)
     opts = opts or {}
@@ -52,10 +53,10 @@ function U.ScrollBar(parent, source, opts)
     local function Range() return max(0, source.range() or 0) end
 
     function bar:Paint()
-        local token = self.dragging and "accent" or (self.hover and "textMuted") or "borderStrong"
-        self.thumb:SetColorTexture(T.RGBA(token, 1))
+        local r = T.Resolve(LOOK, self)
+        self.thumb:SetColorTexture(T.C4(r.thumb))
         self.thumb:SetWidth((self.hover or self.dragging) and (opts.width or WIDTH) or THIN)
-        self.track:SetColorTexture(T.RGBA("surface2", 0.7))
+        self.track:SetColorTexture(T.C4(r.track))
     end
     T.Watch(bar)
 

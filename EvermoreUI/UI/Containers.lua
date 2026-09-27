@@ -7,7 +7,7 @@ if EV_BLOCKED then return end
 --  W.Scroll(parent)                     .content child, thin themed bar
 --  W.Window(name, opts)                 our own top-level window
 --      opts: { title, width, height, movable = true, escape = true, closable = true }
---  W.Panel(parent, token)               raised box (surface1 + border)
+--  W.Panel(parent, look)                raised box (T.LOOK.raised), or "inset" etc.
 --  W.Section(parent, text)              heading with a hairline under it
 --  W.Divider(parent)                    1px hairline
 --  W.Label(parent, text, role, size)    role: text, textMuted, title, accent...
@@ -22,6 +22,8 @@ local max, min = math.max, math.min
 --  Tabs: text (or icon) with an accent underline on the selected one. The
 --  same look the skins give Blizzard's tabs.
 --------------------------------------------------------------------------------
+local TAB = T.LOOK.tab
+
 function U.Tabs(parent, tabs, get, set, opts)
     opts = opts or {}
     local H = opts.height or 32
@@ -62,10 +64,13 @@ function U.Tabs(parent, tabs, get, set, opts)
         local ctl = { _hover = false }
         function ctl.Paint()
             local sel = get() == t.value
-            bar:SetShown(sel or ctl._hover)
-            if sel then bar:SetColorTexture(T.RGBA("accent")) else bar:SetColorTexture(T.RGBA("borderStrong")) end
-            hl:SetShown(ctl._hover and not sel)
-            text:SetTextColor(T.RGBA((sel or ctl._hover) and "text" or "textMuted"))
+            ctl._selected = sel
+            local r = T.Resolve(TAB, ctl)
+            bar:SetShown(T.Visible(r.bar))
+            bar:SetColorTexture(T.C4(r.bar))
+            hl:SetShown(T.Visible(r.highlight))
+            hl:SetColorTexture(T.C4(r.highlight))
+            text:SetTextColor(T.C4(r.text))
             if icon then icon:SetDesaturated(not sel and not ctl._hover) end
         end
         function ctl.ShowTip() if t.tooltip then T.ShowTooltip(b, t.text, t.tooltip) end end
@@ -163,16 +168,25 @@ end
 --------------------------------------------------------------------------------
 --  Panel, Section, Divider, Label
 --------------------------------------------------------------------------------
-function U.Panel(parent, token)
+--- A raised box (T.LOOK.raised), or another surface Look by name: "inset",
+--- "window", "control". A plain token still works, as the fill alone.
+function U.Panel(parent, look)
     local p = CreateFrame("Frame", nil, parent)
-    p._token = token or "surface1"
-    p._bg = T.Fill(p, "BACKGROUND", p._token)
+    p._bg = T.Fill(p, "BACKGROUND", "surface1")
     p._bg:SetAllPoints()
     T.TokenBorder(p, "border")
+    local surface = T.LOOK[look or "raised"]
     function p:Paint()
-        self._bg:SetColorTexture(T.RGBA(self._token))
-        T.SetBorderToken(self, "border")
+        if surface then
+            local r = T.Resolve(surface)
+            self._bg:SetColorTexture(T.C4(r.fill))
+            T.SetEdge(self, r.edge)
+        else
+            self._bg:SetColorTexture(T.RGBA(look))
+            T.SetBorderToken(self, "border")
+        end
     end
+    p:Paint()
     T.Watch(p)
     return p
 end
@@ -219,7 +233,7 @@ function U.Window(name, opts)
     w:SetClampedToScreen(true)
     w:EnableMouse(true)
     w:Hide()
-    w._bg = T.Fill(w, "BACKGROUND", "surface0", 0.97)
+    w._bg = T.Fill(w, "BACKGROUND", "surface0", 0.97)   -- a touch of the world through it
     w._bg:SetAllPoints()
     T.TokenBorder(w, "border")
     T.Shadow(w, 12)
@@ -259,11 +273,13 @@ function U.Window(name, opts)
 
     function w:SetTitle(s) title:SetText(s or "") end
     function w:Paint()
-        self._bg:SetColorTexture(T.RGBA("surface0", 0.97))
-        bar._bg:SetColorTexture(T.RGBA("titleBar"))
-        rule:SetColorTexture(T.RGBA("divider"))
-        title:SetTextColor(T.RGBA("text"))
-        T.SetBorderToken(self, "border")
+        local r = T.Resolve(T.LOOK.window)
+        local c1, c2, c3 = T.C4(r.fill)
+        self._bg:SetColorTexture(c1, c2, c3, 0.97)
+        bar._bg:SetColorTexture(T.C4(r.titleBar))
+        rule:SetColorTexture(T.C4(r.divider))
+        title:SetTextColor(T.C4(r.title))
+        T.SetEdge(self, r.edge)
     end
     T.Watch(w)
     return w
@@ -291,7 +307,7 @@ function U.ColorSwatch(parent, get, set, hasAlpha)
     U.Init(b)
 
     function b:Paint()
-        if self._hover then T.SetBorderToken(self, "text") else T.SetBorderToken(self, "borderStrong") end
+        T.SetEdge(self, T.Resolve(T.LOOK.swatch, self).edge)
     end
     function b:Refresh()
         local r, g, bl, a = get()

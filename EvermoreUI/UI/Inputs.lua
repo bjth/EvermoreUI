@@ -13,24 +13,25 @@ local T = EV.Theme
 local U = EV.UI
 local floor, max, min = math.floor, math.max, math.min
 
---- A themed edit box: sunk well, strong edge, accent edge on focus.
+--- A themed edit box, painted through T.LOOK.input: sunk well, strong edge,
+--- accent edge on focus.
+local INPUT = T.LOOK.input
 local function Field(parent, width, height)
     local e = CreateFrame("EditBox", nil, parent)
     e:SetSize(width or 190, height or U.HEIGHT)
     e:SetAutoFocus(false)
     e:SetFont(T.FontPath(), T.SIZE.body, "")
-    e:SetTextInsets(10, 10, 0, 0)
+    e:SetTextInsets(INPUT.inset, INPUT.inset, 0, 0)
     e._fill = T.Fill(e, "BACKGROUND", "surfaceSunk")
     e._fill:SetAllPoints()
     T.TokenBorder(e, "borderStrong")
     U.Init(e)
     function e:Paint()
-        e._fill:SetColorTexture(T.RGBA(self._hover and not self:HasFocus() and "surface1" or "surfaceSunk"))
-        if self:HasFocus() then T.SetBorderToken(self, "accent")
-        elseif self._hover then T.SetBorderColor(self, T.Mix("borderStrong", "text", 0.35))
-        else T.SetBorderToken(self, "borderStrong") end
-        self:SetTextColor(T.RGBA("text"))
-        if self._ph then self._ph:SetTextColor(T.RGBA("textDisabled")) end
+        self._focus = self:HasFocus()
+        local r = U.PaintBox(self, self._fill, INPUT)
+        self:SetTextColor(T.C4(r.text))
+        if self._ph then self._ph:SetTextColor(T.C4(r.placeholder)) end
+        if self._glyph then self._glyph:SetVertexColor(T.C4(r.glyph)) end
     end
     e:HookScript("OnEnter", function(self) self._hover = true; self:Paint(); self:ShowTip() end)
     e:HookScript("OnLeave", function(self) self._hover = false; self:Paint(); self:HideTip() end)
@@ -47,8 +48,8 @@ U.Field = Field
 function U.Input(parent, width, placeholder, onCommit)
     local e = Field(parent, width)
     local ph = T.Font(e, T.SIZE.body, false, 1)
-    ph:SetPoint("LEFT", 10, 0)
-    ph:SetPoint("RIGHT", -10, 0)
+    ph:SetPoint("LEFT", INPUT.inset, 0)
+    ph:SetPoint("RIGHT", -INPUT.inset, 0)
     ph:SetText(placeholder or "")
     e._ph = ph
 
@@ -98,7 +99,9 @@ function U.SearchBox(parent, width, onSearch, placeholder)
     local basePaint = e.Paint
     function e:Paint()
         basePaint(self)
-        glass:SetVertexColor(T.RGBA(self:HasFocus() and "accent" or "textMuted"))
+        -- The glass takes the edge's colour while focused, the glyph's otherwise.
+        local r = T.Resolve(INPUT, self)
+        glass:SetVertexColor(T.C4(self._focus and r.edge or r.glyph))
     end
     e:Paint()
     return e
@@ -108,6 +111,8 @@ end
 --  Slider: track, accent fill, square thumb with a halo, editable value.
 --  Drag, click to jump, mouse wheel steps.
 --------------------------------------------------------------------------------
+local SLIDER = T.LOOK.slider
+
 function U.Slider(parent, minV, maxV, step, get, set, fmt, width)
     step = step or 1
     local f = CreateFrame("Frame", nil, parent)
@@ -127,10 +132,10 @@ function U.Slider(parent, minV, maxV, step, get, set, fmt, width)
     track:EnableMouseWheel(true)
 
     local bar = T.Fill(track, "BACKGROUND", "surface3")
-    bar:SetHeight(4)
+    bar:SetHeight(SLIDER.track)
     bar:SetPoint("LEFT"); bar:SetPoint("RIGHT")
     local fill = T.Fill(track, "BORDER", "accent")
-    fill:SetHeight(4)
+    fill:SetHeight(SLIDER.track)
     fill:SetPoint("LEFT", bar, "LEFT")
     local halo = T.Fill(track, "ARTWORK", "surface0", 1, 0)
     local thumb = T.Fill(track, "ARTWORK", "accent", 1, 1)
@@ -174,12 +179,15 @@ function U.Slider(parent, minV, maxV, step, get, set, fmt, width)
 
     function f:Paint()
         local big = self._hover or self._dragging
-        thumb:SetSize(big and 14 or 12, big and 14 or 12)
-        halo:SetSize(big and 18 or 16, big and 18 or 16)
-        thumb:SetColorTexture(T.RGBA("accent"))
-        fill:SetColorTexture(T.RGBA("accent"))
-        bar:SetColorTexture(T.RGBA(self._hover and "borderStrong" or "surface3"))
-        halo:SetColorTexture(T.RGBA("surface0"))
+        local t = big and SLIDER.thumbHover or SLIDER.thumb
+        local h = big and SLIDER.haloHover or SLIDER.halo
+        thumb:SetSize(t, t)
+        halo:SetSize(h, h)
+        local r = T.Resolve(SLIDER, self)
+        thumb:SetColorTexture(T.C4(r.thumb))
+        fill:SetColorTexture(T.C4(r.fill))
+        bar:SetColorTexture(T.C4(r.bar))
+        halo:SetColorTexture(T.C4(r.halo))
     end
 
     track:SetScript("OnMouseDown", function(self, btn)
@@ -251,12 +259,13 @@ function U.Stepper(parent, minV, maxV, step, get, set, fmt, width)
         if step >= 1 then return tostring(floor(v + 0.5)) end
         return (("%.2f"):format(v):gsub("0+$", ""):gsub("%.$", ""))
     end
+    local lo, hi, st = {}, {}, {}
     function f:Paint()
-        local r, g, b = T.RGBA("text")
-        local dr, dg, db = T.RGBA("textDisabled")
         local atMin, atMax = current and current <= minV, current and current >= maxV
-        mg:SetColor(atMin and dr or r, atMin and dg or g, atMin and db or b)
-        pg:SetColor(atMax and dr or r, atMax and dg or g, atMax and db or b)
+        st.disabled = atMin
+        mg:SetColor(T.C4(T.Resolve(T.LOOK.stepper, st, lo).glyph))
+        st.disabled = atMax
+        pg:SetColor(T.C4(T.Resolve(T.LOOK.stepper, st, hi).glyph))
     end
     local function Show()
         if not input:HasFocus() then input:SetText(Format(current)) end
