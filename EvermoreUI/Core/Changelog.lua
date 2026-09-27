@@ -18,6 +18,12 @@ EvermoreUI.CHANGELOG = {
                 "**Reactive abilities** glow while they're usable: Overpower, Revenge, Execute, Riposte, Counterattack, Mongoose Bite and Hammer of Wrath to start with, and any cooldown can be switched on.",
                 "**Refresh window**: a tracked buff or debuff lights up for its last part (30% by default) or last few seconds, so you know when re-casting wastes nothing. Works in combat.",
             } },
+            { title = "Changed", items = {
+                "**One look for every control.** Our buttons, boxes, tabs, lists and scroll bars, and Blizzard's own once skinned, now come from the same recipe, so a skinned window's buttons match ours in every state. Close buttons turn red on hover, the selected tab and window titles are gold, a greyed-out control shows it in its own colours rather than fading, and icon wells on the action bars, bags and quest items are all the same.",
+            } },
+            { title = "Fixes", items = {
+                "Parts of the options window and edit mode could stop following a contrast or colour change partway through a session, until a reload.",
+            } },
         },
     },
     {

@@ -39,6 +39,18 @@ meter in our style, and cooldown icons that tell you more.
     part (30% by default) or last few seconds, so you know when re-casting
     wastes nothing. Works in combat.
 
+### Changed
+- **One look for every control.** Our buttons, boxes, tabs, lists and
+  scroll bars, and Blizzard's own once skinned, now come from the same
+  recipe, so a skinned window's buttons match ours in every state. Close
+  buttons turn red on hover, the selected tab and window titles are gold,
+  a greyed-out control shows it in its own colours rather than fading, and
+  icon wells on the action bars, bags and quest items are all the same.
+
+### Fixes
+- Parts of the options window and edit mode could stop following a
+  contrast or colour change partway through a session, until a reload.
+
 ## 0.12.5
 
 Your own cooldowns: the bars now take what the game's Cooldown Manager
