@@ -1005,8 +1005,11 @@ P{
                 k:Size(create, nil, h)
                 k:Size(all, nil, h)
                 k:Size(count, nil, h)
+                -- The template puts Decrement 6 off the box and Increment
+                -- flush against it, so the box sat off centre between them.
+                if count.IncrementButton then k:Move(count.IncrementButton, "LEFT", count, "RIGHT", 6, 0) end
                 k:Move(create, "RIGHT", foot, "RIGHT", -PROF.pad, 0)
-                k:Move(count, "RIGHT", create, "LEFT", -(arrow + g), 0)
+                k:Move(count, "RIGHT", create, "LEFT", -(6 + arrow + g), 0)
                 k:Move(all, "RIGHT", count, "LEFT", -(6 + arrow + g), 0)
             end
             Controls()
