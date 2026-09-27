@@ -54,6 +54,12 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("PLAYER_REGEN_ENABLED")
 ev:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
+        -- Whether this account used EvermoreUI before setup existed, decided
+        -- once, before What's New marks this version as seen.
+        if EV.InstallPending() then
+            local s = State()
+            if s.returning == nil then s.returning = EV.DB:GetGlobal().lastSeenVersion ~= nil end
+        end
         -- After the login burst, ahead of the What's New check (which stands
         -- aside while setup is pending).
         C_Timer.After(2.5, Check)

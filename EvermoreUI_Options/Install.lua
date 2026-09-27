@@ -131,12 +131,12 @@ local function ApplyLayout(role)
     local def = LAYOUTS[role]
     if not def or InCombatLockdown() then return end
     local MV = EV.Movers
-    undo = { snap = MV:Snapshot(), role = State().role }
+    local np = Module("Nameplates")
+    undo = { snap = MV:Snapshot(), role = State().role, tankMode = np and np.db.tankMode }
     for _, key in ipairs(LAYOUT_KEYS) do
         if MV:Get(key) then MV:Reset(key) end
     end
     if def.place then def.place() end
-    local np = Module("Nameplates")
     if np then
         np.db.tankMode = def.tankMode
         if np:IsEnabled() and np.Refresh then np:Refresh() end
@@ -148,6 +148,11 @@ local function UndoLayout()
     if not undo or InCombatLockdown() then return end
     EV.Movers:Restore(undo.snap)
     State().role = undo.role
+    local np = Module("Nameplates")
+    if np and undo.tankMode then
+        np.db.tankMode = undo.tankMode
+        if np:IsEnabled() and np.Refresh then np:Refresh() end
+    end
     undo = nil
 end
 
@@ -160,8 +165,7 @@ STEPS[#STEPS + 1] = { key = "welcome", title = L["Welcome"],
     heading = L["Welcome to EvermoreUI"],
     sub = L["A complete interface for World of Warcraft: Forever. A few quick choices and you're ready to play."],
     build = function(p)
-        local returning = EV.DB:GetGlobal().lastSeenVersion ~= nil
-        if returning then
+        if State().returning then
             p:Banner(L["You've used EvermoreUI before, so your settings are all still here. Every step shows what you have now, and nothing changes unless you change it."])
         end
         p:Note(L["EvermoreUI replaces most of the game's interface: unit frames, nameplates, action bars, cooldowns, bags, chat, the minimap and more, drawn in one style and set up for how Forever plays."])
@@ -324,7 +328,8 @@ STEPS[#STEPS + 1] = { key = "layout", title = L["Layout"],
     heading = L["A layout for how you play"],
     sub = L["A starting point for where things sit. Nothing moves until you press Use this layout, and Undo puts everything back."],
     build = function(p)
-        local pick = State().role or "damage"
+        I.layoutPick = I.layoutPick or State().role or "damage"
+        local pick = I.layoutPick
         p:Section(L["Your role"])
         local cells = {}
         for _, role in ipairs(LAYOUT_ORDER) do
@@ -334,11 +339,11 @@ STEPS[#STEPS + 1] = { key = "layout", title = L["Layout"],
                    build = function(host)
                        return W.RadioGroup(host, { { value = role, text = "" } },
                            function() return pick end,
-                           function(v) pick = v; I.RefreshPage() end)
+                           function(v) I.layoutPick = v; I.RebuildPages() end)
                    end }
         end
         p:Spacer(4)
-        local blurb = p:Note(LAYOUTS[pick].blurb)
+        p:Note(LAYOUTS[pick].blurb)
         p:Row{ type = "button", text = L["Place my frames for this role"], label = L["Use this layout"], width = 150, style = "accent",
                tooltip = L["Resets the party and raid frames, player and target frames and cooldown bars, then places them for this role. Everything else stays where it is."],
                onClick = function() ApplyLayout(pick); I.RefreshPage() end }
@@ -357,10 +362,6 @@ STEPS[#STEPS + 1] = { key = "layout", title = L["Layout"],
                        EV:OpenOptions()
                        if EV.Options.ShowPage then EV.Options:ShowPage("clickcast") end
                    end }
-        end
-        -- The blurb follows the radio without rebuilding the page.
-        I.onRefresh = function()
-            if blurb and blurb.text then blurb.text:SetText(LAYOUTS[pick].blurb) end
         end
     end }
 
@@ -434,6 +435,8 @@ STEPS[#STEPS + 1] = { key = "done", title = L["Done"],
                end }
         p:Row{ type = "button", text = L["Something broken? /evui bug"], label = L["Bug report"], width = 150,
                onClick = function() EV.Report:Show() end }
+        p:Row{ type = "button", text = L["What changed in this version: /evui new"], label = L["What's new"], width = 150,
+               onClick = function() I.Finish(false, true); EV.WhatsNew.Show() end }
     end }
 
 I.STEPS = STEPS
@@ -591,7 +594,6 @@ end
 function I.RefreshPage()
     local entry = pages[STEPS[current].key]
     if entry then entry.builder:Refresh() end
-    if I.onRefresh and STEPS[current].key == "layout" then I.onRefresh() end
 end
 
 --- Drop built pages, e.g. after a profile change: every value may be new.
@@ -620,6 +622,7 @@ end
 
 function I:Show(step)
     if InCombatLockdown() then return end
+    I.layoutPick = nil
     Build()
     I.finishing = false
     -- A built page holds the values it was built with; start fresh each time.
