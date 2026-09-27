@@ -153,7 +153,12 @@ function T.Watch(obj, fn) T.watchers[obj] = fn or true; return obj end
 --- regions rather than objects with a :Paint()). Kept for good: use it for
 --- long-lived frames (windows, edit mode), not per-row pools.
 local themed = {}
-T.Watch({ Paint = function() for _, fn in ipairs(themed) do pcall(fn) end end })
+-- Held on T as well as in T.watchers. That table has weak keys, and a runner
+-- nothing else held (a bare table, or a chunk local no function refers to)
+-- was collected at the first full GC, after which no OnTheme callback ever
+-- ran again.
+T.onThemeRunner = { Paint = function() for _, fn in ipairs(themed) do pcall(fn) end end }
+T.Watch(T.onThemeRunner)
 function T.OnTheme(fn)
     themed[#themed + 1] = fn
     fn()
