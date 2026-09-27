@@ -829,6 +829,46 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  3c. Minimal tab        MinimalTabTemplate: the settings panel's Game and
+--     AddOns tabs and the graphics page's Base / Raid and Battleground tabs.
+--     Left/Middle/Right take Options_Tab_* atlases, swapped in UpdateAtlas on
+--     every hover, select and enable; the label's font object is swapped with
+--     them and dropped two pixels when selected (MinimalTabMixin:OnSelected).
+--     It shares Left/Middle/Right/Text with a panel button, which claimed it
+--     and drew a button with no selected state. Ours: the window tab face,
+--     open at the bottom, standing on the rule under it; the label centred,
+--     body text when chosen and muted otherwise.
+--------------------------------------------------------------------------------
+R{
+    name = "minimalTab",
+    type = "Button",
+    keys = { "Left", "Middle", "Right", "Text" },
+    test = function(b) return rawget(b, "upMiddleTexture") ~= nil and rawget(b, "selectedMiddleTexture") ~= nil end,
+    paint = function(tab, p)
+        S.StripArt(tab.Left); S.StripArt(tab.Middle); S.StripArt(tab.Right)
+        local d = S.D(tab)
+        local Face = S.TabFace(tab, "bottom")
+        -- The face's black ring is for an icon; a text tab is the face alone.
+        if d.tabInset then d.tabInset:Hide() end
+        p:Label(tab.Text, false)
+        local function Sync()
+            local on = type(tab.IsSelected) == "function" and tab:IsSelected() or false
+            Face(on, d.hover)
+            if tab.Text then
+                p:Reseat(tab.Text, { { "CENTER", 0, 0 } })
+                tab.Text:SetTextColor(T.C4(T.Resolve(LOOK.tab, { on = on, hover = d.hover }).text))
+            end
+        end
+        p:After("OnSelected", Sync)
+        p:After("UpdateAtlas", Sync)
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
+        S.Own(Sync, tab, tab.Text)
+        Sync()
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  4. Panel button        UIPanelButtonTemplate, 284 inherits
 --     The single biggest win in the game's UI.
 --------------------------------------------------------------------------------
@@ -2870,6 +2910,46 @@ R{
         for _, kid in ipairs(ok and kids or {}) do
             if type(kid) == "table" then HoverTint(rawget(kid, "HoverBackground")) end
         end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9q. Graphics quality   SettingsAdvancedQualitySectionTemplate (Graphics.xml):
+--     the graphics page's quality block. A "Graphics Quality" heading at its
+--     top left (an unnamed font string), Base and Raid and Battleground tabs
+--     (minimalTab) hanging from its top right at y=+10, 37 tall, and an
+--     OptionsFrame UniqueCorners nine-slice from x=-12 y=-14: the box started
+--     halfway down the tabs and its top line ran through the heading. Ours:
+--     the heading in gold; the nine-slice's art gone and a box of ours whose
+--     top is the tabs' bottom, so the tabs stand on it and the chosen one
+--     opens into it, down to where Blizzard's box ended. Nothing of
+--     Blizzard's moves: the box is ours, anchored to what is there.
+--------------------------------------------------------------------------------
+R{
+    name = "qualitySection",
+    keys = { "NineSlice", "BaseTab", "RaidTab", "BaseQualityControls" },
+    paint = function(f, p)
+        p:FadeSlice(f.NineSlice)
+        for _, r in ipairs(S.Regions(f)) do
+            if not S.ours[r] and r.GetObjectType and r:GetObjectType() == "FontString" then
+                p:Label(r, "title", true)
+            end
+        end
+        local d = S.D(f)
+        local tab = f.RaidTab or f.BaseTab
+        if not d.box then
+            d.box = S.Ours(CreateFrame("Frame", nil, f))
+            d.box:EnableMouse(false)
+            d.box:SetFrameLevel(f:GetFrameLevel())
+            local one = EV.Pixel:One(f)
+            d.box:SetPoint("LEFT", f.NineSlice, "LEFT")
+            d.box:SetPoint("RIGHT", f.NineSlice, "RIGHT")
+            d.box:SetPoint("BOTTOM", f.NineSlice, "BOTTOM")
+            -- A pixel up into the tabs: the chosen tab's face covers the line
+            -- under it, and opens into the box.
+            d.box:SetPoint("TOP", tab, "BOTTOM", 0, one)
+        end
+        p:Border(LOOK.inset.rest.edge, nil, d.box)
     end,
 }
 
