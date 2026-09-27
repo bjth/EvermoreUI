@@ -164,7 +164,7 @@ function M:UpdateStats(which)
     if gold and gold:IsShown() then
         local cfg = self.db.gold
         local copper = GetMoney and GetMoney() or 0
-        if cfg.total and EV.Alts then copper = EV.Alts:Money() end
+        if cfg.total and EV.Alts and EV.Alts:Settings().track then copper = EV.Alts:Money() end
         -- Whole gold once there's any; the tooltip has the exact figures.
         if copper >= 10000 then copper = floor(copper / 10000) * 10000 end
         local label = cfg.showLabel and (Colour(cfg.total and L["All"] or L["Gold"], "textMuted", true) .. " ") or ""

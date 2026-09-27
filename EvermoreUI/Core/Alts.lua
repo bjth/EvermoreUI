@@ -39,6 +39,12 @@ EV.Alts = A
 
 local time = time
 local NUM_BAGS = NUM_BAG_SLOTS or 4
+local BI = Enum.BagIndex or {}
+-- The reagent bag, when the client has one; the first and last classic bank
+-- bag slots, for a bank without tabs.
+local REAGENT_BAG = BI.ReagentBag
+local BANK_BAG_FIRST = BI.BankBag_1 or (NUM_BAGS + 1 + (REAGENT_BAG and 1 or 0))
+local BANK_BAG_LAST = BI.BankBag_7 or (BANK_BAG_FIRST + (NUM_BANKBAGSLOTS or 7) - 1)
 local MAIL_ATTACH = ATTACHMENTS_MAX_RECEIVE or 16
 local SEND_ATTACH = ATTACHMENTS_MAX_SEND or 12
 local BT = Enum.BankType or { Character = 0, Account = 2 }
@@ -141,7 +147,8 @@ local function ScanBags()
     if not Tracking() then return end
     local items = Items()
     local bags = {}
-    for bag = 0, NUM_BAGS + 1 do ReadContainer(bag, bags) end   -- + 1: the reagent bag
+    for bag = 0, NUM_BAGS do ReadContainer(bag, bags) end
+    if REAGENT_BAG then ReadContainer(REAGENT_BAG, bags) end
     items.bags = bags
     local worn = {}
     for slot = 1, 19 do
@@ -155,30 +162,37 @@ end
 
 local atBank = false
 
+--- The bank's tab containers. nil: this client has no tabbed bank. false:
+--- it has, but it can't be looked at right now (and so must not be read as
+--- empty).
 local function TabIDs(bankType)
     if not (C_Bank and C_Bank.FetchPurchasedBankTabIDs) then return nil end
     if C_Bank.CanViewBank then
         local ok, can = pcall(C_Bank.CanViewBank, bankType)
-        if ok and not can then return nil end
+        if not ok or not can then return false end
     end
     local ok, ids = pcall(C_Bank.FetchPurchasedBankTabIDs, bankType)
-    return ok and type(ids) == "table" and ids or nil
+    if not ok or type(ids) ~= "table" then return false end
+    return ids
 end
 
 local function ScanBank()
     if not (atBank and Tracking()) then return end
     local items = Items()
-    local bank = {}
     local ids = TabIDs(BT.Character)
-    if ids and #ids > 0 then
-        for _, bag in ipairs(ids) do ReadContainer(bag, bank) end
-    else
-        -- An older bank: the bank itself and its bag slots.
-        if BANK_CONTAINER then ReadContainer(BANK_CONTAINER, bank) end
-        for bag = NUM_BAGS + 2, NUM_BAGS + 1 + (NUM_BANKBAGSLOTS or 7) do ReadContainer(bag, bank) end
+    -- A tabbed bank we can't see right now: keep what we had.
+    if ids ~= false then
+        local bank = {}
+        if ids and #ids > 0 then
+            for _, bag in ipairs(ids) do ReadContainer(bag, bank) end
+        else
+            -- An older bank: the bank itself and its bag slots.
+            if BANK_CONTAINER then ReadContainer(BANK_CONTAINER, bank) end
+            for bag = BANK_BAG_FIRST, BANK_BAG_LAST do ReadContainer(bag, bank) end
+        end
+        items.bank = bank
+        items.at.bank = time()
     end
-    items.bank = bank
-    items.at.bank = time()
 
     local acct = TabIDs(BT.Account)
     if acct then
@@ -212,8 +226,8 @@ local function ScanMail()
         end
         if has and (not cod or cod == 0) then
             for a = 1, MAIL_ATTACH do
-                local _, id, _, qty = GetInboxItem(i, a)
-                if id then Add(mail, id, qty or 1) end
+                local _, id, _, qty, _, _, isCurrency = GetInboxItem(i, a)
+                if id and not isCurrency then Add(mail, id, qty or 1) end
             end
         end
     end
@@ -462,7 +476,8 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
         atBank = true
         Soon("bank", ScanBank, 0.5)
     elseif event == "BANKFRAME_CLOSED" then
-        if atBank then ScanBank() end
+        -- No scan here: by now the bank may already be out of reach, and the
+        -- opening and slot-change scans have it.
         atBank = false
     elseif event == "PLAYERBANKSLOTS_CHANGED" or event == "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED"
         or event == "BANK_TABS_CHANGED" then
