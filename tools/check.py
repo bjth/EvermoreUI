@@ -7,6 +7,8 @@
   * EvermoreUI/Core/Changelog.lua is what CHANGELOG.md generates
   * the palette and every control Look pass their contrast audit, if lua5.1
     is on the PATH (tools/looks/audit.lua)
+  * the skins walk keeps to its budget and the pack layer's hooks go on once,
+    if lua5.1 is on the PATH (tools/skins/walk_test.lua)
   * no module paints chrome from raw surface or border tokens
     (tools/lint_tokens.py)
   * every skins part still matches something in the surveyed client and the
@@ -87,6 +89,17 @@ def check_looks():
         failures.append("looks audit:\n" + (r.stdout + r.stderr).strip())
 
 
+def check_skins_walk():
+    lua = shutil.which("lua5.1")
+    if not lua:
+        print("lua5.1 not found, skipping the skins walk test")
+        return
+    r = subprocess.run([lua, os.path.join("tools", "skins", "walk_test.lua")], cwd=ROOT,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        failures.append("skins walk test:\n" + (r.stdout + r.stderr).strip())
+
+
 def check_tokens():
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import lint_tokens  # noqa: E402
@@ -127,6 +140,7 @@ check_tocs()
 check_lua()
 check_changelog()
 check_looks()
+check_skins_walk()
 check_tokens()
 check_coverage()
 for f in failures:
