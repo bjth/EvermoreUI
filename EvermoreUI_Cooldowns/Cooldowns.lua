@@ -121,6 +121,7 @@ local OVERLAY_ATLAS = "UI-HUD-CoolDownManager-IconOverlay"
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 
 local state = setmetatable({}, { __mode = "k" })   -- item frame -> our notes
+ns.state = state
 local hookedViewer = setmetatable({}, { __mode = "k" })
 local holders = {}                                  -- bar key -> our frame
 local busy = {}                                     -- bar key -> laying out now
@@ -335,6 +336,8 @@ local function Skin(f, def)
         f:HookScript("OnShow", function() Relayout(def) end)
         f:HookScript("OnHide", function() Relayout(def) end)
     end
+    -- Border, crop, swipe and the glows (Look.lua).
+    if ns.LookItem then pcall(ns.LookItem, f, s) end
     return s
 end
 
@@ -763,6 +766,7 @@ function M:OnEnable()
         EV:Print(L["Switched on the game's Cooldown Manager, which the Cooldowns bars are built on."])
     end
 
+    if ns.EnableLook then ns.EnableLook() end
     inCombat = InCombatLockdown() and true or false
     if C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer") then
         Attach()
@@ -818,4 +822,5 @@ end
 function M:Refresh()
     for _, s in pairs(state) do s.fontSize = nil end
     self:LayoutAll()
+    if ns.LookAll then ns.LookAll() end
 end

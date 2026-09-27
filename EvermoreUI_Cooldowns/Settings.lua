@@ -371,3 +371,114 @@ function ns.BuffList(p, b, rebuild)
                if v ~= "" and M.AddBarBuff(b, v) then Refresh(); rebuild(true) end
            end }
 end
+
+--------------------------------------------------------------------------------
+--  Look, procs, usable and the refresh window (Look.lua): one table for
+--  every bar, so the icons read as one set.
+--------------------------------------------------------------------------------
+local PROC_STYLES = {
+    { value = "pulse",    text = L["Pulsing border"] },
+    { value = "border",   text = L["Solid border"] },
+    { value = "blizzard", text = L["Blizzard's glow"] },
+    { value = "none",     text = L["Nothing"] },
+}
+local REFRESH_MODES = {
+    { value = "percent",  text = L["Last part of the aura"] },
+    { value = "seconds",  text = L["Last few seconds"] },
+    { value = "blizzard", text = L["Blizzard's pandemic effect"] },
+    { value = "off",      text = L["Off"] },
+}
+local HIGHLIGHT = {
+    { value = "warning", text = L["Amber"] },
+    { value = "danger",  text = L["Red"] },
+    { value = "success", text = L["Green"] },
+    { value = "title",   text = L["Gold"] },
+    { value = "accent",  text = L["Accent"] },
+}
+
+local function LookRow(key)
+    local M = ns.module
+    return function() return M.db.look[key] end, function(v) M.db.look[key] = v; Refresh() end
+end
+
+function ns.LookSettings(p)
+    local g, s
+    p:Section(L["Icons"])
+    g, s = LookRow("border")
+    p:Row{ type = "slider", text = L["Border"], min = 0, max = 4, step = 1,
+           fmt = function(v) return v == 0 and L["None"] or (v .. " px") end, get = g, set = s }
+    g, s = LookRow("borderColour")
+    p:Row{ type = "dropdown", text = L["Border colour"], width = 170, values = ns.LOOK_COLOURS, get = g, set = s,
+           disabled = function() return ns.module.db.look.border == 0 end }
+    g, s = LookRow("zoom")
+    p:Row{ type = "slider", text = L["Crop"], min = 0, max = 15, step = 1,
+           tooltip = L["How much of the icon's edge is trimmed. Blizzard's icons have a baked-in frame; around 8% takes it off."],
+           fmt = function(v) return v .. "%" end, get = g, set = s }
+    g, s = LookRow("swipe")
+    p:Row{ type = "slider", text = L["Cooldown darkness"], min = 20, max = 100, step = 5,
+           tooltip = L["How dark the sweep over an icon on cooldown is."],
+           fmt = function(v) return v .. "%" end, get = g, set = s }
+end
+
+function ns.ProcSettings(p)
+    local M = ns.module
+    local g, s
+    p:Section(L["When a spell lights up"])
+    p:Note(L["The game lights a spell up when a proc makes it ready or free. Pick how that shows on these icons."], 0.7)
+    g, s = LookRow("proc")
+    p:Row{ type = "dropdown", text = L["Proc"], width = 170, values = PROC_STYLES, get = g, set = s }
+    g, s = LookRow("procColour")
+    p:Row{ type = "dropdown", text = L["Colour"], width = 170, values = ns.LOOK_COLOURS, get = g, set = s,
+           disabled = function() return M.db.look.proc == "blizzard" or M.db.look.proc == "none" end }
+
+    p:Section(L["Reactive abilities"])
+    p:Note(L["Overpower after a dodge, Revenge after a block, Execute below 20%, Riposte after a parry: Forever keeps these as abilities that only become usable, so they glow while they are. Pick any cooldown on the grid to switch it on or off."], 0.7)
+    g, s = LookRow("usableGlow")
+    p:Row{ type = "toggle", text = L["Glow while usable"], get = g, set = s }
+    local _, class = UnitClass("player")
+    for id, on in pairs(M.db.usable[class] or {}) do
+        if on then
+            local name = M.SpellName(id)
+            if name then
+                p:Row{ type = "button", text = name, label = L["Remove"], width = 90,
+                       onClick = function()
+                           ns.SetUsableGlow(id, false)
+                           Refresh()
+                           if EV.DesignerUI then EV.DesignerUI:RebuildInspector(true) end
+                       end }
+            end
+        end
+    end
+end
+
+function ns.RefreshSettings(p)
+    local M = ns.module
+    local g, s
+    p:Section(L["Refresh window"])
+    p:Note(L["When re-casting a buff or debuff you're tracking wastes nothing: the icon lights up for the last part of its duration. Works in combat; the timing never leaves the game's own code."], 0.7)
+    g, s = LookRow("refresh")
+    p:Row{ type = "dropdown", text = L["Show"], width = 200, values = REFRESH_MODES, get = g,
+           set = function(v) M.db.look.refresh = v; if ns.RefreshCurveChanged then ns.RefreshCurveChanged() end; Refresh() end }
+    p:Row{ type = "slider", text = L["Last part"], min = 10, max = 50, step = 5,
+           fmt = function(v) return v .. "%" end,
+           disabled = function() return M.db.look.refresh ~= "percent" end,
+           get = function() return M.db.look.refreshPct end,
+           set = function(v) M.db.look.refreshPct = v; if ns.RefreshCurveChanged then ns.RefreshCurveChanged() end end }
+    p:Row{ type = "slider", text = L["Last seconds"], min = 1, max = 10, step = 0.5, fmt = Seconds,
+           disabled = function() return M.db.look.refresh ~= "seconds" end,
+           get = function() return M.db.look.refreshSec end,
+           set = function(v) M.db.look.refreshSec = v; if ns.RefreshCurveChanged then ns.RefreshCurveChanged() end end }
+    g, s = LookRow("refreshColour")
+    p:Row{ type = "dropdown", text = L["Colour"], width = 170, values = HIGHLIGHT, get = g, set = s,
+           disabled = function() return M.db.look.refresh ~= "percent" and M.db.look.refresh ~= "seconds" end }
+end
+
+--- On one cooldown's inspector: glow while it's usable.
+function ns.IconUsable(p, spellID)
+    p:Section(L["Reactive"])
+    p:Row{ type = "toggle", text = L["Glow while it's usable"],
+           tooltip = L["For abilities that only become usable after something happens: Overpower, Revenge, Execute, Riposte and the like."],
+           disabled = function() return not ns.module.db.look.usableGlow end,
+           get = function() return ns.IsUsableGlow and ns.IsUsableGlow(spellID) or false end,
+           set = function(v) if ns.SetUsableGlow then ns.SetUsableGlow(spellID, v) end end }
+end

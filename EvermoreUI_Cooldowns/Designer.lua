@@ -612,6 +612,22 @@ function Elements()
         key = "timers", label = L["Linked timers"],
         Options = function(p) ns.TimerList(p, Rebuild) end,
     }
+    list[#list + 1] = {
+        key = "look", label = L["Icon look"],
+        sub = L["Border, crop and cooldown darkness, for every bar."],
+        Options = function(p) ns.LookSettings(p) end,
+        Reset = function() wipe(M.db.look); EV.DB.Merge(M.db.look, M.defaults.look); M:Refresh() end,
+    }
+    list[#list + 1] = {
+        key = "procs", label = L["Procs and reactives"], fresh = true,
+        sub = L["How a lit-up spell shows, and abilities that glow while usable."],
+        Options = function(p) ns.ProcSettings(p) end,
+    }
+    list[#list + 1] = {
+        key = "refresh", label = L["Refresh window"],
+        sub = L["When re-casting a tracked buff or debuff wastes nothing."],
+        Options = function(p) ns.RefreshSettings(p) end,
+    }
     for _, f in ipairs(ns.CustomFrames and ns.CustomFrames() or {}) do
         local frame = f
         list[#list + 1] = {
@@ -636,7 +652,7 @@ function Elements()
                 list[#list + 1] = {
                     key = key, label = Name(it.f) or L["Cooldown"], unlisted = true,
                     sub = L["Drag it on the grid to move it. Its bar's settings are in the list."],
-                    Options = function(p) ns.IconTimer(p, spell) end,
+                    Options = function(p) ns.IconTimer(p, spell); ns.IconUsable(p, spell) end,
                 }
             end
         end
@@ -675,7 +691,8 @@ EV.Designers:Register{
         local a = M:Arrangement(false)
         return { spec = M.SpecKey(), data = a and EV.CopyTable(a) or nil,
                  bars = EV.CopyTable(M.db.bars), timers = EV.CopyTable(M:Timers()),
-                 custom = EV.CopyTable(M:CustomList()), userBars = EV.CopyTable(M:UserBars()) }
+                 custom = EV.CopyTable(M:CustomList()), userBars = EV.CopyTable(M:UserBars()),
+                 look = EV.CopyTable(M.db.look), usable = EV.CopyTable(M.db.usable) }
     end,
     Restore = function(_, snap)
         if not snap then return end
@@ -699,6 +716,14 @@ EV.Designers:Register{
                 for i, t in ipairs(snap[field]) do list[i] = EV.CopyTable(t) end
             end
         end
+        for _, field in ipairs({ "look", "usable" }) do
+            if snap[field] then
+                wipe(M.db[field])
+                for k, v in pairs(EV.CopyTable(snap[field])) do M.db[field][k] = v end
+            end
+        end
+        if ns.UsableChanged then ns.UsableChanged() end
+        if ns.RefreshCurveChanged then ns.RefreshCurveChanged() end
         if ns.SyncUserBars then ns.SyncUserBars() end
         if ns.SyncCustom then ns.SyncCustom() end
         M:Refresh()
