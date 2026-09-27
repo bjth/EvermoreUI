@@ -195,6 +195,9 @@ local function Check()
     local since = g.lastSeenVersion
     g.lastSeenVersion = cur
     if g.whatsNew == false then return end
+    -- Setup is showing instead: its last page covers what a first install
+    -- needs, and an update in the middle of it can wait for /evui new.
+    if EV.InstallPending and EV.InstallPending() then return end
     -- A first install sees only the release it installed, not the history.
     local list = WN.Entries(since)
     if not since then

@@ -96,7 +96,7 @@ handlers.modules = function()
 end
 
 handlers.help = function()
-    EV:Print("/evui, /evui caps, /evui edit, /evui lock, /evui copy, /evui profile [name], /evui modules, /evui bug, /evui export, /evui import, /evui auras [target]")
+    EV:Print("/evui, /evui caps, /evui edit, /evui lock, /evui copy, /evui profile [name], /evui modules, /evui bug, /evui export, /evui import, /evui install, /evui auras [target]")
 end
 
 SLASH_EVERMOREUI1 = "/evui"

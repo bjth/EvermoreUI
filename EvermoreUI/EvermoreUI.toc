@@ -67,3 +67,4 @@ UI\Prompt.lua
 UI\Gallery.lua
 Core\Changelog.lua
 Core\WhatsNew.lua
+Core\Install.lua

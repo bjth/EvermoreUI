@@ -107,6 +107,10 @@ EV.Options:RegisterPage{
               tooltip = "/evui new",
               onClick = function() EV.Options:Toggle(); EV.WhatsNew.Show() end })
 
+        p:Row{ type = "button", text = L["Setup"], label = L["Run setup again"], width = 140,
+               tooltip = L["The first-run walkthrough: characters, look, modules, a layout for your role and the everyday conveniences. Also /evui install."],
+               onClick = function() EV.Options:Toggle(); EV:OpenInstaller(1) end }
+
         p:Section(L["Feedback"])
         p:Note(L["Found a bug or want something changed? The report collects your version, modules, other addons and any recent EvermoreUI errors, ready to paste into an issue."], 0.7)
         p:Row{ type = "button", text = L["Bug report"], label = L["Copy report"], width = 140,
