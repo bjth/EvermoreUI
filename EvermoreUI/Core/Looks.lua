@@ -79,6 +79,13 @@ L.buttonDanger = {
     focus    = { edge = "danger" },
     disabled = { fill = "surface1", edge = "border", text = "textDisabled" },
 }
+L.reset = {                                    -- a small "clear these filters" badge: copper while
+    glyphSize = 8, box = 16,                   -- there is something to clear, red under the mouse
+    rest     = { fill = "surface2", edge = "borderStrong", glyph = "accent" },
+    hover    = { fill = "danger", edge = "danger", glyph = "onAccent" },
+    pressed  = { fill = { "danger", k = 0.8 }, edge = "danger", glyph = "onAccent" },
+    disabled = { glyph = "textDisabled" },
+}
 L.close = {
     glyphSize = 10,
     rest     = { fill = "none", edge = "none", glyph = "textMuted" },

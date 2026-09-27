@@ -26,6 +26,32 @@ if not S then return end
 
 local P = S.Pack
 
+--- A square button over the map in our button look: its art faded (all of
+--- it, or all but `keep`), our fill and edge, and a chevron pointing `dir`
+--- if it has one. Once per button. Returns its data and a painter.
+local function OverlayButton(k, b, dir, keep)
+    if not S.Alive(b) then return end
+    local d = S.D(b)
+    local p = S.PainterFor(b)
+    if d.overlay then return d, p end
+    d.overlay = true
+    S.claimed[b] = S.claimed[b] or "pack"
+    S.Blank(b)
+    p:Fade(nil, keep)
+    local rest = T.LOOK.button.rest
+    p:Fill(rest.fill)
+    p:Border(rest.edge)
+    local opts = { on = function() return b.isActive == true end }
+    if dir then
+        d.chev = S.Ours(T.Chevron(b, 5))
+        d.chev:SetPoint("CENTER")
+        d.chev:Point(dir)
+        opts.chev = d.chev
+    end
+    p:States(T.LOOK.button, opts)
+    return d, p
+end
+
 --------------------------------------------------------------------------------
 --  Shared bits
 --------------------------------------------------------------------------------
@@ -277,6 +303,29 @@ P{
         -- sweep can run before any of them exist. Re-dress on show.
         if f.ScrollContainer then k:Dress(f.ScrollContainer) end
         if f.NavBar then k:Dress(f.NavBar) end
+
+        -- The quest log's open and close arrow at the canvas's bottom right
+        -- (WorldMapSidePanelToggleTemplate): two buttons, one shown at a
+        -- time, each QuestCollapse art on a corner shadow. Ours: a button
+        -- with a chevron the way the panel will go.
+        local toggle = f.SidePanelToggle
+        if toggle then
+            OverlayButton(k, toggle.OpenButton, "left")
+            OverlayButton(k, toggle.CloseButton, "right")
+        end
+
+        -- The waypoint pin button (WorldMapTrackingPinButtonTemplate): a
+        -- minimap-style gold ring round the pin. The pin is the content and
+        -- stays; the ring, the backing and the glow go, and SetActive, which
+        -- showed the glow, shows our "on" instead.
+        local pin = f.WorldMapTrackingPinButton
+        if pin then
+            local d, p = OverlayButton(k, pin, nil, { pin.Icon, pin.IconOverlay })
+            if p and not d.pinHooked then
+                d.pinHooked = true
+                k:After(pin, "SetActive", function() if d.Repaint then d.Repaint() end end)
+            end
+        end
     end,
 }
 

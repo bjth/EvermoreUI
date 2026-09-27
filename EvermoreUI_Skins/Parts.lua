@@ -491,6 +491,39 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  1c. Reset button       UIResetButtonTemplate: the red disc with a yellow X
+--     Shown on a filter button while any filter is off its default (the map's
+--     filter button, the auction house, the collections). A small box of ours
+--     with the close glyph in copper, red under the mouse (LOOK.reset). The
+--     button is 23px square; the box is drawn inside it, centred, at the
+--     Look's size, so the hit area stays Blizzard's.
+--------------------------------------------------------------------------------
+R{
+    name = "resetButton",
+    type = "Button",
+    art  = { normal = "auctionhouse%-ui%-filter%-redx" },
+    paint = function(b, p)
+        local RL = LOOK.reset
+        S.Blank(b)
+        p:Fade()
+        local d = S.D(b)
+        if not d.box then
+            d.box = S.Ours(CreateFrame("Frame", nil, b))
+            d.box:SetSize(RL.box, RL.box)
+            d.box:SetPoint("CENTER")
+            d.box:EnableMouse(false)
+        end
+        p:Fill(RL.rest.fill, nil, nil, d.box)
+        p:Border(RL.rest.edge, nil, d.box)
+        p:Glyph("close", RL.glyphSize, RL.rest.glyph)
+        local boxFill = S.D(d.box).fill
+        p:States(RL, { edgesOn = d.box, after = function(r)
+            if boxFill and r.fill then boxFill:SetColorTexture(T.C4(r.fill)) end
+        end })
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  2. Bottom tab          PanelTabButtonTemplate, 19 inherits
 --     keys: Left/Middle/Right + LeftActive/MiddleActive/RightActive
 --------------------------------------------------------------------------------
@@ -798,6 +831,49 @@ R{
         })
         p:After("OnMenuOpened", function() if d.Repaint then d.Repaint() end end)
         p:After("OnMenuClosed", function() if d.Repaint then d.Repaint() end end)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  6b. Icon dropdown      a DropdownButton that is only an icon
+--     UIPanelArrowDropdownButtonTemplate, UIPanelIconDropdownButtonTemplate
+--     (the quest log's settings cog) and the world map's filter button
+--     (WorldMapTrackingOptionsButtonTemplate). Two of them draw their icon
+--     from common-dropdown-a-button, which S.ORNATE rightly takes down on a
+--     real dropdown, where it is the arrow the dropdown part replaces, and
+--     wrongly took off these, where it is the whole button: the map's filter
+--     button was invisible, its red reset X floating on its own.
+--
+--     An arrow becomes our chevron. Any other icon keeps its shape, in our
+--     text colours. A button big enough to be a button (the map's, 32px) is
+--     drawn as one; a small one is a ghost that boxes on hover.
+--------------------------------------------------------------------------------
+R{
+    name = "iconDropdown",
+    type = "DropdownButton",
+    keys = { "Icon" },
+    artOrFile = { Icon = { atlas = { "common%-dropdown%-a%-button", "questlog%-icon%-setting" } } },
+    paint = function(b, p)
+        local d = S.D(b)
+        local arrow = S.ArtIs(b.Icon, "common%-dropdown%-a%-button")
+        local big = (S.Num(b:GetWidth()) or 0) >= 24
+        local look = big and LOOK.button or LOOK.buttonGhost
+        S.Blank(b)
+        p:Fill("surface2")
+        p:Border("borderStrong")
+        if arrow then
+            p:Fade()
+            if not d.chev then
+                d.chev = S.Ours(T.Chevron(b, big and 5 or 4))
+                d.chev:SetPoint("CENTER")
+                d.chev:Point("down")
+            end
+            p:States(look, { chev = d.chev })
+        else
+            p:Fade(nil, { b.Icon })
+            if b.Icon.SetDesaturated then b.Icon:SetDesaturated(true) end
+            p:States(look, { glyph = b.Icon })
+        end
     end,
 }
 
@@ -1138,6 +1214,107 @@ R{
             cd.chev:Point("down")
             S.StepperLook(nil, cd)
         end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9e. List header        ListHeaderVisualTemplate: the quest log's zone headers
+--     A brown bar (common-button-list-collapseExpand) with a gold +/- at the
+--     right. Ours: a flat bar, the title in gold, lighter under the mouse,
+--     and our chevron for the +/-, down while open, right while collapsed.
+--
+--     Blizzard recolours the title on every enter and leave
+--     (ListHeaderVisualMixin:CheckHighlightTitle) and swaps the +/- atlas and
+--     the highlight in CollapseButtonMixin:UpdateCollapsedState, so ours are
+--     put back after each, not fought.
+--------------------------------------------------------------------------------
+R{
+    name = "listHeader",
+    type = "Button",
+    keys = { "CollapseButton" },
+    art  = { normal = "common%-button%-list%-collapseexpand" },
+    paint = function(h, p)
+        S.Blank(h)
+        p:Fade()
+        p:Fill("surface2")
+        p:Border("border")
+        local title = h.ButtonText or h.Text
+        if title then p:Label(title, false, true) end
+        local d = S.D(h)
+        local function Over()
+            local fn = h.IsMouseMotionFocus or h.IsMouseOver
+            local ok, v = pcall(fn, h)
+            return ok and v and true or false
+        end
+        local function Sync(_, over)
+            if type(over) ~= "boolean" then over = Over() end
+            if d.fill then d.fill:SetColorTexture(S.Colour(over and "surface3" or "surface2")) end
+            if title then title:SetTextColor(S.Colour(over and "text" or "title")) end
+        end
+        p:After("CheckHighlightTitle", Sync)
+        p:Hook("OnEnter", function() Sync(nil, true) end)
+        p:Hook("OnLeave", function() Sync(nil, false) end)
+        S.Own(Sync, h, title)
+        Sync()
+
+        local c = h.CollapseButton
+        if S.Alive(c) then
+            S.claimed[c] = "listHeader"
+            local cp, cd = S.PainterFor(c), S.D(c)
+            if not cd.chev then
+                cd.chev = S.Ours(T.Chevron(c, 5))
+                cd.chev:SetPoint("CENTER")
+            end
+            local function Turn()
+                S.Blank(c)          -- UpdateCollapsedState sets the highlight atlas again
+                cp:Fade()
+                cd.chev:Point(c.collapsed and "right" or "down")
+                cd.chev:SetColorLines(S.Colour("textMuted"))
+            end
+            cp:After("UpdateCollapsedState", Turn)
+            T.Watch(cd.chev, Turn)
+            Turn()
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9f. Quest track box    QuestLogTrackCheckboxTemplate: the quest log's ticks
+--     A Frame, not a CheckButton, so the check button part never saw it: a
+--     ticksquare atlas behind a yellow CheckMark that Blizzard shows and
+--     hides for tracked and untracked (QuestMapFrame.lua,
+--     Checkbox.CheckMark:SetShown(isTracked)). Drawn as our checkbox
+--     (LOOK.checkbox): copper with a dark tick while tracked. Their mark stays
+--     where it is, out of sight, and still says which it is.
+--------------------------------------------------------------------------------
+R{
+    name = "questTrack",
+    keys = { "CheckMark" },
+    art  = { CheckMark = "questlog%-icon%-checkmark" },
+    paint = function(f, p)
+        local CL = LOOK.checkbox
+        p:Fade()
+        p:Fill(CL.rest.fill)
+        p:Border(CL.rest.edge)
+        local d = S.D(f)
+        if not d.tick then
+            d.tick = S.Ours(f:CreateTexture(nil, "OVERLAY", nil, 7))
+            d.tick:SetTexture(T.MEDIA .. "check.png")
+            d.tick:SetPoint("CENTER")
+            d.tick:SetSize(10, 10)
+        end
+        local mark = f.CheckMark
+        local function Sync()
+            d.on = mark:IsShown() and true or false
+            local r = T.Resolve(CL, d)
+            if d.fill then d.fill:SetColorTexture(T.C4(r.fill)) end
+            T.SetEdge(f, r.edge)
+            if r.glyph then d.tick:SetVertexColor(T.C4(r.glyph)) end
+            d.tick:SetShown(d.on)
+        end
+        for _, m in ipairs({ "SetShown", "Show", "Hide" }) do pcall(hooksecurefunc, mark, m, Sync) end
+        S.Own(Sync, f)
+        Sync()
     end,
 }
 
