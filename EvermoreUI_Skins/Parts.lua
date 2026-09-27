@@ -425,6 +425,16 @@ R{
         p:FadeSlice()
         p:Fill("surfaceSunk")
         p:Border("borderStrong")
+        -- The pop-up's field is user-scaled (UserScaledFrameTemplate) and
+        -- centred, so its edges land on part pixels, and an unsnapped
+        -- one-pixel line there can round away: the right edge did. These are
+        -- still, so the renderer's snapping is only a gain.
+        local rec = EV.Pixel:EdgesOf(e)
+        for _, t in ipairs(rec and rec.edges or {}) do
+            EV.Pixel.KeepSnap(t, true)
+            if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(true) end
+            if t.SetTexelSnappingBias then t:SetTexelSnappingBias(0) end
+        end
         p:States(LOOK.input, { label = e })
         if e.Instructions then p:Label(e.Instructions, LOOK.input.rest.placeholder) end
         p:TextPad(LOOK.input.pad, LOOK.input.pad)
