@@ -927,9 +927,27 @@ P{
         -- The overview (the book page) fills its cards in Lua as it is shown.
         local book = f.BookPage
         if book then
+            -- Unlearn sits LEFT of the bar's RIGHT, 1 across and 4 down; the
+            -- bar's fill (and our well round it) is 3 down, so it read a pixel
+            -- low. Centred on the fill, the well's height, a 2px gap.
+            local function Unlearn()
+                local content = book.ProfessionsContentFrame
+                for _, key in ipairs({ "PrimaryProfession1", "PrimaryProfession2" }) do
+                    local card = content and content[key]
+                    local btn, bar = card and card.UnlearnButton, card and card.StatusBar
+                    if btn and bar and bar.Fill then
+                        local one = EV.Pixel:One(bar)
+                        k:Size(btn, nil, bar.Fill:GetHeight() + 2 * one)
+                        k:Move(btn, "LEFT", bar.Fill, "RIGHT", one + 2, 0)
+                    end
+                end
+            end
             k:Hook(book, "OnShow", function(self2)
-                C_Timer.After(0, function() if self2:IsShown() then S.Walk(self2, 0) end end)
+                C_Timer.After(0, function()
+                    if self2:IsShown() then S.Walk(self2, 0); Unlearn() end
+                end)
             end)
+            Unlearn()
         end
 
         if not page then return end
@@ -964,17 +982,36 @@ P{
             end
         end
 
-        -- The count between the arrows, centred in its box.
-        local count = page.CreateMultipleInputBox
-        if count and count.SetJustifyH then count:SetJustifyH("CENTER") end
-
         -- The footer under the schematic, for Create All, the count and Create.
         local form = page.SchematicForm
         if form then
-            Band(page, "footer", "top", function(b)
+            local foot = Band(page, "footer", "top", function(b)
                 b:SetPoint("TOPLEFT", form, "BOTTOMLEFT", 0, -1)
                 b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
             end)
+
+            -- One group on the footer's right, the way Blizzard reads it:
+            -- [Create All] [<] [count] [>] [Create], an even gap between each.
+            -- Camelot pinned Create All and the count to fixed offsets from the
+            -- page's corner (SetControlAnchors) and Create to another
+            -- (Refresh, every recipe), which spread them across the footer.
+            -- The arrows hang off the count box (NumericInputSpinnerTemplate:
+            -- Decrement 6 left of it, Increment on its right), 23 wide.
+            local count, create, all = page.CreateMultipleInputBox, page.CreateButton, page.CreateAllButton
+            if count and count.SetJustifyH then count:SetJustifyH("CENTER") end
+            local function Controls()
+                if not (count and create and all) then return end
+                local g, arrow, h = PROF.gap + 2, 23, 22
+                k:Size(create, nil, h)
+                k:Size(all, nil, h)
+                k:Size(count, nil, h)
+                k:Move(create, "RIGHT", foot, "RIGHT", -PROF.pad, 0)
+                k:Move(count, "RIGHT", create, "LEFT", -(arrow + g), 0)
+                k:Move(all, "RIGHT", count, "LEFT", -(6 + arrow + g), 0)
+            end
+            Controls()
+            k:After(page, "SetControlAnchors", Controls)
+            k:After(page, "Refresh", Controls)
             -- A recipe's slots and controls are built and shown per recipe.
             k:After(form, "Init", function()
                 C_Timer.After(0, function() if form:IsShown() then S.Walk(form, 0) end end)
