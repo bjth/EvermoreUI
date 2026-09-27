@@ -734,7 +734,10 @@ P{
         -- The model and its backdrop, inside our border and under the title rule.
         local left, scene = f.LeftPaneHost, _G.CharacterModelScene
         if left and scene then
-            k:Anchors(scene, { { "TOPLEFT", left, "TOPLEFT", 1, -2 },
+            -- LeftPaneHost starts 20 down; our title band and its rule end
+            -- TITLE_BAND + 2 down.
+            local under = -((S.TITLE_BAND or 20) + 2 - 20)
+            k:Anchors(scene, { { "TOPLEFT", left, "TOPLEFT", 1, under },
                                { "BOTTOMRIGHT", left, "BOTTOMRIGHT", -1, 1 } })
             -- The zoom and turn buttons are hidden until the model is set up,
             -- after the window's walk; dress them when they appear.
@@ -750,7 +753,7 @@ P{
         local stone = right and right.StoneBg
         if right and stone then
             local band = Band(right, "header", "bottom", function(b)
-                b:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -2)
+                b:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -((S.TITLE_BAND or 20) + 2 - 20))
                 b:SetPoint("BOTTOMRIGHT", stone, "BOTTOMRIGHT", -1, 0)
             end)
             -- PaperDollLevelInfo is declared frameLevel="5", absolute, so on a
@@ -767,7 +770,7 @@ P{
             k:Once(right, "seam", function()
                 local seam = S.Ours(right:CreateTexture(nil, "BORDER", nil, 7))
                 if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(seam) end
-                seam:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -2)
+                seam:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -((S.TITLE_BAND or 20) + 2 - 20))
                 seam:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 0, 1)
                 local function Paint()
                     seam:SetColorTexture(S.Colour("border"))
@@ -845,6 +848,8 @@ P{
                 local ok, v = pcall(f.IsRightPaneCollapsed, f)
                 return ok and v and true or false
             end
+            -- Clear of the taller title band: Blizzard has it 6 into the pane.
+            if left then k:Move(toggle, "TOPRIGHT", left, "TOPRIGHT", -6, -((S.TITLE_BAND or 20) - 20 + 8)) end
             -- Blizzard's arrow points left while the pane is open.
             local d = OverlayButton(k, toggle, Collapsed() and "right" or "left")
             if d and d.chev then

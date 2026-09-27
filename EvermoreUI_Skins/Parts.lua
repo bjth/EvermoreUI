@@ -1503,6 +1503,29 @@ local TILE_PAD  = 8     -- card edge to the icon, on the left
 local TILE_TEXT = 6     -- text to the card's right edge
 local TILE_MARK = 5     -- the "not on your bars" mark
 
+--- Take a texture's art away for good. Muting by alpha is not enough for a
+--- spell's hover art: Blizzard's own hover and leave handlers set those alphas
+--- (OnIconEnter lifts the Backplate to 1; OnIconLeave puts it back to 0.25 and
+--- the icon highlight to 0.35), so a muted texture came back on the first
+--- hover and stayed after it. The art itself is cleared instead, and cleared
+--- again whenever Blizzard sets new art (UpdateVisuals re-sets the highlight
+--- and the border atlas for every spell), so any alpha it picks shows nothing.
+local stripped = setmetatable({}, { __mode = "k" })
+local function StripArt(t)
+    if not (t and t.SetTexture) or stripped[t] then return end
+    stripped[t] = true
+    local busy
+    local function Clear(self)
+        if busy then return end
+        busy = true
+        pcall(self.SetTexture, self, nil)
+        busy = false
+    end
+    Clear(t)
+    pcall(hooksecurefunc, t, "SetAtlas", Clear)
+    pcall(hooksecurefunc, t, "SetTexture", Clear)
+end
+
 local function Passive(item)
     local ok, v = pcall(function() return item.spellBookItemInfo and item.spellBookItemInfo.isPassive end)
     return ok and v == true
@@ -1572,10 +1595,14 @@ R{
             d.mark:SetShown(MissingFromBars(item) and not d.disabled)
         end
 
+        -- Blizzard's frame, shadow, hover glow, trainer art and backplate:
+        -- the card and our edge do all of their jobs.
+        StripArt(item.Backplate)
+        for _, key in ipairs({ "Border", "BorderShadow", "IconHighlight", "TrainableShadow", "TrainableBackplate" }) do
+            StripArt(btn[key])
+        end
+
         local function Apply()
-            S.Mute(btn.Border)
-            S.Mute(btn.BorderShadow)
-            S.Mute(btn.IconHighlight)
             if Passive(item) then
                 if bd.unmasked and btn.IconMask then pcall(icon.AddMaskTexture, icon, btn.IconMask) end
                 bd.unmasked = false
@@ -1595,12 +1622,7 @@ R{
         p:After("UpdateArtSet", Apply)
         p:After("UpdateVisuals", Apply)
         p:After("UpdateActionBarAnim", Sync)
-        -- Blizzard lights the Backplate on hover (hoverBackplateAlpha); the
-        -- card is the hover now, so it stays down.
-        p:After("OnIconEnter", function()
-            if item.Backplate then item.Backplate:SetAlpha(0) end
-            d.hover = true; Sync()
-        end)
+        p:After("OnIconEnter", function() d.hover = true; Sync() end)
         p:After("OnIconLeave", function() d.hover = false; Sync() end)
         S.Own(Sync, d.tile)
         T.Watch(bd.ring, Apply)
@@ -2500,7 +2522,11 @@ S.FillTarget = FillTarget
 --  offsets are read from its anchors each time, after any of those and on
 --  show, never assumed.
 --------------------------------------------------------------------------------
-local TITLE_BAND = 20
+-- The height of the close and maximise buttons (UIPanelCloseButtonNoScripts
+-- and MaximizeMinimizeButtonFrameTemplate are both 24x24), so they sit flush
+-- in the band rather than hanging over it. It was 20, which left Blizzard's
+-- 24px buttons poking out below the title bar on every window.
+local TITLE_BAND = 24
 S.TITLE_BAND = TITLE_BAND   -- packs lay bands under it
 
 local function ContainerOffsets(tc)
@@ -2542,7 +2568,7 @@ local function TitleBar(f, p, tc, title)
     local tp = S.PainterFor(tc)
     local function Centre()
         local left, right = ContainerOffsets(tc)
-        tp:Reseat(title, { { "TOP", 0, -5 }, { "LEFT", -(left - right), 0 }, { "RIGHT", 0, 0 } })
+        tp:Reseat(title, { { "TOP", 0, -(5 + (TITLE_BAND - 20) / 2) }, { "LEFT", -(left - right), 0 }, { "RIGHT", 0, 0 } })
     end
     titled[f] = Centre
     Centre()
@@ -2589,6 +2615,17 @@ local function PaintWindow(f, p)
         p:Fade(f.TitleContainer)
         HookPortraitToggles()
         TitleBar(f, p, f.TitleContainer, title)
+        -- The close button, flush in the band's corner inside our border.
+        -- Blizzard anchors it TOPRIGHT x=-2 y=1 (Camelot's
+        -- UIPanelCloseButtonDefaultAnchorsMixin), a pixel above the window;
+        -- the maximise button hangs off its left, so it follows.
+        local close = rawget(f, "CloseButton")
+        if type(close) == "table" and close.GetPoint then
+            local ok, pt, rel = pcall(close.GetPoint, close, 1)
+            if ok and pt == "TOPRIGHT" and (rel == f or rel == nil) then
+                p:Reseat(close, { { "TOPRIGHT", -1, -1 } })
+            end
+        end
     end
 end
 
