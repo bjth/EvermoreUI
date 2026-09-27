@@ -1557,6 +1557,87 @@ local function FillTarget(f)
 end
 S.FillTarget = FillTarget
 
+--------------------------------------------------------------------------------
+--  The title bar of a portrait window
+--
+--  PortraitFrameTemplate and ButtonFrameTemplate (thirty of the windows a
+--  player opens: mail, merchant, quests, friends, the spellbook...) keep their
+--  title in a TitleContainer 20px tall at y -1, and their background starts at
+--  y -21 (SharedUIPanelTemplates.xml). That band is the title bar already, so
+--  ours is drawn into it, in the window Look's title bar colour with the
+--  divider under it, as U.Window's and the game menu's are. Nothing of
+--  Blizzard's moves for it.
+--
+--  The title is centred in the container, and the container runs from x 58
+--  (room for the portrait, which we hide) to -24, so the text sat 17px right
+--  of the window's centre. It is re-seated within its own container, widened
+--  on the left by the difference, which puts its centre on the window's.
+--  Blizzard re-anchors the container itself (TitledPanelMixin:SetTitleOffsets,
+--  ButtonFrameTemplate_HidePortrait and _ShowPortrait: 58/-24 or 0/0), so the
+--  offsets are read from its anchors each time, after any of those and on
+--  show, never assumed.
+--------------------------------------------------------------------------------
+local TITLE_BAND = 20
+
+local function ContainerOffsets(tc)
+    local left, right = 58, 24
+    local ok, n = pcall(tc.GetNumPoints, tc)
+    for i = 1, (ok and S.Num(n) or 0) do
+        local okP, pt, _, _, x = pcall(tc.GetPoint, tc, i)
+        x = okP and S.Num(x)
+        if x then
+            if pt == "TOPLEFT" or pt == "LEFT" then left = x
+            elseif pt == "TOPRIGHT" or pt == "RIGHT" then right = -x end
+        end
+    end
+    return left, right
+end
+
+local titled = setmetatable({}, { __mode = "k" })   -- window -> its re-centre
+
+local function TitleBar(f, p, tc, title)
+    local d = S.D(f)
+    if not d.titleBar and f.CreateTexture then
+        d.titleBar = S.Ours(f:CreateTexture(nil, "BACKGROUND", nil, -6))
+        d.titleBar:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+        d.titleBar:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+        d.titleBar:SetHeight(TITLE_BAND)
+        d.titleRule = S.Ours(f:CreateTexture(nil, "BORDER", nil, -8))
+        d.titleRule:SetPoint("TOPLEFT", d.titleBar, "BOTTOMLEFT")
+        d.titleRule:SetPoint("TOPRIGHT", d.titleBar, "BOTTOMRIGHT")
+        d.titleRule:SetHeight(1)
+        local function Paint()
+            local r = T.Resolve(LOOK.window)
+            d.titleBar:SetColorTexture(T.C4(r.titleBar))
+            d.titleRule:SetColorTexture(T.C4(r.divider))
+        end
+        Paint()
+        T.Watch(d.titleBar, Paint)
+    end
+    if not (title and title.GetParent and title:GetParent() == tc) then return end
+    local tp = S.PainterFor(tc)
+    local function Centre()
+        local left, right = ContainerOffsets(tc)
+        tp:Reseat(title, { { "TOP", 0, -5 }, { "LEFT", -(left - right), 0 }, { "RIGHT", 0, 0 } })
+    end
+    titled[f] = Centre
+    Centre()
+    p:Hook("OnShow", Centre)
+    p:After("SetTitleOffsets", Centre)
+end
+
+-- The portrait toggles are global functions, taking the window.
+local portraitHooked = false
+local function HookPortraitToggles()
+    if portraitHooked then return end
+    portraitHooked = true
+    for _, fn in ipairs({ "ButtonFrameTemplate_HidePortrait", "ButtonFrameTemplate_ShowPortrait" }) do
+        if type(_G[fn]) == "function" then
+            hooksecurefunc(fn, function(win) local c = titled[win]; if c then c() end end)
+        end
+    end
+end
+
 --- Shared by window and panel. Their treatment is the same; only our
 --- confidence about what the frame is differs.
 local function PaintWindow(f, p)
@@ -1568,8 +1649,12 @@ local function PaintWindow(f, p)
     p:Fill(W.fill, nil, nil, FillTarget(f))
     p:Border(W.edge)
     local title = (type(f.TitleContainer) == "table" and f.TitleContainer.TitleText) or f.TitleText
-    if title then p:Label(title, W.title) end
-    if type(f.TitleContainer) == "table" then p:Fade(f.TitleContainer) end
+    if title then p:Label(title, W.title, true) end
+    if type(f.TitleContainer) == "table" then
+        p:Fade(f.TitleContainer)
+        HookPortraitToggles()
+        TitleBar(f, p, f.TitleContainer, title)
+    end
 end
 
 --- Does this frame carry the furniture a window has?
