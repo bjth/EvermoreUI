@@ -869,6 +869,48 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  3d. Icon button, style 2  WowStyle2IconButtonTemplate (Blizzard_Menu): the
+--     square beside a dropdown, the steppers of DropdownWithSteppersTemplate
+--     above all (every graphics setting has a pair). Its Background takes a
+--     common-dropdown-c-button-* atlas per state and its Icon the KeyValue
+--     normalAtlas or disabledAtlas, both in OnButtonStateChanged. Ours: the
+--     button Look; a stepper's arrow (common-dropdown-icon-next / -back) is
+--     our chevron, any other icon is kept and coloured as a glyph.
+--------------------------------------------------------------------------------
+local STEP_DIR = { ["common%-dropdown%-icon%-next"] = "right", ["common%-dropdown%-icon%-back"] = "left" }
+
+R{
+    name = "iconButton2",
+    type = "Button",
+    keys = { "Background", "Icon" },
+    test = function(b) return type(rawget(b, "normalAtlas")) == "string" end,
+    paint = function(b, p)
+        S.StripArt(b.Background)
+        local atlas = rawget(b, "normalAtlas"):lower()
+        local dir
+        for pat, d in pairs(STEP_DIR) do if atlas:find(pat) then dir = d end end
+        p:Fill(LOOK.button.rest.fill)
+        p:Border(LOOK.button.rest.edge)
+        if dir then
+            S.StripArt(b.Icon)
+            local d = S.D(b)
+            if not d.chev then
+                d.chev = S.Ours(T.Chevron(b, LOOK.pager.chevron))
+                d.chev:SetPoint("CENTER")
+                d.chev:Point(dir)
+            end
+            p:States(LOOK.button, { chev = d.chev })
+        else
+            p:States(LOOK.button, { glyph = b.Icon })
+        end
+        p:After("OnButtonStateChanged", function()
+            local d = S.D(b)
+            if d.Repaint then d.Repaint() end
+        end)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  4. Panel button        UIPanelButtonTemplate, 284 inherits
 --     The single biggest win in the game's UI.
 --------------------------------------------------------------------------------
@@ -2950,6 +2992,24 @@ R{
             d.box:SetPoint("TOP", tab, "BOTTOM", 0, one)
         end
         p:Border(LOOK.inset.rest.edge, nil, d.box)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9r. Graphics row       SettingsAdvancedDropdownTemplate, -SliderTemplate,
+--     -WideSliderTemplate, -WideCheckboxSliderTemplate: the rows inside the
+--     graphics quality box. Not list elements, so nothing reset their label,
+--     GameFontNormal's gold. Ours: body text, as every other settings row.
+--------------------------------------------------------------------------------
+R{
+    name = "settingsAdvancedRow",
+    keys = { "Text", "NewFeature" },
+    without = { "Tooltip", "Title" },
+    test = function(f)
+        return type(rawget(f, "Control")) == "table" or type(rawget(f, "SliderWithSteppers")) == "table"
+    end,
+    paint = function(f, p)
+        p:Label(f.Text, "text")
     end,
 }
 
