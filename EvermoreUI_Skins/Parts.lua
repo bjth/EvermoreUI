@@ -850,7 +850,10 @@ R{
 --------------------------------------------------------------------------------
 R{
     name = "iconDropdown",
-    type = "DropdownButton",
+    -- No type: the XML says <DropdownButton>, but in game the object is a
+    -- plain Button (the map's filter button reported "Button" and went
+    -- unclaimed with type = "DropdownButton", though the survey's stand-ins,
+    -- built from the tag, matched). The icon and its atlas are the print.
     keys = { "Icon" },
     artOrFile = { Icon = { atlas = { "common%-dropdown%-a%-button", "questlog%-icon%-setting" } } },
     paint = function(b, p)
