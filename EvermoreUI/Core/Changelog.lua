@@ -3,6 +3,24 @@ if EV_BLOCKED then return end
 -- changelog, not this file.
 EvermoreUI.CHANGELOG = {
     {
+        version = "0.13.0",
+        intro = { "Built around how Forever plays: a setup that gets you going in a minute, every character's bags, bank and gold from any of them, the built-in damage meter in our style, and cooldown icons that tell you more." },
+        sections = {
+            { title = "New", items = {
+                "**Setup.** The first time you log in, a short walkthrough: whether this character shares its setup with your others, contrast, font and size, which modules to use, a starting layout for tanking, healing or damage, and the everyday conveniences. Nothing moves until you press Use this layout, and Undo puts it back. Your settings are all kept if you've used EvermoreUI before. /evui install runs it again. Tell us how it went on the Discord: setup is the part we most want feedback on.",
+                "**Characters** (/evui alts). Every character's gold, rested XP, professions and when you last played them, side by side, with the total at the foot. Browse any character's bags, bank or mail, or the account bank, from any other. Find an item across all of them by name. Items you mail to your own characters count straight away. Mail about to run out gets a line in chat at login.",
+                "**Item counts in tooltips**: how many each of your characters has, and where (bags, bank, mail, equipped), plus the account bank.",
+                "**A gold readout** on the Data Bars, off by default: this character's gold or everyone's, with every character's on hover.",
+                "**The damage meter**, Forever's built-in one, in our style: title bar, surface, flat bars and our font. Its own settings keep working. Window Skins page, or setup.",
+                "**Cooldown icons**, all in the designer:",
+                "**Icon look**: border thickness and colour (theme, gold, class), crop and how dark the cooldown sweep is.",
+                "**Procs**: when the game lights a spell up, a pulsing or solid border of ours, Blizzard's glow sized to our square icons, or nothing.",
+                "**Reactive abilities** glow while they're usable: Overpower, Revenge, Execute, Riposte, Counterattack, Mongoose Bite and Hammer of Wrath to start with, and any cooldown can be switched on.",
+                "**Refresh window**: a tracked buff or debuff lights up for its last part (30% by default) or last few seconds, so you know when re-casting wastes nothing. Works in combat.",
+            } },
+        },
+    },
+    {
         version = "0.12.5",
         intro = { "Your own cooldowns: the bars now take what the game's Cooldown Manager doesn't track." },
         sections = {
@@ -108,41 +126,6 @@ EvermoreUI.CHANGELOG = {
                 "Hovering durability on the data bar no longer errors.",
                 "The Well Fed reminder only shows when you have food that gives it, and clicking it eats that food. Any reminder can do the same with \"Only when I carry something for it\".",
                 "Unit frames no longer error on class colours in dungeons.",
-            } },
-        },
-    },
-    {
-        version = "0.10.0",
-        intro = { "A big one for classic players: training reminders, a swing timer, energy ticks, and action bars you can set up without ever leaving the options." },
-        sections = {
-            { title = "New", items = {
-                "**Training**: a badge on the spellbook button when you have spells to learn, a line in chat when you level, and a Train All button at your trainer.",
-                "**Swing timer**: main hand, off hand and ranged bars, built on Forever's own swing events. Combat > Swing Timer.",
-                "**Energy ticks and the five-second rule**: a strip on your power bar timing the next tick, and a preview of what it will add.",
-                "**Click casting**: Shift + click (and friends) on your unit frames casts on that unit, in combat too. Combat > Click Casting.",
-                "**Colours**: your own palette for class, hostility, power, threat, cast bars and the interface itself, and a string to share it. General > Colours.",
-                "**Durability**: a warning in chat when your gear runs low, and a readout on Data Bars with the repair cost.",
-                "**Sell prices** in item tooltips, with the price of one item on a stack.",
-                "**Reagent and ammo counts** on your action buttons.",
-                "**Pet happiness** on the pet frame.",
-                "**Small fixes**, all off until you want them: easy delete, maximum camera distance and fewer red error messages. Extras > Quality of Life.",
-                "**What's new**: this window. It shows once after each update, and `/evui new` brings it back.",
-            } },
-            { title = "Action bars", items = {
-                "**Bar editor**: pick a bar in the options and edit it right there. Drag spells on from the spellbook, swap buttons, clear them and bind keys.",
-                "**Keybind mode**: hover a button and press a key. `/evui kb`.",
-                "**Paging**: Alt, Ctrl and Shift pages, a fixed page per bar, or your own conditions.",
-                "**Modifier actions**: give a button a second job, like Alt + click to cast it on yourself.",
-                "**Right click self cast**, and the game's self cast, focus cast, button lock and spell queue settings all in one place.",
-                "**Spell rank** text on each bar, placed and coloured how you like.",
-                "Growth direction, scale, opacity, fade groups, text per bar, short keybind names, red icons out of range and an edge on equipped items.",
-            } },
-            { title = "Improvements", items = {
-                "Chat keeps each window's last lines through a reload.",
-                "Fast loot is properly instant now.",
-                "Spellbook: tidier school tabs, and an option to hide the parchment.",
-                "The flight map is skinned.",
-                "The nameplate pixel check has moved out of your login chat and into `/evui bug`.",
             } },
         },
     },

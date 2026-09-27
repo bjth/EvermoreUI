@@ -1,5 +1,44 @@
 # EvermoreUI
 
+## 0.13.0
+
+Built around how Forever plays: a setup that gets you going in a minute,
+every character's bags, bank and gold from any of them, the built-in damage
+meter in our style, and cooldown icons that tell you more.
+
+### New
+- **Setup.** The first time you log in, a short walkthrough: whether this
+  character shares its setup with your others, contrast, font and size,
+  which modules to use, a starting layout for tanking, healing or damage,
+  and the everyday conveniences. Nothing moves until you press Use this
+  layout, and Undo puts it back. Your settings are all kept if you've used
+  EvermoreUI before. /evui install runs it again. Tell us how it went on
+  the Discord: setup is the part we most want feedback on.
+- **Characters** (/evui alts). Every character's gold, rested XP,
+  professions and when you last played them, side by side, with the total
+  at the foot. Browse any character's bags, bank or mail, or the account
+  bank, from any other. Find an item across all of them by name. Items you
+  mail to your own characters count straight away. Mail about to run out
+  gets a line in chat at login.
+- **Item counts in tooltips**: how many each of your characters has, and
+  where (bags, bank, mail, equipped), plus the account bank.
+- **A gold readout** on the Data Bars, off by default: this character's
+  gold or everyone's, with every character's on hover.
+- **The damage meter**, Forever's built-in one, in our style: title bar,
+  surface, flat bars and our font. Its own settings keep working. Window
+  Skins page, or setup.
+- **Cooldown icons**, all in the designer:
+  - **Icon look**: border thickness and colour (theme, gold, class), crop
+    and how dark the cooldown sweep is.
+  - **Procs**: when the game lights a spell up, a pulsing or solid border
+    of ours, Blizzard's glow sized to our square icons, or nothing.
+  - **Reactive abilities** glow while they're usable: Overpower, Revenge,
+    Execute, Riposte, Counterattack, Mongoose Bite and Hammer of Wrath to
+    start with, and any cooldown can be switched on.
+  - **Refresh window**: a tracked buff or debuff lights up for its last
+    part (30% by default) or last few seconds, so you know when re-casting
+    wastes nothing. Works in combat.
+
 ## 0.12.5
 
 Your own cooldowns: the bars now take what the game's Cooldown Manager
