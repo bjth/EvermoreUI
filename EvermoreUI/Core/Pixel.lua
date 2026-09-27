@@ -75,7 +75,7 @@ function Pixel:SetPoint(frame, point, rel, relPoint, x, y)
 end
 
 --------------------------------------------------------------------------------
---  Pixel snapping, turned off across the whole UI
+--  Pixel snapping, turned off on our own regions
 --
 --  Snapping is a property of each texture OBJECT and it defaults ON. It rounds
 --  that region's coordinates to the pixel grid INDEPENDENTLY of every other
@@ -97,27 +97,28 @@ end
 --  missed: font strings, and the StatusBar FILL, which is a brand new texture
 --  object after every SetStatusBarTexture.
 --
---  So it is hooked once, at the metatable. Every widget of a type shares one
---  method table, so hooking it covers every object of that type that exists
---  now or is created later, ours and Blizzard's alike. The image setters are
---  the signal: they are what a newly minted texture gets called with first.
+--  It used to be hooked once, at the widget metatables (SetTexture,
+--  SetColorTexture, SetAtlas, SetStatusBarTexture, SetSnapToPixelGrid), so
+--  every region in the game was unsnapped on first touch. That cannot be done
+--  on Forever. The metatables are shared with Blizzard's secure code, and
+--  under the secret-value rules a hooked method counts as ours when that code
+--  calls it with secrets in play: the taint log showed "An attempt to call a
+--  secret value was blocked because of taint from EvermoreUI -
+--  SetStatusBarTexture()" from the cast bar on every cast, and with that hook
+--  gone the XP bar's next line, SetAtlas, was blocked the same way.
 --
---  What is deliberately NOT hooked:
+--  So snapping is taken off OUR regions, by us:
 --
---   * SetVertexColor and SetTexCoord. They fire constantly -- every nameplate
---     recolour, every cooldown tick -- and neither can blur a texture. Hooking
---     them would be pure cost.
---   * A frame tree walk at load. With a full UI loaded that is well over ten
---     thousand frames and a large share of login time, and the only widget
---     type such a walk would reach that the metatable hooks below miss is
---     StatusBar, whose bars of ours are hooked one at a time (Pixel:Bar, below;
---     the metatable hook tainted Blizzard's secure bars).
+--   * Pixel.NoSnap(region), for a texture, mask or font string, or a
+--     StatusBar's current fill.
+--   * Pixel:Bar(bar), once after CreateFrame("StatusBar"): SetStatusBarTexture
+--     mints a new fill texture every call, so each of our bars is hooked on
+--     its own to unsnap the new one. Our frame, never Blizzard's.
+--   * Anything that moves walks its own regions: the nameplates' layout pass
+--     (Nameplates/Core.lua, SnapOff) does every region on every plate.
 --
---  The cache is keyed on the REGION, never on the StatusBar that owns it, so a
---  runtime fill swap unsnaps the new texture instead of being skipped as
---  already done. And SetSnapToPixelGrid is itself watched, so foreign code
---  turning snapping back on drops the entry and the next image setter takes it
---  off again.
+--  Blizzard's own regions keep the client's default snapping, which is what
+--  it was built for.
 --
 --  Never a field written onto a widget: the cache is an external weak-keyed
 --  table, because a stray key on a Blizzard frame taints it.
@@ -126,17 +127,17 @@ local snapOff = true
 local done = setmetatable({}, { __mode = "k" })
 
 -- Regions that have deliberately been put back ON the grid (nameplates in
--- crisp mode). The image-setter hooks below would otherwise take snapping
--- off again the next time anything called SetTexture or SetColorTexture on
--- them, which left a crisp plate half snapped and half not within seconds of
--- play: the exact mix that makes plate contents move against each other.
+-- crisp mode), so NoSnap leaves them alone.
 local keep = setmetatable({}, { __mode = "k" })
 
 --- Mark a region as intentionally snapped (true) or hand it back to the
---- suite wide default (false).
+--- suite wide default (false). Marking one snapped also forgets that it was
+--- unsnapped, so handing it back later unsnaps it again rather than stopping
+--- at the cache (crisp mode switched back to smooth).
 function Pixel.KeepSnap(r, on)
     if r == nil then return end
     keep[r] = on and true or nil
+    if on then done[r] = nil end
 end
 
 local function Usable(obj)
@@ -159,8 +160,8 @@ end
 --- Textures, mask textures and font strings carry the setter themselves; a
 --- StatusBar is a frame and carries it on the fill it owns.
 ---
---- Order matters here, because this runs on EVERY image setter call in the
---- game. The secret guards are one C call each and have to come first, since a
+--- Order matters here: nameplates call this for every region on every layout.
+--- The secret guards are one C call each and have to come first, since a
 --- secret is not safe to use as a table key. The cache lookup comes next and
 --- is where the hot path ends: a texture that has already been unsnapped never
 --- reaches the pcall below it. A StatusBar is the exception and is meant to
@@ -183,49 +184,11 @@ local function NoSnap(obj)
 end
 Pixel.NoSnap = NoSnap
 
---- Something turned snapping back on for this region. Forget it, so the next
---- image setter takes it off again rather than short-circuiting on the cache.
-local function Watch(r, snap)
-    if snap and r and done[r] then done[r] = nil end
-end
-
-local hookedTypes = {}
-local function HookType(obj)
-    if not obj then return end
-    local mt = getmetatable(obj)
-    mt = mt and mt.__index
-    if type(mt) ~= "table" or hookedTypes[mt] then return end
-    hookedTypes[mt] = true
-    if mt.SetSnapToPixelGrid  then hooksecurefunc(mt, "SetSnapToPixelGrid", Watch) end
-    if mt.SetTexture          then hooksecurefunc(mt, "SetTexture", NoSnap) end
-    if mt.SetColorTexture     then hooksecurefunc(mt, "SetColorTexture", NoSnap) end
-    if mt.SetAtlas            then hooksecurefunc(mt, "SetAtlas", NoSnap) end
-end
-
-do
-    local probe = CreateFrame("Frame")
-    HookType(probe)
-    HookType(probe:CreateTexture())
-    HookType(probe:CreateFontString())
-    HookType(probe:CreateMaskTexture())
-    HookType(CreateFrame("ScrollFrame"))
-end
-
---- Our own status bars, one at a time.
----
---- StatusBar's SetStatusBarTexture used to be hooked here at the metatable,
---- like the image setters above, so a fill swapped at run time was unsnapped
---- wherever it happened. That table is shared with every status bar
---- Blizzard's secure code drives, and under Forever's secret-value rules the
---- hooked method counted as ours when that code called it with secrets in
---- play: the taint log showed "An attempt to call a secret value was blocked
---- because of taint from EvermoreUI - SetStatusBarTexture()" from the cast
---- bar (CastingBarFrame.lua UpdateBarFillTexture) on every cast, and the XP
---- bar's first update at login failed with "attempt to call a nil value".
----
---- So each bar of ours is hooked on its own, which never touches Blizzard's
---- bars: call this once, right after CreateFrame("StatusBar"). Blizzard's own
---- bars keep the client's default snapping.
+--- Our own status bars, one at a time: SetStatusBarTexture mints a new fill
+--- texture on every call, so each bar of ours is hooked on its own to unsnap
+--- the new one. Call once, right after CreateFrame("StatusBar"). Never on a
+--- bar of Blizzard's (see the header: the metatable version of this was what
+--- tainted the cast bar).
 local barred = setmetatable({}, { __mode = "k" })
 function Pixel:Bar(bar)
     if bar == nil or barred[bar] then return bar end

@@ -215,8 +215,8 @@ local M = EV:NewModule("Nameplates", {
     -- units, a fractional number of physical pixels, so a host frame rounded
     -- to that box flips height and its centre moves half a pixel. Nothing
     -- here is sized to that box, and the root is sized in Layout to an even
-    -- number of physical pixels. The suite-wide unsnap hook in Pixel.lua is
-    -- countered per region in crisp mode (Pixel.KeepSnap).
+    -- number of physical pixels. In crisp mode the plate's own regions are
+    -- marked snapped (Pixel.KeepSnap), so NoSnap leaves them.
     pixelMode      = "crisp",
     -- Off. On, the game pins a plate to the edge of the screen when its mob
     -- walks out of view, so the plate stops tracking the mob and starts
@@ -673,19 +673,19 @@ end
 --     stops crawling. The call is guarded on the method existing either way, so it costs
 --     nothing if that client ever drops it.
 --
---  The suite-wide version, hooking the widget metatables so every image
---  setter in the game disables snapping on first touch, is a decision for the
---  parent addon, not for this module. This one is scoped: every region on OUR
---  plates, on every layout.
+--  A suite-wide version, hooking the widget metatables so every image setter
+--  in the game disabled snapping on first touch, was tried in Pixel.lua and
+--  taken out: those tables are shared with Blizzard's secure code, and on
+--  Forever the hooks tainted it (the cast bar and XP bar were blocked). This
+--  pass is scoped, and is the whole of it: every region on OUR plates, on
+--  every layout.
 --------------------------------------------------------------------------------
---- One implementation, in Pixel.lua, which also hooks the widget metatables so
---- every texture in the game is covered whether or not this walk reaches it.
---- This walk stays because it is cheap and because it is the belt to that
---- braces: the engine's aura buttons are minted in batches and the plate's
---- regions are the ones that actually have to be right.
---- In "crisp" mode this puts snapping BACK ON for the plate's own regions,
---- against the suite wide hook in Pixel.lua. The two modes have to agree with
---- each other across every region on the plate or we are back to the mix that
+--- One implementation, in Pixel.lua (Pixel.NoSnap); this walk is what reaches
+--- every region on the plate, the engine's aura buttons included, which are
+--- minted in batches.
+--- In "crisp" mode this puts snapping BACK ON for the plate's own regions, and
+--- marks them (Pixel.KeepSnap) so NoSnap leaves them. The two modes have to
+--- agree across every region on the plate or we are back to the mix that
 --- caused the jumping.
 local function SnapOff(r)
     if not r then return end
@@ -700,8 +700,7 @@ local function SnapOff(r)
         local ok, fill = pcall(r.GetStatusBarTexture, r)
         t = (ok and type(fill) == "table") and fill or nil
     end
-    -- Exempt from the suite wide unsnap hook, or the next SetTexture on this
-    -- region silently undoes the line below.
+    -- Marked, so NoSnap (from any pass) leaves it snapped.
     if KS then KS(r, true); if t then KS(t, true) end end
     if t and t.SetSnapToPixelGrid then pcall(t.SetSnapToPixelGrid, t, true) end
 end
