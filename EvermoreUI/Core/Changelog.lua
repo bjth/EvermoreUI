@@ -12,6 +12,7 @@ EvermoreUI.CHANGELOG = {
             } },
             { title = "Fixes", items = {
                 "The Buffs & Debuffs page said this client couldn't show them and hid its settings. The buffs themselves were fine; the page is back.",
+                "A lone \":\" under the chat when the input box was left showing without focus. The \"Say:\" part now only shows while you type.",
             } },
         },
     },

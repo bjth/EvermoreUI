@@ -199,6 +199,18 @@ local function EditHeaderFont(eb)
     end
 end
 
+--- The "Say:" header belongs to typing. A box left showing without focus
+--- (the game's classic chat style, or a box restored after a reload) would
+--- otherwise show the header on its own, often just its ": " when the
+--- channel part is blank.
+local function HeaderShown(eb, on)
+    if on == nil then on = eb.HasFocus and eb:HasFocus() or false end
+    for _, fs in ipairs({ eb.header, eb.headerSuffix }) do
+        if fs and fs.SetAlpha then fs:SetAlpha(on and 1 or 0) end
+    end
+end
+ns.HeaderShown = HeaderShown
+
 function ns.PlaceEditBox(cf)
     local eb = ns.EditBoxOf(cf)
     if not eb then return end
@@ -216,6 +228,7 @@ function ns.PlaceEditBox(cf)
     ns.ApplyShadow(eb)
     eb:SetTextInsets(G.padX(), G.padX(), 0, 0)
     EditHeaderFont(eb)
+    HeaderShown(eb)
 end
 
 -- With the input on top, our text gives up the strip the box covers, but
@@ -317,13 +330,15 @@ end
 
 -- Edit box state from Blizzard's chat events, permanent windows only.
 local EDIT_BOX_EVENTS = {
-    OnEditBoxShow = function() ns.RefreshInputStrips() end,
+    OnEditBoxShow = function(eb) HeaderShown(eb); ns.RefreshInputStrips() end,
     OnEditBoxHide = function() ns.RefreshInputStrips() end,
     OnEditBoxFocusGained = function(eb)
         EditHeaderFont(eb)
+        HeaderShown(eb, true)
         ns.Activity(true)
     end,
     OnEditBoxFocusLost = function(eb)
+        HeaderShown(eb, false)
         CFD(eb).index = 0
         ns.Activity(false)
     end,
