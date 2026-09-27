@@ -408,14 +408,29 @@ function Painter:States(look, opts)
     end
     d.Repaint = Repaint
     if obj.HookScript then
-        obj:HookScript("OnEnter", function() d.hover = true; Repaint() end)
-        obj:HookScript("OnLeave", function() d.hover = false; d.pressed = false; Repaint() end)
-        obj:HookScript("OnMouseDown", function() d.pressed = true; Repaint() end)
-        obj:HookScript("OnMouseUp", function() d.pressed = false; Repaint() end)
-        obj:HookScript("OnShow", Repaint)
+        local hooks = {
+            OnEnter     = function() d.hover = true; Repaint() end,
+            OnLeave     = function() d.hover = false; d.pressed = false; Repaint() end,
+            OnMouseDown = function() d.pressed = true; Repaint() end,
+            OnMouseUp   = function() d.pressed = false; Repaint() end,
+            OnShow      = Repaint,
+        }
         if obj.GetObjectType and obj:GetObjectType() == "EditBox" then
-            obj:HookScript("OnEditFocusGained", function() d.focus = true; Repaint() end)
-            obj:HookScript("OnEditFocusLost", function() d.focus = false; Repaint() end)
+            hooks.OnEditFocusGained = function() d.focus = true; Repaint() end
+            hooks.OnEditFocusLost = function() d.focus = false; Repaint() end
+        end
+        for script, fn in pairs(hooks) do obj:HookScript(script, fn) end
+        -- SetScript drops every hook on that script along with the handler,
+        -- and some of Blizzard's code sets scripts on every use. The game
+        -- menu does: MainMenuFrameMixin:AddButton sets OnEnter and OnLeave
+        -- on each button every time the menu opens, so its hover worked on
+        -- the first opening and never again. Put ours back after, through
+        -- hooksecurefunc, which leaves Blizzard's own call secure.
+        if type(obj.SetScript) == "function" then
+            pcall(hooksecurefunc, obj, "SetScript", function(self, script)
+                local fn = hooks[script]
+                if fn then self:HookScript(script, fn) end
+            end)
         end
     end
     for _, m in ipairs({ "Enable", "Disable", "SetEnabled" }) do

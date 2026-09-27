@@ -603,6 +603,38 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  4c. Three-slice button ThreeSliceButtonTemplate, 35 templates: the big red buttons
+--     The game menu's, and BigRedThreeSliceButtonTemplate's whole family
+--     (SharedButtonTemplate and its sizes, the gold-red ones, talents, end of
+--     match). Left, Center and Right, no Middle, so panelButton never saw
+--     them, and their art is set from Lua (ThreeSliceButtonMixin:UpdateButton,
+--     "128-RedButton-Left" and so on) on show, enable, disable and every
+--     press. That only swaps the atlas; the alpha we set stays, so the art
+--     stays down.
+--
+--     Fingerprinted on atlasName, the KeyValue every one of them carries:
+--     UpdateButton builds its atlas names from it, so Blizzard keeps it.
+--     The gold-red kit is their primary button, and it gets ours.
+--------------------------------------------------------------------------------
+R{
+    name = "threeSlice",
+    type = "Button",
+    keys = { "Left", "Center", "Right" },
+    test = function(b) return type(b.atlasName) == "string" end,
+    paint = function(b, p)
+        S.Blank(b)          -- the highlight atlas InitButton sets
+        p:Fade()
+        local look = b.atlasName:lower():find("goldred", 1, true) and LOOK.buttonPrimary or LOOK.button
+        local r = look.rest
+        p:Fill(r.fill ~= "none" and r.fill or "surface2")
+        p:Border(r.edge ~= "none" and r.edge or "borderStrong")
+        local fs = b.GetFontString and b:GetFontString()
+        p:Label(fs)
+        p:States(look, { label = fs })
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  4b. Radio button       UIRadioButtonTemplate
 --      A radio button is a CheckButton whose art is a FILE
 --      (Interface\Buttons\UI-RadioButton), so it was invisible to the old
@@ -1202,13 +1234,92 @@ R{
 --     Dead for the same reason as the inset: its Bg is
 --     Interface\DialogFrame\UI-DialogBox-Background, a file.
 --------------------------------------------------------------------------------
+--
+--     A dialog that stands on its own (the game menu, a pop-up) is a window,
+--     and is drawn as ours are (EvermoreUI/UI/Containers.lua, U.Window): the
+--     window surface, its edge, and the soft shadow that lets the edge read
+--     against the world. One inside another window is a box, and stays raised.
+--------------------------------------------------------------------------------
+local function TopLevel(f)
+    local ok, parent = pcall(f.GetParent, f)
+    if not (ok and parent) then return false end
+    local ok2, grand = pcall(parent.GetParent, parent)
+    return ok2 and (grand == UIParent or grand == nil)
+end
+S.TopLevel = TopLevel
+
+--- Our soft shadow round a frame of Blizzard's: frames of our own, below it.
+function S.Shadow(f, size)
+    local d = S.D(f)
+    if d.shadow or not (T.Shadow and f.GetFrameLevel) then return end
+    d.shadow = S.Ours(T.Shadow(f, size or 12))
+end
+
 R{
     name = "dialogBorder",
     layout = "Dialog",
     paint = function(f, p)
         p:Fade()
         p:FadeSlice()
-        p:Surface("raised")
+        if TopLevel(f) then
+            p:Surface("window")
+            S.Shadow(f)
+        else
+            p:Surface("raised")
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+-- 11b. Dialog header      DialogHeaderTemplate, 17 inherits: the metal banner over a dialog
+--     Its title becomes our title bar: the banner art goes, a strip in the
+--     title bar colour runs across the top of the dialog under it, with the
+--     divider rule below, and the title sits centred in it in gold. The
+--     strip is ours, drawn on the header and anchored to the dialog it
+--     crowns; nothing of Blizzard's moves except the title, re-seated within
+--     its own header (Painter:Reseat), because the banner hung 11px above
+--     the dialog (DialogTemplates.xml, Anchor TOP y="11") and the title with
+--     it.
+--
+--     Fingerprinted on headerTextPadding, the KeyValue UpdateWidth reads.
+--------------------------------------------------------------------------------
+local TITLE_BAR = 32      -- as U.Window's
+
+R{
+    name = "dialogHeader",
+    keys = { "LeftBG", "RightBG", "CenterBG", "Text" },
+    -- Present, not typed: the survey keeps every KeyValue as a string.
+    test = function(h) return h.headerTextPadding ~= nil end,
+    paint = function(h, p)
+        p:Fade()
+        p:Label(h.Text, "title", true)
+        local ok, win = pcall(h.GetParent, h)
+        if not (ok and S.Alive(win) and h.CreateTexture) then return end
+        -- How far the header stands above the dialog: its own anchor, 11px
+        -- in the template, read from the frames when they have been laid out.
+        local lift = 11
+        local ht, wt = S.Num(h.GetTop and h:GetTop()), S.Num(win.GetTop and win:GetTop())
+        if ht and wt then lift = ht - wt end
+        local tall = S.Num(h.Text.GetStringHeight and h.Text:GetStringHeight()) or 14
+        p:Reseat(h.Text, { { "TOP", 0, -(lift + 1 + TITLE_BAR / 2 - tall / 2) } })
+        local d = S.D(h)
+        if not d.bar then
+            d.bar = S.Ours(h:CreateTexture(nil, "BACKGROUND", nil, -8))
+            d.bar:SetPoint("TOPLEFT", win, "TOPLEFT", 1, -1)
+            d.bar:SetPoint("TOPRIGHT", win, "TOPRIGHT", -1, -1)
+            d.bar:SetHeight(TITLE_BAR)
+            d.rule = S.Ours(h:CreateTexture(nil, "BORDER"))
+            d.rule:SetPoint("TOPLEFT", d.bar, "BOTTOMLEFT")
+            d.rule:SetPoint("TOPRIGHT", d.bar, "BOTTOMRIGHT")
+            d.rule:SetHeight(1)
+            local function Paint()
+                local r = T.Resolve(LOOK.window)
+                d.bar:SetColorTexture(T.C4(r.titleBar))
+                d.rule:SetColorTexture(T.C4(r.divider))
+            end
+            Paint()
+            T.Watch(d.bar, Paint)
+        end
     end,
 }
 

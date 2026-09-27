@@ -19,6 +19,8 @@
 --    * a part that asks for its own window again, or a frame that dies
 --      mid-walk, does not break the walk
 --    * scroll box rows get one pass after a rebuild, none on a scroll
+--    * a window is walked once per opening
+--    * IsOrnate gives the answers the old per-pattern loop did, in two calls
 --    * pack hooks go on once however often the pack runs; S.Window's paths
 --      and its refusal of unknown fields; the dev commands
 --------------------------------------------------------------------------------
@@ -369,19 +371,26 @@ do
 end
 
 --------------------------------------------------------------------------------
---  7. Adopt: walk, pack after, and on show once now and once the frame after.
+--  7. Adopt: walk, pack after, and on show once, with no second pass queued.
 --------------------------------------------------------------------------------
 do
     local w = Window("AdoptWindow", 2, 3)
     local packs = 0
     S.Pack{ name = "AdoptWindow", apply = function() packs = packs + 1 end }
+    timers = {}
     S.Adopt(w)
     ok(packs == 1, "adopt: pack ran after the walk")
     Open(w)
     ok(packs == 2, "adopt: pack ran on show")
-    ok(#timers == 1, "adopt: one pass queued for the frame after")
+    ok(#timers == 0, "adopt: no second pass queued for the frame after")
+    -- A big window opened: one walk, not a second on top of it.
+    local big = Window("AdoptBig", 40, 50)
+    big:Hide()
+    S.Adopt(big)
+    Drain()
+    Open(big)
     Flush(); Drain()
-    ok(packs == 3, "adopt: and once more the frame after")
+    ok(not S.Walking(big), "adopt: big window walked once and done")
 end
 
 --------------------------------------------------------------------------------
@@ -506,6 +515,58 @@ do
     slashes.skin("find nothing like it")
     ok(out[1] and out[1]:find("Nothing on screen", 1, true), "find: says when nothing matches")
     print = realPrint
+end
+
+--------------------------------------------------------------------------------
+--  11. IsOrnate: the same verdicts as the pattern-by-pattern loop it replaced,
+--      far fewer calls, and a pooled texture given new art judged afresh.
+--------------------------------------------------------------------------------
+do
+    local ns2 = {}
+    Load("EvermoreUI_Skins/Core.lua", "EvermoreUI_Skins", ns2)
+    Load("EvermoreUI_Skins/Parts.lua", "EvermoreUI_Skins", ns2)
+    local S2 = ns2.S
+    -- File art as the client hands it back: an opaque id per file.
+    S2.TexID = function(path) return "FileData ID " .. path:lower() end
+    local function Old(region)
+        for _, pattern in ipairs(S2.ORNATE) do if S2.ArtIs(region, pattern) then return true end end
+        for _, path in ipairs(S2.ORNATE_FILES) do if S2.ArtIsFile(region, path) then return true end end
+        return false
+    end
+    local calls = 0
+    local function Region(atlas, tex)
+        return {
+            GetAtlas = function() calls = calls + 1; return atlas end,
+            GetTexture = function() calls = calls + 1; return tex end,
+        }
+    end
+    local atlases = { nil, "", "UI-Frame-Metal-CornerTopLeft", "common-dropdown-a-button", "QuestBG-Parchment",
+                      "ui-hud-actionbar-iconframe", "Professions-Icon-Quality", "communities-list-row" }
+    local texes = { nil, "", 132089, "Interface\\Icons\\INV_Misc_Bag_08",
+                    "Interface\\Common\\Some-Border-Piece", "FileData ID 424242" }
+    for _, path in ipairs(S2.ORNATE_FILES) do texes[#texes + 1] = S2.TexID(path) end
+    local same, n, disagree = true, 0, nil
+    for ai = 0, #atlases do
+        for ti = 0, #texes do
+            local r = Region(atlases[ai], texes[ti])
+            local want = Old(r)
+            for _ = 1, 2 do     -- the second time is from the cache
+                if S2.IsOrnate(r) ~= want then same = false; disagree = tostring(atlases[ai]) .. " / " .. tostring(texes[ti]) end
+            end
+            n = n + 1
+        end
+    end
+    ok(same, ("IsOrnate: same verdicts as before on %d combinations (%s)"):format(n, tostring(disagree)))
+    local r = Region("UI-Frame-Metal-CornerTopLeft", nil)
+    calls = 0; Old(r); local oldCalls = calls
+    calls = 0; S2.IsOrnate(r); local newCalls = calls
+    ok(newCalls <= 2, ("IsOrnate: %d calls a region, was %d"):format(newCalls, oldCalls))
+    -- Pooled: the same region, new art.
+    local atlas = "UI-Frame-Metal-CornerTopLeft"
+    local pooled = { GetAtlas = function() return atlas end, GetTexture = function() return nil end }
+    ok(S2.IsOrnate(pooled) == true, "IsOrnate: decoration while it holds a corner")
+    atlas = "ui-hud-actionbar-iconframe"
+    ok(S2.IsOrnate(pooled) == false, "IsOrnate: judged afresh when it holds something else")
 end
 
 ok(#errors == 0, "no errors raised: " .. tostring(errors[1]))
