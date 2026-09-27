@@ -520,7 +520,10 @@ local function EndTimer(f, s)
     end
     s.ends = nil
     Under(f, s, 1)
-    if s.edge then T.SetBorderToken(s.edge, "border") end
+    if s.edge then
+        if ns.LookColour then T.SetBorderColor(s.edge, ns.LookColour(M.db.look.borderColour))
+        else T.SetBorderToken(s.edge, "border") end
+    end
 end
 
 local function Overlay(f, s)

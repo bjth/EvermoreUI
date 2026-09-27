@@ -95,13 +95,28 @@ function ns.ApplyLook(f, s)
     local lk = Look()
     if s.edge then
         local size = lk.border or 1
-        EV.Pixel:CreateBorder(s.edge, max(1, size), Colour(lk.borderColour))
-        s.edge:SetShown(size > 0)
+        local b = EV.Pixel:CreateBorder(s.edge, max(1, size), Colour(lk.borderColour))
+        -- The edges only: the keybind and rank text live on this frame too.
+        for _, e in ipairs(b.edges) do e:SetShown(size > 0) end
     end
     local z = (lk.zoom or 8) / 100
     if f.Icon and f.Icon.SetTexCoord then f.Icon:SetTexCoord(z, 1 - z, z, 1 - z) end
+    ns.ApplySwipe(f)
+    -- Blizzard sets the swipe colour on every cooldown and aura refresh;
+    -- ours goes back on straight after.
+    if not s.swipeHooked then
+        s.swipeHooked = true
+        for _, method in ipairs({ "RefreshSpellCooldownInfo", "RefreshCooldownInfo" }) do
+            if not f.evCustom and type(f[method]) == "function" then
+                hooksecurefunc(f, method, function(self) ns.ApplySwipe(self) end)
+            end
+        end
+    end
+end
+
+function ns.ApplySwipe(f)
     local cd = f.Cooldown
-    if cd and cd.SetSwipeColor then pcall(cd.SetSwipeColor, cd, 0, 0, 0, (lk.swipe or 70) / 100) end
+    if cd and cd.SetSwipeColor then pcall(cd.SetSwipeColor, cd, 0, 0, 0, (Look().swipe or 70) / 100) end
 end
 
 --------------------------------------------------------------------------------
@@ -340,16 +355,22 @@ local function UpdateRefresh(f, s)
         return false
     end
     local c = Curve()
-    if not (c and C_UnitAuras and C_UnitAuras.GetAuraDuration) then return false end
+    if not (c and C_UnitAuras and C_UnitAuras.GetAuraDuration) then
+        if s.glow then s.glow.refresh:Hide() end
+        return false
+    end
     local ok, dur = pcall(C_UnitAuras.GetAuraDuration, unit, id)
     if not (ok and dur) then
         if s.glow then s.glow.refresh:Hide() end
         return false
     end
     local fn = mode == "seconds" and dur.EvaluateRemainingDuration or dur.EvaluateRemainingPercent
-    if not fn then return false end
-    local okE, v = pcall(fn, dur, c)
-    if not okE or type(v) == "nil" then return false end
+    local okE, v
+    if fn then okE, v = pcall(fn, dur, c) end
+    if not okE or type(v) == "nil" then
+        if s.glow then s.glow.refresh:Hide() end
+        return false
+    end
     local g = Glows(f, s)
     g.refresh:Show()
     -- v may be secret: straight into the setter, never compared.
