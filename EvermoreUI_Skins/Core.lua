@@ -717,9 +717,10 @@ end
 S.Matches = Matches
 
 --------------------------------------------------------------------------------
---  The walk
+--  Claiming
 --------------------------------------------------------------------------------
 local stats
+local running      -- the budgeted walk whose slice is running (see The walk)
 
 --- Try every part against one object, first match wins.
 function S.Dress(obj)
@@ -737,8 +738,9 @@ function S.Dress(obj)
                 S.errors[part.name] = (S.errors[part.name] or 0) + 1
                 S.lastError = ("%s: %s"):format(part.name, tostring(err))
                 geterrorhandler()(("EvermoreUI Skins (%s): %s"):format(part.name, tostring(err)))
-            elseif stats then
-                stats[part.name] = (stats[part.name] or 0) + 1
+            else
+                if stats then stats[part.name] = (stats[part.name] or 0) + 1 end
+                if running then running.dressed = running.dressed + 1 end
             end
             return part
         end
@@ -811,10 +813,47 @@ local function LiftText(obj)
 end
 S.LiftText = LiftText
 
---- Walk an object and everything under it once.
-function S.Walk(obj, depth)
-    depth = depth or 0
+--------------------------------------------------------------------------------
+--  The walk
+--
+--  S.Walk is synchronous: a whole subtree in one go. That is what a scroll
+--  box's row callback and a pack's k:Dress need, because both run inside
+--  Blizzard's own code and the row has to be dressed before it is drawn.
+--
+--  A window is walked differently. The professions and auction house windows
+--  run to thousands of frames, each one tried against every part, and in one
+--  go that is a hitch you feel when the window opens, and again at login when
+--  the sweep adopts every panel the game knows about. So a window's walk is a
+--  coroutine on a time budget: it does as much as fits in S.WALK_BUDGET_MS,
+--  lets the frame draw, and carries on in the next.
+--
+--  The first slice of a window that is on screen runs at once, inside the
+--  OnShow that asked for it, so a small window is dressed before it is ever
+--  drawn. Only a big one is seen part-dressed, and only for a frame or two.
+--  Windows walked while hidden (the login sweep) wait their turn and share
+--  one budget per frame, the one on screen first.
+--
+--  Lua 5.1 cannot yield across a pcall or a C function. The yield point is in
+--  Visit, between objects, never inside a part's paint (pcalled) or a callback
+--  Blizzard makes into us (a C boundary). Anything that walks from inside one
+--  of those goes through S.Walk, which holds yields off until it returns.
+--------------------------------------------------------------------------------
+S.WALK_BUDGET_MS = 4
+
+local now = debugprofilestop
+local hold = 0            -- > 0 while a synchronous walk is running: no yields
+
+local function Visit(obj, depth)
     if depth > MAX_DEPTH or not S.Alive(obj) or S.ours[obj] then return end
+    local w = running
+    if w then
+        w.nodes = w.nodes + 1
+        if hold == 0 and now() >= w.deadline and coroutine.running() == w.co then
+            coroutine.yield()
+            -- The frame may have gone while we were away.
+            if not S.Alive(obj) then return end
+        end
+    end
     local part = S.Dress(obj)
     -- A part may own a whole subtree. Tooltips are the case that matters:
     -- EvermoreUI_Tooltips skins them completely, so the walk claims them and
@@ -823,35 +862,189 @@ function S.Walk(obj, depth)
     if part and part.stop then return end
     StripOrnate(obj)
     LiftText(obj)
-    for _, c in ipairs(Children(obj)) do S.Walk(c, depth + 1) end
+    for _, c in ipairs(Children(obj)) do Visit(c, depth + 1) end
 end
+
+--- Walk an object and everything under it, now, in one go.
+function S.Walk(obj, depth)
+    hold = hold + 1
+    local ok, err = pcall(Visit, obj, depth or 0)
+    hold = hold - 1
+    if not ok then geterrorhandler()(("EvermoreUI Skins walk: %s"):format(tostring(err))) end
+end
+
+--- Budgeted walks: root -> its walk while one is going, and the order they
+--- take their turns in.
+local walks = setmetatable({}, { __mode = "k" })
+local queue = {}
+S.walkQueue = queue
+
+local function Shown(f)
+    if not (f and f.IsVisible) then return false end
+    local ok, v = pcall(f.IsVisible, f)
+    return ok and v == true
+end
+
+local function Step(w, budget)
+    local outer = running
+    running = w
+    local t0 = now()
+    w.deadline = t0 + budget
+    local ok, err = coroutine.resume(w.co)
+    local spent = now() - t0
+    running = outer
+    w.ms, w.slices = w.ms + spent, w.slices + 1
+    if spent > w.worst then w.worst = spent end
+    if not ok then
+        walks[w.root] = nil
+        geterrorhandler()(("EvermoreUI Skins walk: %s"):format(tostring(err)))
+        return true
+    end
+    if coroutine.status(w.co) ~= "dead" then return false end
+    walks[w.root] = nil
+    if S.profiling and S.ReportWalk then S.ReportWalk(w) end
+    if w.after then
+        local okA, errA = pcall(w.after, w.root)
+        if not okA then geterrorhandler()(("EvermoreUI Skins: %s"):format(tostring(errA))) end
+    end
+    -- Asked for again while it ran: what it asked about may already have
+    -- been passed, so go over the whole window once more.
+    if w.again then S.Rewalk(w.root, w.after) end
+    return true
+end
+
+local function Dequeue(w)
+    for i = #queue, 1, -1 do
+        if queue[i] == w then table.remove(queue, i) end
+    end
+end
+
+local runner = CreateFrame("Frame")
+runner:Hide()
+S.walkRunner = runner
+runner:SetScript("OnUpdate", function(self)
+    local t0 = now()
+    while queue[1] do
+        local left = S.WALK_BUDGET_MS - (now() - t0)
+        if left <= 0 then break end
+        local w = queue[1]
+        if Step(w, left) then Dequeue(w) else break end
+    end
+    if not queue[1] then self:Hide() end
+end)
+
+--- Walk a window on the budget, then call `after(root)` (the window's pack).
+--- Asking again while its walk is still going does not start a second one:
+--- it is noted, and the window is gone over once more when this one ends.
+function S.Rewalk(root, after)
+    if not S.Alive(root) or S.ours[root] then return end
+    if M.db and M.db.enabled == false then return end
+    local w = walks[root]
+    local shown = Shown(root)
+    if w then
+        -- Only if it has started: one still waiting will see everything.
+        if w.nodes > 0 then w.again = true end
+        w.after = after or w.after
+        -- Asked from inside its own slice (a part's paint): the note is
+        -- enough, a running coroutine cannot be resumed.
+        if coroutine.status(w.co) ~= "suspended" then return end
+        if shown and queue[1] ~= w then
+            -- Opened while it waited its turn: it goes first, and starts now.
+            Dequeue(w)
+            table.insert(queue, 1, w)
+            if Step(w, S.WALK_BUDGET_MS) then Dequeue(w) end
+        end
+        return
+    end
+    w = { root = root, after = after, nodes = 0, dressed = 0, ms = 0, slices = 0, worst = 0 }
+    w.co = coroutine.create(function() Visit(root, 0) end)
+    walks[root] = w
+    -- From inside a synchronous walk we cannot yield, so do not start a
+    -- slice here at all: queue it for the next frame.
+    if shown and hold == 0 then
+        if Step(w, S.WALK_BUDGET_MS) then return end
+        table.insert(queue, 1, w)
+    else
+        queue[#queue + 1] = w
+    end
+    runner:Show()
+end
+
+--- Is a budgeted walk still going over this frame?
+function S.Walking(root) return walks[root] ~= nil end
 
 --- Walk a window and keep it fresh: pooled rows and lazily built panes
 --- appear after the first pass, so walk again when it is next shown, and
 --- follow its scroll boxes.
 local watched = setmetatable({}, { __mode = "k" })
-function S.Adopt(frame)
-    if not S.Alive(frame) or S.ours[frame] or watched[frame] then return end
-    watched[frame] = true
-    S.Walk(frame, 0)
+
+local function Pack(frame)
     -- The pack runs AFTER the walk, so it works on a window the generic
     -- layer has already dressed and only has to deal with what was left.
     if S.ApplyPack then S.ApplyPack(frame) end
+end
+
+function S.Adopt(frame)
+    if not S.Alive(frame) or S.ours[frame] or watched[frame] then return end
+    watched[frame] = true
+    S.Rewalk(frame, Pack)
     if frame.HookScript then
         frame:HookScript("OnShow", function()
-            S.Walk(frame, 0)
-            if S.ApplyPack then S.ApplyPack(frame) end
+            S.Rewalk(frame, Pack)
+            -- And once more the frame after. Our hook runs after the
+            -- window's own OnShow but before its children's, and some of
+            -- those (the spellbook's pages) fill the window in then.
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0, function() S.Rewalk(frame, Pack) end)
+            end
         end)
     end
 end
 
+--- What the row passes cost, for `/evui skin profile`.
+S.rowCost = { passes = 0, ms = 0 }
+
+local function RowWalk(_, row)
+    if S.profiling then
+        local t0 = now()
+        S.Walk(row, 0)
+        S.rowCost.passes = S.rowCost.passes + 1
+        S.rowCost.ms = S.rowCost.ms + (now() - t0)
+    else
+        S.Walk(row, 0)
+    end
+end
+
 --- Scroll boxes recycle their rows; dress each one as it is initialised.
+---
+--- OnInitializedFrame fires after the row's initializer has run
+--- (ScrollBox.lua, OnViewInitializedFrame), so a row is finished when we see
+--- it. What that misses is a list rebuilt and then touched up (a selection
+--- set, a header collapsed) straight after, so a rebuild also gets one pass
+--- over the rows on show, the frame after, however many rebuilds there were.
+---
+--- It hooks FullUpdateInternal, not Update. Update runs on every step of a
+--- scroll (SetScrollPercentageInternal calls it), and re-walking the rows on
+--- each would be a cost paid every frame the wheel turns; a rebuild is a data
+--- change (OnViewDataChanged -> FullUpdate -> FullUpdateInternal).
 function S.FollowScrollBox(box)
     if not S.Alive(box) or S.D(box).followed then return end
     if not (ScrollUtil and ScrollUtil.AddInitializedFrameCallback) then return end
     S.D(box).followed = true
-    ScrollUtil.AddInitializedFrameCallback(box, function(_, row) S.Walk(row, 0) end, nil, false)
-    if box.ForEachFrame then pcall(box.ForEachFrame, box, function(row) S.Walk(row, 0) end) end
+    ScrollUtil.AddInitializedFrameCallback(box, RowWalk, nil, false)
+    local function All()
+        if box.ForEachFrame then pcall(box.ForEachFrame, box, function(row) RowWalk(nil, row) end) end
+    end
+    All()
+    local pending = false
+    local function Soon()
+        if pending or not (C_Timer and C_Timer.After) then return end
+        pending = true
+        C_Timer.After(0, function() pending = false; All() end)
+    end
+    if type(box.FullUpdateInternal) == "function" then
+        pcall(hooksecurefunc, box, "FullUpdateInternal", Soon)
+    end
 end
 
 --------------------------------------------------------------------------------
