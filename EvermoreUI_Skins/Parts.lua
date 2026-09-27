@@ -319,14 +319,58 @@ S.ORNATE_FILES = {
     "Interface\\Store\\Store-Main",
 }
 
-local function IsOrnate(region)
-    for _, pattern in ipairs(S.ORNATE) do
-        if S.ArtIs(region, pattern) then return true end
-    end
+--- Is this region decoration, by the two lists above?
+---
+--- The same answer S.ArtIs and S.ArtIsFile would give pattern by pattern,
+--- read once. That loop asked the client for the region's atlas and texture
+--- twice per pattern, 118 pcalled calls and 37 lowercased copies for every
+--- texture the walk passed, and the walk passes every texture on every
+--- object each time a window opens: most of the 40 to 100ms a re-walk of the
+--- character window cost, with nothing left to dress.
+---
+--- The verdict is kept per piece of art (atlas and texture together), not
+--- per region, so a pooled texture that comes back holding different art is
+--- judged afresh. The lists never change after load.
+local verdicts = {}    -- atlas .. "\0" .. texture -> true / false
+local fileIds          -- the resolved ids of S.ORNATE_FILES, as a set
+
+local function FileIds()
+    if fileIds then return fileIds end
+    local set = {}
     for _, path in ipairs(S.ORNATE_FILES) do
-        if S.ArtIsFile(region, path) then return true end
+        local id = S.TexID(path)
+        if id then set[id] = true end
     end
-    return false
+    fileIds = set
+    return set
+end
+
+local function IsOrnate(region)
+    if type(region) ~= "table" then return false end
+    local atlas, tex
+    if region.GetAtlas then
+        local ok, a = pcall(region.GetAtlas, region)
+        if ok and type(a) == "string" and a ~= "" then atlas = a end
+    end
+    if region.GetTexture then
+        local ok, t = pcall(region.GetTexture, region)
+        if ok and t ~= nil and t ~= "" then tex = t end
+    end
+    if not atlas and tex == nil then return false end
+    local key = (atlas or "") .. "\0" .. tostring(tex)
+    local hit = verdicts[key]
+    if hit ~= nil then return hit end
+    local yes = false
+    local la = atlas and atlas:lower()
+    local lt = type(tex) == "string" and tex:lower() or nil
+    for _, pattern in ipairs(S.ORNATE) do
+        if (la and la:find(pattern)) or (lt and lt:find(pattern)) then yes = true; break end
+    end
+    -- A file only counts on a region with no atlas: dozens of atlases share
+    -- one sheet, as S.ArtIsFile explains.
+    if not yes and not atlas and tex ~= nil and FileIds()[tex] then yes = true end
+    verdicts[key] = yes
+    return yes
 end
 S.IsOrnate = IsOrnate
 

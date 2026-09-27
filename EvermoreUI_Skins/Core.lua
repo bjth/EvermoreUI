@@ -854,14 +854,27 @@ local function Visit(obj, depth)
             if not S.Alive(obj) then return end
         end
     end
+    -- Where the time goes, for /evui skin profile: trying the parts, taking
+    -- decoration down, lifting dark text.
+    local prof = w and S.profiling
+    local t0 = prof and now()
     local part = S.Dress(obj)
+    local t1 = prof and now()
     -- A part may own a whole subtree. Tooltips are the case that matters:
     -- EvermoreUI_Tooltips skins them completely, so the walk claims them and
     -- goes no further rather than having two of our own addons paint the
     -- same frames.
-    if part and part.stop then return end
+    if part and part.stop then
+        if prof then w.tParts = w.tParts + (t1 - t0) end
+        return
+    end
     StripOrnate(obj)
+    local t2 = prof and now()
     LiftText(obj)
+    if prof then
+        local t3 = now()
+        w.tParts, w.tArt, w.tText = w.tParts + (t1 - t0), w.tArt + (t2 - t1), w.tText + (t3 - t2)
+    end
     for _, c in ipairs(Children(obj)) do Visit(c, depth + 1) end
 end
 
@@ -956,7 +969,8 @@ function S.Rewalk(root, after)
         end
         return
     end
-    w = { root = root, after = after, nodes = 0, dressed = 0, ms = 0, slices = 0, worst = 0 }
+    w = { root = root, after = after, nodes = 0, dressed = 0, ms = 0, slices = 0, worst = 0,
+          tParts = 0, tArt = 0, tText = 0 }
     w.co = coroutine.create(function() Visit(root, 0) end)
     walks[root] = w
     -- From inside a synchronous walk we cannot yield, so do not start a
@@ -989,15 +1003,13 @@ function S.Adopt(frame)
     watched[frame] = true
     S.Rewalk(frame, Pack)
     if frame.HookScript then
-        frame:HookScript("OnShow", function()
-            S.Rewalk(frame, Pack)
-            -- And once more the frame after. Our hook runs after the
-            -- window's own OnShow but before its children's, and some of
-            -- those (the spellbook's pages) fill the window in then.
-            if C_Timer and C_Timer.After then
-                C_Timer.After(0, function() S.Rewalk(frame, Pack) end)
-            end
-        end)
+        -- Once per opening. A second pass the frame after was tried and
+        -- taken out: on a window whose walk spans frames it arrived while
+        -- the first was still going and made it go over the whole window
+        -- again, doubling the cost of every opening for nothing seen to
+        -- need it. Content built later is the packs' and the row
+        -- callbacks' to catch.
+        frame:HookScript("OnShow", function() S.Rewalk(frame, Pack) end)
     end
 end
 

@@ -68,6 +68,7 @@ end
 function S.ReportWalk(w)
     Say(("walk |cffe3b464%s|r: %.1fms over %d slice(s), longest %.1fms; %d looked at, %d dressed%s"):format(
         NameOf(w.root), w.ms, w.slices, w.worst, w.nodes, w.dressed, w.again and ", going again" or ""))
+    Say(("   parts %.1fms, decoration %.1fms, text %.1fms"):format(w.tParts or 0, w.tArt or 0, w.tText or 0))
 end
 
 local rowTicker
