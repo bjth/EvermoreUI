@@ -409,6 +409,29 @@ end
 S.IsOrnate = IsOrnate
 
 --------------------------------------------------------------------------------
+--  0. Backdrop input      an EditBox that borrows the tooltip's backdrop
+--      (TooltipBackdropTemplate): the static pop-ups' text field
+--      (StaticPopupTemplate's EditBox, AutoCompleteEditBoxTemplate plus
+--      TooltipBackdropTemplate). The tooltip part below claims anything with a
+--      tooltip layout and stops, so the pop-up's field was left with no box at
+--      all. Claimed first, as an input.
+--------------------------------------------------------------------------------
+R{
+    name = "backdropInput",
+    type = "EditBox",
+    layout = { "TooltipDefaultLayout", "TooltipMixedLayout" },
+    paint = function(e, p)
+        p:Fade()
+        p:FadeSlice()
+        p:Fill("surfaceSunk")
+        p:Border("borderStrong")
+        p:States(LOOK.input, { label = e })
+        if e.Instructions then p:Label(e.Instructions, LOOK.input.rest.placeholder) end
+        p:TextPad(LOOK.input.pad, LOOK.input.pad)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  0a. Tooltips           layoutType Tooltip*, 48 templates
 --      CLAIMED AND LEFT ALONE, on purpose. EvermoreUI_Tooltips already skins
 --      GameTooltip, the shopping tooltips, ItemRefTooltip and the shared
@@ -2735,6 +2758,54 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  Game dialog           StaticPopupTemplate (Blizzard_StaticPopup_Game): the
+--      confirmations (unlearn, delete, sell, invite). A BG frame of two atlases
+--      Blizzard sets in OnLoad (GameDialogBackgroundTop, the diamond border, and
+--      UI-DialogBox-Background-Dark), both in S.ORNATE, and nothing else, so
+--      once they were down the dialog was a shadowless see-through box.
+--      Ours: a window, with its shadow.
+--
+--  Dialog button         StaticPopupButtonTemplate: file art
+--      (UI-DialogBox-Button-Up/-Down/-Disabled/-Highlight) and a Flash glow
+--      for PulseAnim. Ours: the button Look, the first button (the one that
+--      does the thing) primary.
+--------------------------------------------------------------------------------
+R{
+    name = "gameDialog",
+    keys = { "BG", "ButtonContainer", "CoverFrame", "EditBox" },
+    paint = function(f, p)
+        -- The alert icon and the progress bar are content.
+        p:Fade(nil, { f.AlertIcon, f.ProgressBarFill, f.ProgressBarBorder })
+        p:FadeSlice()
+        if S.Alive(f.BG) then S.PainterFor(f.BG):Fade() end
+        p:Surface("window")
+        if TopLevel(f) then S.Shadow(f) end
+        if f.Text then p:Label(f.Text, "text") end
+        if f.SubText then p:Label(f.SubText, "textMuted") end
+    end,
+}
+
+R{
+    name = "dialogButton",
+    type = "Button",
+    file = { normal = "Interface\\Buttons\\UI-DialogBox-Button-Up" },
+    paint = function(b, p)
+        S.Blank(b)
+        p:Fade()
+        if b.Flash then StripArt(b.Flash) end
+        local primary = b.GetID and b:GetID() == 1
+        local look = primary and LOOK.buttonPrimary or LOOK.button
+        local r = look.rest
+        p:Fill(r.fill ~= "none" and r.fill or "surface2")
+        p:Border(r.edge ~= "none" and r.edge or "borderStrong")
+        local fs = b.Text or (b.GetFontString and b:GetFontString())
+        p:Label(fs)
+        p:States(look, { label = fs })
+    end,
+}
+
+
+--------------------------------------------------------------------------------
 -- 11b. Dialog header      DialogHeaderTemplate, 17 inherits: the metal banner over a dialog
 --     Its title becomes our title bar: the banner art goes, a strip in the
 --     title bar colour runs across the top of the dialog under it, with the
@@ -2978,7 +3049,7 @@ local function HasFurniture(f)
     return false
 end
 
--- 12. Window: Blizzard's own label. 35 templates.
+-- 12. Window: Blizzard's own label. 34 templates.
 R{
     name = "window",
     layout = { "PortraitFrameTemplate", "PortraitFrameTemplateMinimizable",

@@ -883,11 +883,13 @@ P{
 --                      to where the recipe list starts (y=-72), centred on it.
 --    RecipeList        TOPLEFT x=5 y=-72 to the bottom, 304 wide (OverrideArt):
 --                      its Professions-background-summarylist art and inset
---                      nine-slice go; our panel, like the schematic beside it.
+--                      nine-slice go, and it ends on the footer.
 --      SearchBox       20 tall next to a 22px filter; both 24, one line.
---    SchematicForm     beside the list, with Create All, the count spinner
---                      and Create below it on the page's bottom edge: a footer
---                      band under the schematic for them.
+--    SchematicForm     beside the list, 484 tall, an inset (the inset part
+--                      boxes it). No box on either side: one hairline between
+--                      the two, the way the spellbook's pages meet.
+--    Create controls   Create All, the count spinner and Create on a footer
+--                      the width of the window, grouped on its right.
 --    Side tabs         ProfessionsOverviewTab at TOPRIGHT y=-60 with seven
 --                      profession tabs chained under it; the character
 --                      window's tabs, sized and set flush the same way.
@@ -897,7 +899,7 @@ P{
 --  everything in the schematic for a recipe (its reagent slots, the track
 --  check box: Init runs per recipe).
 --------------------------------------------------------------------------------
-local PROF = { list = 72, pad = 8, control = 24, gap = 6 }
+local PROF = { list = 72, pad = 8, control = 24, gap = 6, footer = 36 }
 
 P{
     name  = "ProfessionsFrame",
@@ -1020,11 +1022,42 @@ P{
             k:After(page, "Refresh", Unlearn)
         end
 
-        -- The recipe list: a panel, search and filter on one line.
+        -- The footer, the whole width of the window, like the spellbook's.
+        local foot = Band(page, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(PROF.footer)
+        end)
+
+        -- The recipe list and the schematic sit straight on the window, with
+        -- one hairline between them: no box round either (Ben: two nested
+        -- borders read cramped). The list runs from the tool bar down to the
+        -- footer; the schematic is Blizzard's fixed 484 tall, which ends on
+        -- the footer's line.
         local list = page.RecipeList
+        local form = page.SchematicForm
+        if form then
+            k:NoFill(form)
+            EV.Pixel:ShowEdges(form, false)
+            if form.NineSlice then k:Fade(form.NineSlice) end
+        end
         if list then
             if list.BackgroundNineSlice then k:Fade(list.BackgroundNineSlice) end
-            k:Panel(list, "surface0")
+            k:Fade(list)
+            k:Anchors(list, { { "TOPLEFT", page, "TOPLEFT", 5, -PROF.list },
+                              { "BOTTOMLEFT", foot, "TOPLEFT", 4, 0 } })
+            k:Once(list, "divider", function()
+                local rule = S.Ours(page:CreateTexture(nil, "BORDER"))
+                if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(rule) end
+                rule:SetPoint("TOPLEFT", list, "TOPRIGHT", 1, 0)
+                rule:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT", 1, 0)
+                local function Paint()
+                    rule:SetColorTexture(S.Colour("border"))
+                    rule:SetWidth((EV.Pixel and EV.Pixel.One and EV.Pixel:One(page)) or 1)
+                end
+                Paint()
+                T.Watch(rule, Paint)
+            end)
             local filter, search = list.FilterDropdown, list.SearchBox
             if filter then
                 k:Size(filter, nil, PROF.control)
@@ -1037,13 +1070,8 @@ P{
             end
         end
 
-        -- The footer under the schematic, for Create All, the count and Create.
-        local form = page.SchematicForm
+        -- Create All, the count and Create, on the footer.
         if form then
-            local foot = Band(page, "footer", "top", function(b)
-                b:SetPoint("TOPLEFT", form, "BOTTOMLEFT", 0, -1)
-                b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
-            end)
 
             -- One group on the footer's right, the way Blizzard reads it:
             -- [Create All] [<] [count] [>] [Create], an even gap between each.
