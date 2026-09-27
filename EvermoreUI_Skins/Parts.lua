@@ -1468,8 +1468,13 @@ R{
 --  9i. Stat header        CharacterStatFrameCategoryTemplate and the side
 --     pane's CharacterFrameSidePaneCategoryTemplate: a brown banner
 --     (UI-Character-Info-Title) with its title in it. Ours is the kit's group
---     header: a control-coloured bar, its edge, the title in gold.
+--     header: a control-coloured bar, its edge, the title in gold. The frame
+--     is 40px tall (CharacterFrame.xml) with the banner stretched over all of
+--     it, which read as a slab; ours is a 26px band centred in it, on a frame
+--     of our own.
 --------------------------------------------------------------------------------
+local HEADER_BAND = 26
+
 R{
     name = "statHeader",
     keys = { "Background" },
@@ -1477,9 +1482,40 @@ R{
     test = function(f) return type(f.Title or f.Label) == "table" end,
     paint = function(f, p)
         p:Fade()
-        p:Fill("surface2")
-        p:Border("border")
+        local d = S.D(f)
+        if not d.band then
+            d.band = S.Ours(CreateFrame("Frame", nil, f))
+            d.band:SetPoint("LEFT", f, "LEFT", 0, 0)
+            d.band:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+            d.band:SetHeight(HEADER_BAND)
+            d.band:SetFrameLevel(math.max(0, f:GetFrameLevel() - 1))
+            d.band:EnableMouse(false)
+        end
+        p:Fill("surface2", nil, nil, d.band)
+        p:Border("border", nil, d.band)
         p:Label(f.Title or f.Label, "title", true)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9o. Model control      ModelSceneControlButtonTemplate: the zoom, turn and
+--     reset buttons over a model (the character window, inspect, the dressing
+--     room). A grey square atlas behind an icon atlas Blizzard sets per
+--     button. Ours: our button, the icon kept and tinted to the Look's glyph
+--     colour, lighter under the mouse.
+--------------------------------------------------------------------------------
+R{
+    name = "modelControl",
+    type = "Button",
+    keys = { "Icon" },
+    art  = { normal = "common%-button%-square%-gray" },
+    paint = function(b, p)
+        S.Blank(b)
+        p:Fade(nil, { b.Icon })
+        p:Fill(LOOK.button.rest.fill)
+        p:Border(LOOK.button.rest.edge)
+        if b.Icon.SetDesaturated then b.Icon:SetDesaturated(true) end
+        p:States(LOOK.button, { glyph = b.Icon })
     end,
 }
 
