@@ -148,7 +148,13 @@ function R:Build()
     Add("EvermoreUI %s", tostring(EV.version))
     Add("Client %s (%s), interface %s, %s", tostring(c.version), tostring(c.build), tostring(c.interface), GetLocale())
     local w, h = GetPhysicalScreenSize()
-    Add("Screen %sx%s, UI scale %.2f", tostring(w), tostring(h), UIParent:GetEffectiveScale())
+    -- The scale to three places, beside the pixel-perfect one and whether we
+    -- manage it: at two places a pixel-perfect 0.548 read as a rounded 0.55.
+    local P = EV.Pixel
+    local s = P and P.ScaleSettings and P.ScaleSettings()
+    Add("Screen %sx%s, UI scale %.3f (pixel perfect %.3f; %s)", tostring(w), tostring(h),
+        UIParent:GetEffectiveScale(), P and P:Perfect() or 0,
+        s and s.managed and ("ours, size %d%%"):format((s.size or 1) * 100 + 0.5) or "Blizzard's")
     local _, class = UnitClass("player")
     Add("Character: level %s %s", tostring(UnitLevel("player")), tostring(class))
     Add("Profile: %s", EV.DB:GetProfileName())
