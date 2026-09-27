@@ -79,8 +79,10 @@ L.buttonDanger = {
     focus    = { edge = "danger" },
     disabled = { fill = "surface1", edge = "border", text = "textDisabled" },
 }
+-- Even sizes: the badge and its cross are both centred, and odd ones put the
+-- cross half a pixel off.
 L.reset = {                                    -- a small "clear these filters" badge: copper while
-    glyphSize = 7, box = 13,                   -- there is something to clear, red under the mouse
+    glyphSize = 8, box = 14,                   -- there is something to clear, red under the mouse
     rest     = { fill = "surface2", edge = "borderStrong", glyph = "accent" },
     hover    = { fill = "danger", edge = "danger", glyph = "onAccent" },
     pressed  = { fill = { "danger", k = 0.8 }, edge = "danger", glyph = "onAccent" },

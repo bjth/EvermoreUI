@@ -1019,6 +1019,13 @@ end
 function S.Adopt(frame)
     if not S.Alive(frame) or S.ours[frame] or watched[frame] then return end
     watched[frame] = true
+    -- The pack once straight away as well as after the walk. A window whose
+    -- addon loads as it opens (professions) is shown before its budgeted walk
+    -- can finish, and its layout arrived a few frames late: the buttons were
+    -- seen to jump. Packs are written to be run again (every mover keeps
+    -- Blizzard's origin and sets absolute values), so the second run after
+    -- the walk only finishes what the parts' paint needed.
+    Pack(frame)
     S.Rewalk(frame, Pack)
     if frame.HookScript then
         -- Once per opening. A second pass the frame after was tried and

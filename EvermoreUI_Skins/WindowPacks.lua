@@ -963,6 +963,61 @@ P{
             local function Seat() k:Move(rank, "CENTER", bar, "CENTER", 0, 3) end
             Seat()
             k:After(page, "SetRankBarAnchors", Seat)
+
+            -- A small addition of ours: the overview's Unlearn cross, beside
+            -- the skill bar on the profession's own page too. It opens
+            -- Blizzard's own UNLEARN_SKILL dialog (type the word to confirm),
+            -- exactly as the overview's button does
+            -- (Blizzard_ProfessionsBook/Camelot, FormatProfession), and only
+            -- for a primary profession, which is all the overview offers it for.
+            k:Once(rank, "unlearn", function()
+                local b = S.Ours(CreateFrame("Button", nil, rank))
+                b:SetFrameStrata("HIGH")
+                b:SetFrameLevel(rank:GetFrameLevel() + 5)
+                local p = S.PainterFor(b)
+                p:Fill(T.LOOK.buttonDanger.rest.fill)
+                p:Border(T.LOOK.buttonDanger.rest.edge)
+                p:Glyph("close", T.LOOK.close.glyphSize, "danger")
+                p:States(T.LOOK.buttonDanger)
+                b:SetScript("OnEnter", function(self2)
+                    GameTooltip:SetOwner(self2, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(UNLEARN_SKILL_TOOLTIP or UNLEARN or "Unlearn")
+                    GameTooltip:Show()
+                end)
+                b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+                S.D(rank).unlearn = b
+            end)
+            local unlearn = S.D(rank).unlearn
+            local function Primary()
+                local ok, info = pcall(Professions.GetProfessionInfo)
+                if not (ok and info) then return end
+                local line = info.parentProfessionID or info.professionID
+                local p1, p2 = GetProfessions()
+                for _, idx in ipairs({ p1, p2 }) do
+                    if idx then
+                        local name, _, _, _, _, _, skillLine = GetProfessionInfo(idx)
+                        if skillLine == line then return name, skillLine end
+                    end
+                end
+            end
+            local function Unlearn()
+                if not unlearn then return end
+                local fill = rank.Fill
+                local one = EV.Pixel:One(rank)
+                local h = (fill and fill:GetHeight() or 18) + 2 * one
+                unlearn:SetSize(h, h)
+                unlearn:ClearAllPoints()
+                unlearn:SetPoint("LEFT", fill or rank, "RIGHT", one + 2, 0)
+                local name, line = Primary()
+                unlearn:SetShown(name ~= nil and rank:IsShown())
+                unlearn:SetScript("OnClick", function()
+                    local popup = InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled()
+                        and "UNLEARN_SKILL_GAMEPAD" or "UNLEARN_SKILL"
+                    StaticPopup_Show(popup, name, nil, line)
+                end)
+            end
+            Unlearn()
+            k:After(page, "Refresh", Unlearn)
         end
 
         -- The recipe list: a panel, search and filter on one line.

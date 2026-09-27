@@ -85,7 +85,8 @@ meter in our style, and cooldown icons that tell you more.
   recipe, with the count centred. The profession tabs down the side match
   the character window's. Reagent and result icons use the icon style. The
   overview's cards are plain cards, their spells in the icon style and
-  Unlearn a small red cross button.
+  Unlearn a small red cross button, which now also sits beside the skill
+  bar on a primary profession's own page.
 - **Page arrows** in every window that uses the spellbook's (mail, the
   merchant, collections) are flat buttons with a chevron.
 

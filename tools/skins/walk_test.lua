@@ -20,6 +20,7 @@
 --      mid-walk, does not break the walk
 --    * scroll box rows get one pass after a rebuild, none on a scroll
 --    * a window is walked once per opening
+--    * a skinned control's hover survives Blizzard setting its scripts
 --    * IsOrnate gives the answers the old per-pattern loop did, in two calls
 --    * pack hooks go on once however often the pack runs; S.Window's paths
 --      and its refusal of unknown fields; the dev commands
@@ -371,7 +372,8 @@ do
 end
 
 --------------------------------------------------------------------------------
---  7. Adopt: walk, pack after, and on show once, with no second pass queued.
+--  7. Adopt: pack straight away (so a window shown mid-walk has its layout at
+--     once), walk, pack after, and on show once, with no second pass queued.
 --------------------------------------------------------------------------------
 do
     local w = Window("AdoptWindow", 2, 3)
@@ -379,9 +381,9 @@ do
     S.Pack{ name = "AdoptWindow", apply = function() packs = packs + 1 end }
     timers = {}
     S.Adopt(w)
-    ok(packs == 1, "adopt: pack ran after the walk")
+    ok(packs == 2, "adopt: pack ran at once and after the walk")
     Open(w)
-    ok(packs == 2, "adopt: pack ran on show")
+    ok(packs == 3, "adopt: pack ran on show")
     ok(#timers == 0, "adopt: no second pass queued for the frame after")
     -- A big window opened: one walk, not a second on top of it.
     local big = Window("AdoptBig", 40, 50)
@@ -567,6 +569,46 @@ do
     ok(S2.IsOrnate(pooled) == true, "IsOrnate: decoration while it holds a corner")
     atlas = "ui-hud-actionbar-iconframe"
     ok(S2.IsOrnate(pooled) == false, "IsOrnate: judged afresh when it holds something else")
+end
+
+--------------------------------------------------------------------------------
+--  12. A control's hover survives SetScript. The client drops every hook on a
+--      script when it is set, and the game menu sets OnEnter and OnLeave on
+--      each button every time it opens (MainMenuFrameMixin:AddButton).
+--------------------------------------------------------------------------------
+do
+    local b = { _handlers = {} }
+    function b:GetObjectType() return "Button" end
+    function b:IsForbidden() return false end
+    function b:IsEnabled() return true end
+    function b:CreateTexture() return FakeTex() end
+    function b:SetScript(script, fn) self._handlers[script] = fn and { fn } or {} end
+    function b:HookScript(script, fn)
+        self._handlers[script] = self._handlers[script] or {}
+        table.insert(self._handlers[script], fn)
+    end
+    local function Fire(script) for _, fn in ipairs(b._handlers[script] or {}) do fn(b) end end
+    S.PainterFor(b):States(EvermoreUI.Theme.LOOK.button, {})
+    local d = S.D(b)
+    Fire("OnEnter")
+    ok(d.hover == true, "hover: set on enter")
+    Fire("OnLeave")
+    ok(d.hover == false, "hover: cleared on leave")
+    -- The menu opens again: Blizzard sets the scripts afresh.
+    b:SetScript("OnEnter", nil)
+    b:SetScript("OnLeave", nil)
+    Fire("OnEnter")
+    ok(d.hover == true, "hover: still followed after SetScript")
+    Fire("OnLeave")
+    ok(d.hover == false, "hover: leave still followed after SetScript")
+    -- And once more, with a handler of Blizzard's own (a disabled button's tooltip).
+    local theirs = 0
+    b:SetScript("OnEnter", function() theirs = theirs + 1 end)
+    Fire("OnEnter")
+    ok(theirs == 1 and d.hover == true, "hover: theirs and ours both run")
+    local n = #b._handlers.OnEnter
+    b:SetScript("OnEnter", nil)
+    ok(#b._handlers.OnEnter == 1, ("hover: ours put back once, not piled up (%d)"):format(#b._handlers.OnEnter))
 end
 
 ok(#errors == 0, "no errors raised: " .. tostring(errors[1]))
