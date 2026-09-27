@@ -69,6 +69,8 @@ local function IconKey(id) return "spell:" .. id end
 
 --- What picking this tile opens: a cooldown's own timer, or a buff's bar.
 local function PickFor(item)
+    if item.extra == "add" then return "yours" end
+    if item.extra == "mine" then return "mine" end
     if item.f.evCustom then return "custom:" .. item.f.evUID end
     if item.group == "cd" and SpellOf(item.f) then return IconKey(item.id) end
     return BarKey(item.native)
@@ -127,10 +129,57 @@ local function Move(it, to, index)
 end
 
 --------------------------------------------------------------------------------
+--  Dropping from your bags or spellbook
+--  Whatever's on the cursor when you let go over a row: an item or a spell
+--  on a cooldown row becomes one of your own icons there; a spell on a buff
+--  row joins Your buffs.
+--------------------------------------------------------------------------------
+local function CursorThing()
+    local ok, kind, a, b, c = pcall(GetCursorInfo)
+    if not ok or not kind then return nil end
+    if kind == "item" and type(a) == "number" then return "item", a end
+    if kind == "spell" then
+        local id = type(c) == "number" and c or nil
+        if not id and type(a) == "number" and C_SpellBook and C_SpellBook.GetSpellBookItemInfo then
+            local bank = Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
+            local okI, info = pcall(C_SpellBook.GetSpellBookItemInfo, a, bank)
+            id = okI and type(info) == "table" and info.spellID or nil
+        end
+        if type(id) == "number" and not issecret(id) then return "spell", id end
+    end
+    return "other"
+end
+
+--- Take what's on the cursor into row `key`. true when something was held
+--- (taken or not), so the click isn't also treated as a pick.
+local function DropOn(key)
+    local kind, id = CursorThing()
+    if not kind then return false end
+    if kind == "other" or key == HIDDEN then ClearCursor(); return true end
+    local buffRow = key == "mine" or key == "buffs"
+    if buffRow then
+        if kind == "spell" and M.AddMyBuff(id) then
+            ClearCursor()
+            EV.DesignerUI:Commit()
+            EV.DesignerUI:Select("mine")
+            return true
+        end
+        EV:Print(L["Only spells go in Your buffs. Drop items on a cooldown row."])
+        ClearCursor()
+        return true
+    end
+    M:AddCustom(kind, id, key)
+    ClearCursor()
+    EV.DesignerUI:Commit()
+    EV.DesignerUI:Select("yours")
+    return true
+end
+
+--------------------------------------------------------------------------------
 --  Drawing
 --------------------------------------------------------------------------------
 local function PaintTile(t)
-    local on = t.item and EV.DesignerUI:Selected() == PickFor(t.item) and t.item.group == "cd"
+    local on = t.item and EV.DesignerUI:Selected() == PickFor(t.item) and (t.item.group == "cd" or t.item.extra)
     T.SetBorderToken(t, (on or t:IsMouseOver()) and "accent" or "border")
 end
 
@@ -146,12 +195,24 @@ local function Tile(i)
     t.icon:SetPoint("TOPLEFT", 1, -1)
     t.icon:SetPoint("BOTTOMRIGHT", -1, 1)
     t.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    t.plus = T.Text(t, 22, "textMuted", true)
+    t.plus:SetPoint("CENTER", 0, 1)
+    t.plus:SetText("+")
+    t.plus:Hide()
     T.TokenBorder(t, "border")
     t:RegisterForClicks("AnyUp")
     t:SetScript("OnEnter", function(self)
         if dragging then return end
         T.SetBorderToken(self, "accent")
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        if self.item.extra then
+            GameTooltip:AddLine(self.name, 1, 1, 1)
+            GameTooltip:AddLine(self.item.extra == "add"
+                and L["Add a trinket, an item or a spell to your cooldown bars."]
+                or L["Click to change which buffs this bar shows, and how it looks."], 0.75, 0.78, 0.82, true)
+            GameTooltip:Show()
+            return
+        end
         GameTooltip:AddLine(self.name or L["Cooldown"], 1, 1, 1)
         if self.item.f.evCustom then
             GameTooltip:AddLine(self.item.f.evWhat or L["Your own icon"], 0.83, 0.57, 0.31)
@@ -162,10 +223,13 @@ local function Tile(i)
         GameTooltip:Show()
     end)
     t:SetScript("OnLeave", function(self) GameTooltip:Hide(); PaintTile(self) end)
+    t:SetScript("OnReceiveDrag", function(self) DropOn(self.row) end)
     t:SetScript("OnMouseDown", function(self, button)
         if button ~= "LeftButton" then return end
+        if DropOn(self.row) then return end
         GameTooltip:Hide()
         EV.DesignerUI:Select(PickFor(self.item))
+        if self.item.extra then return end   -- picked, never dragged
         dragging = { tile = self, item = self.item, from = self.row }
         grid.ghost.icon:SetTexture(self.icon:GetTexture())
         grid.ghost:Show()
@@ -186,8 +250,11 @@ local function Row(key, label)
     r.key = key
     -- Clicking the row itself (not an icon) picks its bar.
     r:EnableMouse(true)
+    r:SetScript("OnReceiveDrag", function() DropOn(key) end)
     r:SetScript("OnMouseDown", function(_, button)
-        if button == "LeftButton" and key ~= HIDDEN then EV.DesignerUI:Select(BarKey(key)) end
+        if button == "LeftButton" and DropOn(key) then return end
+        if button ~= "LeftButton" or key == HIDDEN then return end
+        EV.DesignerUI:Select(key == "mine" and "mine" or BarKey(key))
     end)
     r.bg = T.Fill(r, "BACKGROUND", "surfaceSunk", 0.6)
     r.bg:SetAllPoints()
@@ -256,7 +323,8 @@ local function Build(stage)
     -- The picked bar's row and the picked cooldown carry the accent.
     function grid.Paint(sel)
         for key, r in pairs(rows) do
-            T.SetBorderToken(r, (key ~= HIDDEN and sel == BarKey(key)) and "accent" or "border")
+            local picked = key == "mine" and sel == "mine" or (key ~= HIDDEN and sel == BarKey(key))
+            T.SetBorderToken(r, picked and "accent" or "border")
         end
         for _, t in ipairs(tiles) do if t:IsShown() then PaintTile(t) end end
     end
@@ -274,33 +342,68 @@ local function Draw()
     if problem then y = y - 36 end
 
     local order = {}
-    for _, def in ipairs(M.BARS) do order[#order + 1] = { key = def.key, label = def.label } end
+    for _, def in ipairs(M.BARS) do order[#order + 1] = { key = def.key, label = def.label, add = not def.buff } end
+    order[#order + 1] = { key = "mine", label = L["Your buffs"] }
     order[#order + 1] = { key = HIDDEN, label = L["Hidden from our bars"] }
+
+    -- Your buffs: the ones you've named, to look at and click, not drag.
+    local mine = {}
+    for i, e in ipairs(M:MyBuffs()) do
+        local name = M.MyBuffName(e)
+        local ok, tex = pcall(C_Spell.GetSpellTexture, type(e.spell) == "number" and e.spell or name)
+        mine[i] = { extra = "mine", name = name, tex = ok and not issecret(tex) and tex or 134400 }
+    end
+    contents.mine = mine
 
     for _, o in ipairs(order) do
         local r = Row(o.key, o.label)
-        local list = contents[o.key] or {}
-        local lines = max(1, math.ceil(#list / per))
+        local real = contents[o.key] or {}
+        -- The cooldown rows end in a + tile that adds one of your own.
+        local list = real
+        if o.add then
+            list = {}
+            for i, it in ipairs(real) do list[i] = it end
+            list[#list + 1] = { extra = "add", name = L["Add your own"] }
+        end
+        local lines = max(1, math.ceil(max(#list, 1) / per))
         local h = lines * ICON + (lines - 1) * GAP + PAD
         r:ClearAllPoints()
         r:SetPoint("TOPLEFT", grid, "TOPLEFT", PAD, y)
         r:SetSize(width, h)
         r.slots = {}
-        r.empty:SetText(#list == 0 and (o.key == HIDDEN and L["Nothing hidden. Drag an icon here to hide it."]
-            or L["Empty. Drag icons here."]) or "")
+        local emptyText = ""
+        if #real == 0 then
+            emptyText = o.key == HIDDEN and L["Nothing hidden. Drag an icon here to hide it."]
+                or o.key == "mine" and L["No buffs named yet. Click here to pick some."]
+                or o.add and L["Empty. Drag icons here, or add your own."]
+                or L["Empty. Drag icons here."]
+        end
+        r.empty:ClearAllPoints()
+        r.empty:SetPoint("LEFT", r, "LEFT", PAD + ((o.add and #real == 0) and (ICON + GAP) or 0), 0)
+        r.empty:SetText(emptyText)
         for i, it in ipairs(list) do
             n = n + 1
             local t = Tile(n)
-            t.item, t.row, t.name = it, o.key, Name(it.f)
-            t.icon:SetTexture(Texture(it.f))
-            t.icon:SetDesaturated(o.key == HIDDEN or (it.f.evCustom and not it.f.evActive) or false)
+            t.item, t.row = it, o.key
+            if it.extra then
+                t.name = it.name
+                t.icon:SetTexture(it.extra == "mine" and it.tex or nil)
+                t.icon:SetDesaturated(false)
+                t.plus:SetShown(it.extra == "add")
+            else
+                t.name = Name(it.f)
+                t.icon:SetTexture(Texture(it.f))
+                t.icon:SetDesaturated(o.key == HIDDEN or (it.f.evCustom and not it.f.evActive) or false)
+                t.plus:Hide()
+            end
             local col, line = (i - 1) % per, floor((i - 1) / per)
             t:ClearAllPoints()
             t:SetPoint("TOPLEFT", r, "TOPLEFT", PAD / 2 + col * (ICON + GAP), -PAD / 2 - line * (ICON + GAP))
             t:SetFrameLevel(r:GetFrameLevel() + 2)
             t:SetAlpha(1)
             t:Show()
-            r.slots[i] = t
+            -- Only real icons are places to drop between.
+            if not it.extra then r.slots[#r.slots + 1] = t end
         end
         y = y - h - 30
     end
@@ -416,7 +519,7 @@ function Elements()
     end
     local function Rebuild(commit) EV.DesignerUI:RebuildInspector(commit) end
     list[#list + 1] = {
-        key = "mine", label = L["Your buffs"],
+        key = "mine", label = L["Your buffs"], fresh = true,
         sub = L["The buffs you name, in a bar of their own. Where it sits on screen is edit mode."],
         Options = function(p) ns.MyBuffSettings(p, Rebuild) end,
         Reset = function() ns.ResetBar(ns.MINE) end,

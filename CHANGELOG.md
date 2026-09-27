@@ -10,10 +10,12 @@ doesn't track.
   cooldown (potions, Healthstones, engineering gear) or a spell the game
   doesn't list. They drag, reorder and hide like the rest. Items show how
   many you carry and grey out when you have none; a trinket shows while it
-  has a Use. Add your own in the designer's Cooldowns tab.
+  has a Use. Drag one from your bags or spellbook onto a row in the
+  designer's Cooldowns tab, or press the + at the end of a row.
 - **Your buffs**: a bar of just the buffs you name, a paladin's seals for
-  example. Every rank counts, and it keeps working in combat. Size, layout
-  and visibility like the other bars; place it in edit mode.
+  example. Pick them from the buffs on you, drag a spell onto the row, or
+  type a name. Every rank counts, and it keeps working in combat. Size,
+  layout and visibility like the other bars; place it in edit mode.
 
 ### Fixes
 - The Buffs & Debuffs page said this client couldn't show them and hid its

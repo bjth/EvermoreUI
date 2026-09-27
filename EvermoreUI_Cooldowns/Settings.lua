@@ -223,6 +223,7 @@ function ns.CustomSettings(p, rebuild)
                onClick = function() M:RemoveCustom(e.uid); rebuild(true) end }
     end
     p:Section(L["Add"])
+    p:Note(L["Quickest: drag an item from your bags, or a spell from your spellbook, onto a cooldown row."], 0.6)
     p:Row{ type = "dropdown", text = L["Goes on"], values = BARS_FOR_NEW,
           get = function() return target end, set = function(v) target = v end }
     p:Row{ type = "dropdown", text = L["A trinket slot"],
@@ -283,6 +284,33 @@ function ns.MyBuffSettings(p, rebuild)
         p:Row{ type = "button", text = M.MyBuffName(e) or "?", label = L["Remove"], width = 90,
                onClick = function() M.RemoveMyBuff(i); Refresh(); rebuild(true) end }
     end
+    -- Buffs on you right now (out of combat, where they can be read), to
+    -- add with a click.
+    local have = {}
+    for _, e in ipairs(list) do
+        local n = M.MyBuffName(e)
+        if n then have[n:lower()] = true end
+    end
+    local now, seen = {}, {}
+    local issecret = issecretvalue or function() return false end
+    for i = 1, 40 do
+        local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+        if not ok or not a then break end
+        if type(a.name) == "string" and not issecret(a.name) and not issecret(a.spellId)
+           and not have[a.name:lower()] and not seen[a.name] then
+            seen[a.name] = true
+            now[#now + 1] = a
+        end
+    end
+    if #now > 0 then
+        p:Section(L["On you now"])
+        for _, a in ipairs(now) do
+            p:Row{ type = "button", text = a.name, label = L["Add"], width = 90,
+                   onClick = function() M.AddMyBuff(a.spellId); Refresh(); rebuild(true) end }
+        end
+    end
+    p:Section(L["Add by name"])
+    p:Note(L["Or drag a spell from your spellbook onto the Your buffs row."], 0.6)
     p:Row{ type = "input", text = L["Add a buff"], width = 170,
            placeholder = L["Name, ID or link"],
            tooltip = L["Its name covers every rank. Seal of Righteousness, for example."],

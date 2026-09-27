@@ -55,6 +55,7 @@ if EV_BLOCKED then return end
 --    Options(p)               inspector rows, with the options page builder
 --    sub                      the line under its name in the inspector
 --    unlisted = true          picked on the canvas only, not in the list
+--    fresh = true             rows drawn again each time it's picked
 --    Reset()
 --------------------------------------------------------------------------------
 local EV = EvermoreUI
@@ -84,6 +85,7 @@ local inspectorCache = {}         -- tabKey .. element key -> { frame, builder }
 local suspended = false
 local quiet = false               -- our own inspector refreshes, not a user change
 local pending                     -- an inspector commit waiting for the control to settle
+local shownKey                    -- the inspector entry on show
 
 local SNAP = 3                    -- snap distance, frame units
 local OwnPoint                    -- below
@@ -556,6 +558,7 @@ local function SyncInspector()
     for _, c in pairs(inspectorCache) do c.frame:Hide() end
     local e = selected and Element(selected)
     if not e then
+        shownKey = nil
         inspector.title:SetText(surface and surface.title or "")
         inspector.sub:SetText(surface and surface.help or L["Pick something on the frame, or from the list."])
         inspector.reset:Hide()
@@ -569,6 +572,14 @@ local function SyncInspector()
     inspector.reset:SetShown(e.Reset ~= nil)
     local ck = TabKey() .. ":" .. e.key
     local c = inspectorCache[ck]
+    -- fresh: rows that read the game (buffs on you now) are drawn again
+    -- each time the element is picked, not kept from last time.
+    if c and e.fresh and shownKey ~= ck then
+        c.frame:Hide()
+        inspectorCache[ck] = nil
+        c = nil
+    end
+    shownKey = ck
     if not c then
         -- The page builder puts its rows T.PAD in from the left, which suits
         -- the options window and not this narrow column: the host is pulled
