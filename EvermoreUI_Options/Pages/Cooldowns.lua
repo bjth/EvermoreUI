@@ -21,7 +21,7 @@ EV.Options:RegisterPage{
                 p:Banner(problem)
             end
         end
-        p:Banner(L["Cooldowns are set up in the designer. Drag icons to arrange your bars, click a bar for its size, layout and text, or click a cooldown to give it a linked timer."],
+        p:Banner(L["Cooldowns are set up in the designer. Drag icons to arrange your bars, click a bar for its size, layout and text, or click a cooldown to give it a linked timer. Add your own trinkets, items and spells there too, and a bar of just the buffs you name."],
                  L["Open designer"], function() EV.Designers:Open("cooldowns") end)
         p:Note(L["Also /evui design. Where the bars sit on your screen is edit mode: /evui edit."])
     end,

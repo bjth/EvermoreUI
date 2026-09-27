@@ -51,6 +51,7 @@ local function Texture(f)
 end
 
 local function Name(f)
+    if f.evLabel then return f.evLabel end
     local info = f.cooldownInfo
     if type(info) ~= "table" then return nil end
     return M.SpellName(info.overrideSpellID) or M.SpellName(info.spellID)
@@ -68,6 +69,7 @@ local function IconKey(id) return "spell:" .. id end
 
 --- What picking this tile opens: a cooldown's own timer, or a buff's bar.
 local function PickFor(item)
+    if item.f.evCustom then return "custom:" .. item.f.evUID end
     if item.group == "cd" and SpellOf(item.f) then return IconKey(item.id) end
     return BarKey(item.native)
 end
@@ -78,7 +80,7 @@ local function Contents()
     local a = M:Arrangement(false)
     for _, def in ipairs(M.BARS) do
         local list = {}
-        for _, f in ipairs(M.Members(def, true)) do
+        for _, f in ipairs(M.Members(def, true, true)) do
             local id = M.IdOf(f)
             if id then list[#list + 1] = { id = id, f = f, group = def.buff and "buff" or "cd", native = def.key } end
         end
@@ -91,6 +93,11 @@ local function Contents()
             if id and a and a.hidden[id] then
                 hidden[#hidden + 1] = { id = id, f = f, group = def.buff and "buff" or "cd", native = def.key }
             end
+        end
+    end
+    for _, f in ipairs(ns.CustomFrames and ns.CustomFrames() or {}) do
+        if a and a.hidden[f.evKey] then
+            hidden[#hidden + 1] = { id = f.evKey, f = f, group = "cd", native = f.evHome }
         end
     end
     out[HIDDEN] = hidden
@@ -146,6 +153,9 @@ local function Tile(i)
         T.SetBorderToken(self, "accent")
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         GameTooltip:AddLine(self.name or L["Cooldown"], 1, 1, 1)
+        if self.item.f.evCustom then
+            GameTooltip:AddLine(self.item.f.evWhat or L["Your own icon"], 0.83, 0.57, 0.31)
+        end
         GameTooltip:AddLine(self.item.group == "buff" and L["Drag along the row to reorder, or to the tray to hide it."]
             or L["Drag to reorder, to the other cooldown row to move it there, or to the tray to hide it. Click for its linked timer."],
             0.75, 0.78, 0.82, true)
@@ -240,6 +250,8 @@ local function Build(stage)
         EV.DesignerUI:Commit()
     end)
     grid.reset:SetPoint("LEFT", grid.blizz, "RIGHT", 8, 0)
+    grid.add = W.Button(grid, L["Add your own"], 130, function() EV.DesignerUI:Select("yours") end)
+    grid.add:SetPoint("LEFT", grid.reset, "RIGHT", 8, 0)
 
     -- The picked bar's row and the picked cooldown carry the accent.
     function grid.Paint(sel)
@@ -281,7 +293,7 @@ local function Draw()
             local t = Tile(n)
             t.item, t.row, t.name = it, o.key, Name(it.f)
             t.icon:SetTexture(Texture(it.f))
-            t.icon:SetDesaturated(o.key == HIDDEN)
+            t.icon:SetDesaturated(o.key == HIDDEN or (it.f.evCustom and not it.f.evActive) or false)
             local col, line = (i - 1) % per, floor((i - 1) / per)
             t:ClearAllPoints()
             t:SetPoint("TOPLEFT", r, "TOPLEFT", PAD / 2 + col * (ICON + GAP), -PAD / 2 - line * (ICON + GAP))
@@ -402,10 +414,35 @@ function Elements()
             Reset = function() ns.ResetBar(def) end,
         }
     end
+    local function Rebuild(commit) EV.DesignerUI:RebuildInspector(commit) end
+    list[#list + 1] = {
+        key = "mine", label = L["Your buffs"],
+        sub = L["The buffs you name, in a bar of their own. Where it sits on screen is edit mode."],
+        Options = function(p) ns.MyBuffSettings(p, Rebuild) end,
+        Reset = function() ns.ResetBar(ns.MINE) end,
+    }
+    list[#list + 1] = {
+        key = "yours", label = L["Your own icons"],
+        sub = L["Add trinkets, items and spells to your cooldown bars."],
+        Options = function(p) ns.CustomSettings(p, Rebuild) end,
+    }
     list[#list + 1] = {
         key = "timers", label = L["Linked timers"],
-        Options = function(p) ns.TimerList(p, function(commit) EV.DesignerUI:RebuildInspector(commit) end) end,
+        Options = function(p) ns.TimerList(p, Rebuild) end,
     }
+    for _, f in ipairs(ns.CustomFrames and ns.CustomFrames() or {}) do
+        local frame = f
+        list[#list + 1] = {
+            key = "custom:" .. f.evUID, label = f.evLabel or L["Your own icon"], unlisted = true,
+            sub = L["Drag it on the grid to move it or hide it."],
+            Options = function(p)
+                ns.CustomIconSettings(p, frame, function()
+                    EV.DesignerUI:Select(nil)
+                    EV.DesignerUI:Commit()
+                end)
+            end,
+        }
+    end
     local contents = Contents()
     local seen = {}
     for _, items in pairs(contents) do
@@ -431,7 +468,7 @@ end
 EV.Designers:Register{
     key = "cooldowns", title = L["Cooldowns"], module = "Cooldowns", kind = "grid",
     page = "cooldowns",
-    help = L["Drag icons to reorder them, move a cooldown between the Essential and Utility bars, or drop one in the tray to hide it. The order is saved for your class and spec. Click a row for its bar's settings, or a cooldown for its linked timer."],
+    help = L["Drag icons to reorder them, move a cooldown between the Essential and Utility bars, or drop one in the tray to hide it. The order is saved for your class and spec. Click a row for its bar's settings, or a cooldown for its linked timer. Add your own adds trinkets, items and spells; Your buffs is a bar of the buffs you name."],
     note = L["Which spells are tracked is the game's choice: Choose tracked spells opens its settings."],
     Tabs = function() return { { value = "spec", text = L["This spec"] } } end,
     BuildGrid = function(stage)
@@ -455,7 +492,8 @@ EV.Designers:Register{
     Snapshot = function()
         local a = M:Arrangement(false)
         return { spec = M.SpecKey(), data = a and EV.CopyTable(a) or nil,
-                 bars = EV.CopyTable(M.db.bars), timers = EV.CopyTable(M:Timers()) }
+                 bars = EV.CopyTable(M.db.bars), timers = EV.CopyTable(M:Timers()),
+                 custom = EV.CopyTable(M:CustomList()), mine = EV.CopyTable(M:MyBuffs()) }
     end,
     Restore = function(_, snap)
         if not snap then return end
@@ -469,11 +507,14 @@ EV.Designers:Register{
                 end
             end
         end
-        if snap.timers then
-            local list = M:Timers()
-            wipe(list)
-            for i, t in ipairs(snap.timers) do list[i] = EV.CopyTable(t) end
+        for field, fn in pairs({ timers = "Timers", custom = "CustomList", mine = "MyBuffs" }) do
+            if snap[field] then
+                local list = M[fn](M)
+                wipe(list)
+                for i, t in ipairs(snap[field]) do list[i] = EV.CopyTable(t) end
+            end
         end
+        if ns.SyncCustom then ns.SyncCustom() end
         M:Refresh()
     end,
     Apply = function() M:Refresh() end,

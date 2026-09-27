@@ -42,6 +42,11 @@ if EV_BLOCKED then return end
 --  follows your last cast, whoever it was on. The overlay is our own Cooldown
 --  frame fed plain numbers, a child of the item, keyed by spell name so it
 --  covers every rank and survives the pool handing the icon to another frame.
+--
+--  Your own icons (Custom.lua): trinket slots, items and spells Blizzard
+--  doesn't track, drawn on frames of ours and keyed "c:<uid>", so they take
+--  part in your arrangement exactly as Blizzard's items do. And a fourth bar,
+--  Your buffs, for the buffs you name (a paladin's seals, say).
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 if not (EvermoreUI and EvermoreUI.NewModule) then return end
@@ -74,10 +79,15 @@ local M = EV:NewModule("Cooldowns", {
     -- [key] = { order = { [cooldownID] = n }, bar = { [cooldownID] = barKey },
     --           hidden = { [cooldownID] = true } }
     arrange = {},
+    -- Your own icons, per class: { { uid, kind = "slot"|"item"|"spell", id, bar }, ... }
+    custom = {},
+    -- Buffs for the Your buffs bar, per class: { { spell = id or name, seen = { [id] = true } }, ... }
+    myBuffs = {},
     bars = {
         essential = BarDefaults(42, 8, "CENTER", "DOWN", true),
         utility   = BarDefaults(32, 10, "CENTER", "DOWN", true),
         buffs     = BarDefaults(34, 10, "CENTER", "UP", false),
+        mine      = BarDefaults(32, 8, "RIGHT", "UP", false),
     },
 })
 M.title = "Cooldowns"
@@ -162,6 +172,7 @@ function M:Arrangement(create)
 end
 
 local function IdOf(f)
+    if f.evKey then return f.evKey end
     local id = f.cooldownID
     if type(id) == "number" and not (issecretvalue and issecretvalue(id)) then return id end
 end
@@ -172,9 +183,21 @@ for _, def in ipairs(BARS) do if not def.buff then COOLDOWN_DEFS[#COOLDOWN_DEFS 
 
 --- The bar an item belongs on: yours if you moved it, else its own viewer's.
 --- nil when you've hidden it.
+local function Enabled(key) return key and M.db.bars[key] and M.db.bars[key].enabled end
+
 function M.BarOf(f, src)
     local a = M:Arrangement(false)
     local id = IdOf(f)
+    -- Ours: moved, hidden, or on the bar it was added to (or the other
+    -- cooldown bar, if that one's switched off).
+    if f.evCustom then
+        if a and a.hidden[id] then return nil end
+        local to = a and a.bar[id]
+        if Enabled(to) then return to end
+        if Enabled(f.evHome) then return f.evHome end
+        for _, d in ipairs(COOLDOWN_DEFS) do if Enabled(d.key) then return d.key end end
+        return nil
+    end
     if a and id then
         if a.hidden[id] then return nil end
         local to = not src.buff and a.bar[id]
@@ -187,12 +210,19 @@ end
 
 --- Items a bar shows, in your order (then Blizzard's). all: include buffs
 --- that are currently inactive.
-local function Members(def, all)
+--- designer: also your own icons that have nothing to show now (an empty
+--- trinket slot, a spell not learned yet), so they can still be arranged.
+local function Members(def, all, designer)
     local a = M:Arrangement(false)
     local out = {}
     for _, src in ipairs(def.buff and { def } or COOLDOWN_DEFS) do
         for _, f in ipairs(Items(src, true)) do
             if M.BarOf(f, src) == def.key and (all or f:IsShown()) then out[#out + 1] = f end
+        end
+    end
+    if not def.buff and ns.CustomFrames then
+        for _, f in ipairs(ns.CustomFrames()) do
+            if (f.evActive or designer) and M.BarOf(f) == def.key then out[#out + 1] = f end
         end
     end
     if a then
@@ -414,6 +444,7 @@ M.SpellName = SpellName
 
 --- The spell an item stands for, by name.
 function ItemSpell(f)
+    if f.evSpellName then return f.evSpellName end
     local info = f.cooldownInfo
     if type(info) ~= "table" then return nil end
     return SpellName(info.overrideSpellID) or SpellName(info.spellID)
@@ -504,6 +535,10 @@ local function TimerBars()
             end
         end
     end
+    for _, f in ipairs(ns.CustomFrames and ns.CustomFrames() or {}) do
+        local s = state[f]
+        if s and f.evSpellName then ShowTimer(f, s) end
+    end
 end
 
 local function OnCast(spellID)
@@ -519,6 +554,9 @@ end
 --------------------------------------------------------------------------------
 --- Opacity for a bar right now, or nil when it should be out of sight.
 local function Opacity(db)
+    return M.Opacity(db)
+end
+function M.Opacity(db)
     local v = db.visibility
     if v == "hidden" then return nil end
     if not inCombat then
@@ -587,6 +625,7 @@ local function Place(bar, def)
                 f:SetPoint("TOPLEFT", bar, "TOPLEFT", x * k, -y * k)
             end
             f:SetAlpha(alpha)
+            if f.evCustom then f:Show() end
             Fonts(f, s, size)
             Texts(f, s, db, size)
             if not def.buff then ShowTimer(f, s) end
@@ -598,11 +637,26 @@ end
 
 local PlaceOne
 
+--- Your own icons that no bar placed this time (hidden, nothing to show,
+--- or their bar is off) are put away. They're ours, so hiding is fine.
+local function PutAwayCustom()
+    if not ns.CustomFrames then return end
+    for _, f in ipairs(ns.CustomFrames()) do
+        local key = f.evActive and M.BarOf(f)
+        local db = key and M.db.bars[key]
+        if not (key and db and db.enabled and M.Opacity(db)) then
+            Park(f)
+            f:Hide()
+        end
+    end
+end
+
 function Relayout(def)
     -- The two cooldown bars share items (you can move one across), so
     -- Blizzard laying out either viewer re-places both.
     if not def.buff then
         for _, d in ipairs(COOLDOWN_DEFS) do PlaceOne(d) end
+        PutAwayCustom()
     else
         PlaceOne(def)
     end
@@ -621,7 +675,9 @@ end
 
 function M:LayoutAll()
     for _, def in ipairs(BARS) do Relayout(def) end
+    if ns.LayoutMine then ns.LayoutMine() end
 end
+M.Park = function(f) Park(f) end
 
 --------------------------------------------------------------------------------
 --  Wiring
@@ -650,6 +706,7 @@ end
 
 function M:OnEnable()
     for _, def in ipairs(BARS) do Build(def) end
+    if ns.EnableCustom then ns.EnableCustom() end
 
     -- The module is built on the game's Cooldown Manager, which is off by
     -- default. Switch it on once; after that it's the user's to change.

@@ -3,6 +3,19 @@ if EV_BLOCKED then return end
 -- changelog, not this file.
 EvermoreUI.CHANGELOG = {
     {
+        version = "0.12.5",
+        intro = { "Your own cooldowns: the bars now take what the game's Cooldown Manager doesn't track." },
+        sections = {
+            { title = "New", items = {
+                "**Your own icons** in the cooldown bars: a trinket slot, any item with a cooldown (potions, Healthstones, engineering gear) or a spell the game doesn't list. They drag, reorder and hide like the rest. Items show how many you carry and grey out when you have none; a trinket shows while it has a Use. Add your own in the designer's Cooldowns tab.",
+                "**Your buffs**: a bar of just the buffs you name, a paladin's seals for example. Every rank counts, and it keeps working in combat. Size, layout and visibility like the other bars; place it in edit mode.",
+            } },
+            { title = "Fixes", items = {
+                "The Buffs & Debuffs page said this client couldn't show them and hid its settings. The buffs themselves were fine; the page is back.",
+            } },
+        },
+    },
+    {
         version = "0.12.0",
         intro = { "The unit frames catch up with the rest of the suite: everything Blizzard's target and player frames used to carry, and the settings you'd expect from a full frames addon." },
         sections = {
@@ -123,28 +136,6 @@ EvermoreUI.CHANGELOG = {
                 "Spellbook: tidier school tabs, and an option to hide the parchment.",
                 "The flight map is skinned.",
                 "The nameplate pixel check has moved out of your login chat and into `/evui bug`.",
-            } },
-        },
-    },
-    {
-        version = "0.9.0",
-        intro = { "First public release. Everything below has been played on Forever's beta throughout development; expect rough edges and please report them with `/evui bug`." },
-        sections = {
-            { title = "", items = {
-                "**Unit Frames**: clean, resizable player, target, target of target, focus and pet frames.",
-                "**Nameplates**: our own plates on Blizzard's: health, cast, your dots with timers, threat colouring and target highlighting. Targeting stays Blizzard's.",
-                "**Action Bars**: Blizzard's buttons in EvermoreUI bars, with our layout, look, fading and movers. Paging, keybinds and casting are still Blizzard's.",
-                "**Auras**: movable buffs and debuffs, plus trackers for seals, aspects, shouts and the like.",
-                "**Minimap**: square, with zone, clock, coordinates and buttons around it.",
-                "**Objective Tracker**: your quests in our own panel, with levelling extras.",
-                "**Data Bars**: experience with quest and rested segments, XP/hour, time to level and session stats.",
-                "**Micro Menu and Bag Bar**: flat glyph micro menu, bag bar with free slots.",
-                "**Chat**: a clean chat panel with sidebar, idle fade, timestamps, short channel names, clickable links and copy.",
-                "**Tooltips**: tooltips and right-click menus in the EvermoreUI style, with class colours, item level, quality borders and a movable or cursor anchor.",
-                "**Window Skins**: Blizzard's own windows in the EvermoreUI palette, their layout untouched.",
-                "**Quality of Life**: auto repair, sell greys, fast loot, quest accept and hand-in. Hold Shift to skip.",
-                "Profiles, profile strings (`/evui export`, `/evui import`), pixel-perfect scaling and a full Edit Mode (`/evui edit`).",
-                "`/evui bug` builds a report to paste into GitHub issues.",
             } },
         },
     },
