@@ -395,6 +395,17 @@ STEPS[#STEPS + 1] = { key = "everyday", title = L["Everyday"],
                    tooltip = L["The game's own windows in the EvermoreUI palette: character, spellbook, quest log, professions and the rest. Turning it off needs a reload."],
                    get = function() return s.db.enabled end,
                    set = function(v) s.db.enabled = v; if v then s:Refresh() else NeedReload() end end }
+            if s.db.damageMeter ~= nil then
+                local sns = EV._ModuleNS["EvermoreUI_Skins"]
+                p:Row{ type = "toggle", text = L["Skin the damage meter too"],
+                       tooltip = L["Forever's built-in damage meter to match: our title bar, surface, flat bars and font. Its own settings keep working."],
+                       disabled = function() return not s.db.enabled end,
+                       get = function() return s.db.damageMeter end,
+                       set = function(v)
+                           s.db.damageMeter = v
+                           if v then if sns and sns.RefreshDamageMeter then sns.RefreshDamageMeter() end else NeedReload() end
+                       end }
+            end
         end
         if not (q or s) then p:Note(L["Quality of Life and Window Skins are switched off, so there's nothing to set here."]) end
     end }
