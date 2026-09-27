@@ -1576,6 +1576,7 @@ local function StripArt(t)
     pcall(hooksecurefunc, t, "SetAtlas", Clear)
     pcall(hooksecurefunc, t, "SetTexture", Clear)
 end
+S.StripArt = StripArt
 
 local function Passive(item)
     local ok, v = pcall(function() return item.spellBookItemInfo and item.spellBookItemInfo.isPassive end)
@@ -2208,7 +2209,134 @@ R{
 }
 
 --------------------------------------------------------------------------------
---  9i2. Popout button     EquipmentFlyoutPopoutButtonTemplate: the tab beside
+--  9r. Crafting results and the crafter's details
+--
+--     itemCard       the loot card: an item button beside its name on a
+--                    looting_itemcard_bg plate with a stroke round it, lit by
+--                    HighlightNameFrame / PushedNameFrame (both shown and hidden
+--                    by Blizzard's scripts). The crafting output log's entries
+--                    (ProfessionsCraftingOutputLogElementTemplate.ItemContainer)
+--                    and the loot window's (LootFrameElementTemplate) both wear
+--                    it. Ours: the kit's tile, hover and press from Blizzard's
+--                    own highlight textures, and a proc (CritFrame, the
+--                    Professions-Results-InspiredCreation border) as the tile's
+--                    chosen state. The quality stripe goes; the quality text
+--                    and the name keep their quality colour.
+--     outputLogRow   a bonus line under a result (multicraft, resources back,
+--                    first-craft rewards): a Professions-Results-Bracket hook
+--                    in front of it. Ours: a hairline in its place.
+--     crafterDetails ProfessionsRecipeCrafterDetailsTemplate: the stats pane
+--                    beside a recipe (difficulty, skill, the quality meter),
+--                    on Professions-QualityPane-bg art with a divider under its
+--                    title. Ours: a raised panel, the title in gold over a rule,
+--                    labels muted and values plain, the meter in a well.
+--------------------------------------------------------------------------------
+local CARD_ART = { "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame",
+                   "CritFrame", "QualityStripe" }
+
+R{
+    name = "itemCard",
+    keys = { "NameFrame", "BorderFrame" },
+    art  = { NameFrame = "looting_itemcard_bg" },
+    paint = function(f, p)
+        for _, key in ipairs(CARD_ART) do StripArt(f[key]) end
+        local hi, down, crit = f.HighlightNameFrame, f.PushedNameFrame, f.CritFrame
+        p:Fill(LOOK.tile.rest.fill)
+        p:Border("border")
+        local d = S.D(f)
+        p:States(LOOK.tile, { on = function() return crit ~= nil and crit:IsShown() end })
+        -- The card is a plain frame under its item button, so the mouse never
+        -- reaches it: Blizzard's own highlight textures say when it is lit.
+        local function Follow(tex, field)
+            if not tex then return end
+            for _, m in ipairs({ "Show", "Hide", "SetShown" }) do
+                pcall(hooksecurefunc, tex, m, function(t)
+                    d[field] = t:IsShown() and true or false
+                    if d.Repaint then d.Repaint() end
+                end)
+            end
+        end
+        Follow(hi, "hover")
+        Follow(down, "pressed")
+        if crit then
+            for _, m in ipairs({ "Show", "Hide", "SetShown" }) do
+                pcall(hooksecurefunc, crit, m, function() if d.Repaint then d.Repaint() end end)
+            end
+        end
+        if f.CritText then p:Label(f.CritText, "title") end
+    end,
+}
+
+R{
+    name = "outputLogRow",
+    keys = { "Bracket", "Text" },
+    art  = { Bracket = "professions%-results%-bracket" },
+    paint = function(f, p)
+        local bracket = f.Bracket
+        StripArt(bracket)
+        local d = S.D(f)
+        if not d.rule then
+            d.rule = S.Ours(f:CreateTexture(nil, "BORDER"))
+            EV.Pixel.NoSnap(d.rule)
+            d.rule:SetPoint("TOP", bracket, "TOP")
+            d.rule:SetPoint("BOTTOM", bracket, "BOTTOM")
+            local function Paint()
+                d.rule:SetWidth(EV.Pixel:One(f))
+                d.rule:SetColorTexture(S.Colour("border"))
+            end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
+        p:Label(f.Text, "textMuted")
+    end,
+}
+
+R{
+    name = "crafterDetails",
+    keys = { "BackgroundTop", "BackgroundMiddle", "BackgroundBottom", "StatLines", "QualityMeter" },
+    paint = function(f, p)
+        for _, key in ipairs({ "BackgroundTop", "BackgroundMiddle", "BackgroundBottom",
+                               "BackgroundMinimized", "Line" }) do
+            StripArt(f[key])
+        end
+        local R0 = LOOK.raised.rest
+        p:Fill(R0.fill)
+        p:Border(R0.edge)
+        if f.Label then p:Label(f.Label, "title", true) end
+        -- The divider keeps its place in the layout (it is a layout child,
+        -- sized by its atlas); our rule is drawn across it.
+        local d = S.D(f)
+        if f.Line and not d.rule then
+            d.rule = S.Ours(f:CreateTexture(nil, "ARTWORK"))
+            EV.Pixel.NoSnap(d.rule)
+            d.rule:SetPoint("LEFT", f.Line, "LEFT")
+            d.rule:SetPoint("RIGHT", f.Line, "RIGHT")
+            local function Paint()
+                d.rule:SetHeight(EV.Pixel:One(f))
+                d.rule:SetColorTexture(T.C4(T.Resolve(LOOK.section).rule))
+            end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
+        local lines = f.StatLines and f.StatLines.StatLines
+        for _, line in ipairs(lines or {}) do
+            if line.LeftLabel then p:Label(line.LeftLabel, "textMuted") end
+            if line.RightLabel then p:Label(line.RightLabel, "text") end
+        end
+        local meter = f.QualityMeter
+        if meter then
+            if meter.Border then p:Fade(meter.Border) end
+            local center = meter.Center
+            if center then
+                if center.Background then StripArt(center.Background) end
+                Well(meter, center, -1)
+            end
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i2. Popout button    EquipmentFlyoutPopoutButtonTemplate: the tab beside
 --     an equipment slot that opens the list of what else fits it
 --     (Blizzard_FrameXML/Camelot/EquipmentFlyout.lua). A 20x43 gold pull
 --     tab, or 43x20 under the weapons. Blizzard re-sets its atlases, size and

@@ -1012,6 +1012,18 @@ P{
                 unlearn:SetPoint("LEFT", fill or rank, "RIGHT", one + 2, 0)
                 local name, line = Primary()
                 unlearn:SetShown(name ~= nil and rank:IsShown())
+                -- Blizzard's chat link button hangs off the bar's right end
+                -- (LEFT of RankBar.RIGHT, x=-2), exactly where the cross now
+                -- is: it moves along to stand after it, the same size.
+                local link = page.LinkButton
+                if link then
+                    k:Size(link, h, h)
+                    if unlearn:IsShown() then
+                        k:Move(link, "LEFT", unlearn, "RIGHT", PROF.gap, 0)
+                    else
+                        k:Move(link, "LEFT", fill or rank, "RIGHT", one + 2, 0)
+                    end
+                end
                 unlearn:SetScript("OnClick", function()
                     local popup = InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled()
                         and "UNLEARN_SKILL_GAMEPAD" or "UNLEARN_SKILL"
@@ -1020,6 +1032,38 @@ P{
             end
             Unlearn()
             k:After(page, "Refresh", Unlearn)
+        end
+
+        -- The chat link button: a tertiary square (common-button-tertiary-
+        -- square-*, swapped per state in OnButtonStateChanged) round a
+        -- chat-link glyph. Ours: the button Look, the glyph kept and
+        -- coloured by state like our own glyphs.
+        local link = page.LinkButton
+        if link then
+            k:Once(link, "look", function()
+                if link.Background then S.StripArt(link.Background) end
+                local p = S.PainterFor(link)
+                p:Fill(T.LOOK.button.rest.fill)
+                p:Border(T.LOOK.button.rest.edge)
+                if link.Icon and link.Icon.SetDesaturated then link.Icon:SetDesaturated(true) end
+                p:States(T.LOOK.button, { glyph = link.Icon })
+                k:After(link, "OnButtonStateChanged", function()
+                    local d = S.D(link)
+                    if d.Repaint then d.Repaint() end
+                end)
+            end)
+        end
+
+        -- The results log (only opened on its own with a controller, on
+        -- Forever): its cards are the itemCard part; the scroll box's
+        -- shadows are the loot card's gradient.
+        local log = page.CraftingOutputLog
+        local box = log and log.ScrollBox
+        if box then
+            for _, get in ipairs({ "GetUpperShadowTexture", "GetLowerShadowTexture" }) do
+                local ok, t = pcall(box[get], box)
+                if ok and t then S.StripArt(t) end
+            end
         end
 
         -- The footer, the whole width of the window, like the spellbook's.
@@ -1084,13 +1128,18 @@ P{
             if count and count.SetJustifyH then count:SetJustifyH("CENTER") end
             local function Controls()
                 if not (count and create and all) then return end
-                local g, arrow, h = PROF.gap + 2, 23, 22
+                local g, h = PROF.gap + 2, 22
+                local arrow = h
                 k:Size(create, nil, h)
                 k:Size(all, nil, h)
                 k:Size(count, nil, h)
-                -- The template puts Decrement 6 off the box and Increment
-                -- flush against it, so the box sat off centre between them.
-                if count.IncrementButton then k:Move(count.IncrementButton, "LEFT", count, "RIGHT", 6, 0) end
+                -- The arrows are 23x22 in the template; square, and the height
+                -- of everything else on the line. The template puts Decrement
+                -- 6 off the box and Increment flush against it, so the box sat
+                -- off centre between them: both 6 off.
+                local inc, dec = count.IncrementButton, count.DecrementButton
+                if inc then k:Size(inc, arrow, h); k:Move(inc, "LEFT", count, "RIGHT", 6, 0) end
+                if dec then k:Size(dec, arrow, h); k:Move(dec, "RIGHT", count, "LEFT", -6, 0) end
                 k:Move(create, "RIGHT", foot, "RIGHT", -PROF.pad, 0)
                 k:Move(count, "RIGHT", create, "LEFT", -(6 + arrow + g), 0)
                 k:Move(all, "RIGHT", count, "LEFT", -(6 + arrow + g), 0)
