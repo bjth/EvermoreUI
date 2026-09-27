@@ -1,7 +1,8 @@
 # EvermoreUI tools
 
 None of this ships: the packager ignores `tools/`. The survey needs Python
-3.8+, standard library only.
+3.8+, standard library only. With a Lua 5.1 as well (`pip install lupa`, or
+`lua5.1` on the PATH) its coverage numbers come from `Parts.lua` itself.
 
 There is no simulator. It was removed on 21 Sep 2026: it was slow, it drifted
 out of step with the addon (it had been asserting against `S.skinned`, an API
@@ -34,11 +35,36 @@ addon and the simulator are gone. Parts are written by hand.
 
 ### Reading the coverage report
 
-Coverage is **measured, not claimed**. `evsurvey/fingerprint.py` resolves every
-template's inheritance into its effective shape (object type, parent keys,
-the art on each named region, its `layoutType`) and then runs the actual
-fingerprints from `Parts.lua` against all 2,937 of them. The report says which
-part claims each template, in registration order, exactly as `S.Dress` would.
+Coverage is **measured, not claimed**. `evsurvey/shapes.py` flattens every
+template's inheritance into the tree of objects the client would build from it
+(object type, parentKey children, `$parent` globals, the atlas or file on every
+region, the button art slots, KeyValues such as `layoutType`).
+`coverage.lua` then loads the real `EvermoreUI_Skins/Core.lua` and `Parts.lua`
+in a stub environment, builds a stand-in object from each shape and runs
+`S.Matches` over it, part by part in registration order, first match wins,
+exactly as `S.Dress` does. There is no second copy of any fingerprint in the
+measurement, so a part that goes stale after a client patch shows up the first
+time it runs. File art is compared by an opaque id, as the client compares
+it, so an atlas pattern cannot match a file texture offline any more than it
+can in game.
+
+It reports three numbers per part:
+
+- **templates / inherit sites**: templates whose own root the part claims,
+  weighted by how many places inherit each one.
+- **inside**: frames a template declares within itself (the coin boxes in a
+  money input frame, the steppers on a scroll bar). The walk dresses those
+  too; `moneyBox` claims no template root at all and lives entirely here.
+- **objects**: every frame in Blizzard's named windows, the instances a player
+  actually sees.
+
+`tools/check.py` runs the same measurement over the committed manifest, so CI
+fails if a part matches nothing or a count quoted in a `Parts.lua` header
+(`UIPanelButtonTemplate, 284 inherits`) is no longer the client's.
+
+To run it by hand: `python tools/survey/survey.py --check --shapes shapes.lua`,
+then `lua5.1 tools/survey/coverage.lua shapes.lua` for the summary, or add
+`all` for every template with its part and inherit count.
 
 That catches the two things a hand-maintained list never will:
 
@@ -61,8 +87,9 @@ The template table's third column reads:
 | `login screen` | `Glue*`, where addons never load |
 | **nothing** | a candidate for the next part |
 
-`fingerprint.py` mirrors `Parts.lua` by hand, so it can drift. The report
-compares the two lists and says so when it has. Keep them in step.
+`evsurvey/fingerprint.py` is a Python copy of the fingerprints, kept only as
+the fallback for a machine with no Lua. It can drift, and the report says when
+it gives a different answer from `Parts.lua`.
 
 The report also **lints `Parts.lua` the way `S.Register` does**: every part
 must carry a real fingerprint, and `type` alone is not one. This is checked
@@ -78,9 +105,12 @@ implements scroll bars as Sliders. A real slider attaches its thumb as
 `Thumb`, a scroll bar as `ThumbTexture`, and never both.
 
 The model is honest about its limits: it reads Blizzard's XML, so it sees
-templates and inheritance, not frames built in Lua at runtime. A template it
-reports as matched will be claimed in game; one it reports as unmatched may
-still be claimed if Lua adds the missing key later.
+templates and inheritance, not mixin methods or frames built in Lua at
+runtime. A template it reports as matched will be claimed in game; one it
+reports as unmatched may still be claimed if Lua adds the missing key later.
+A part that fingerprints on something only a live frame has is listed in
+`RUNTIME` at the top of `coverage.lua` with the templates it claims, and
+reported as runtime rather than dead.
 
 ## Growing coverage, in order of preference
 
@@ -92,8 +122,7 @@ still be claimed if Lua adds the missing key later.
    slot.
 3. **A new part.** For a Blizzard template nothing claims yet. Give it a real
    fingerprint: `layout` (Blizzard's own `layoutType`) is the best one
-   available, then `keys`, then art. Add it to `fingerprint.py` in the same
-   commit.
+   available, then `keys`, then art. Re-run the survey to see what it claims.
 4. **A window pack** (`WindowPacks.lua`), last. Only for a window's own art,
    or a fix that needs a decision about layout. A pattern in the lists above
    is worth ten packs.
