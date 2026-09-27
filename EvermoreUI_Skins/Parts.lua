@@ -469,18 +469,89 @@ R{
     -- `thumbTexture`, and never both. The legacy scroll bars are picked up
     -- by scrollBarLegacy below.
     keys = { "Thumb" },
+    -- Ours is the slider our own options draw (UI/Inputs.lua, U.Slider): a
+    -- thin track across the middle of the slider's rect, the accent filled
+    -- up to the thumb, a square thumb on a halo that grows under the mouse.
+    -- The rect keeps Blizzard's size (it is the hit area, and the settings
+    -- list stretches it to the row's height), so a groove filling it read as
+    -- a black box the height of the row with a block in it.
+    --
+    -- The fill runs to the thumb's centre by anchor, so it follows the value
+    -- without a hook on SetValue. The thumb texture is Blizzard's own, set to
+    -- the Look's size: the slider places it by its size, and a square the
+    -- size of ours is all the thumb has to be.
+    --
+    -- A slider inside MinimalSliderWithSteppersTemplate (every slider in the
+    -- settings panel) has its Back and Forward buttons, the
+    -- Minimal_SliderBar_Button_Left/Right arrows, on its parent: our chevrons
+    -- in their place, and the value labels in body text.
     paint = function(sl, p)
         p:Fade()
         p:FadeSlice()
-        local groove = LOOK.slider.groove
-        p:Fill(groove.fill)
-        p:Border(groove.edge)
-        local thumb = sl.GetThumbTexture and select(2, pcall(sl.GetThumbTexture, sl))
-        if thumb and thumb.SetColorTexture then
+        local SL = LOOK.slider
+        local d = S.D(sl)
+        local vertical = false
+        if sl.GetOrientation then
+            local ok, o = pcall(sl.GetOrientation, sl)
+            vertical = ok and o == "VERTICAL"
+        end
+        local okT, thumb = pcall(sl.GetThumbTexture, sl)
+        thumb = okT and thumb or nil
+        if not d.bar then
+            d.bar = S.Ours(sl:CreateTexture(nil, "BACKGROUND", nil, 1))
+            d.fill = S.Ours(sl:CreateTexture(nil, "BORDER", nil, 1))
+            d.halo = S.Ours(sl:CreateTexture(nil, "ARTWORK", nil, 1))
+            for _, t in ipairs({ d.bar, d.fill, d.halo }) do EV.Pixel.NoSnap(t) end
+            if vertical then
+                d.bar:SetPoint("TOP"); d.bar:SetPoint("BOTTOM")
+                d.bar:SetWidth(SL.track)
+                d.fill:Hide()
+            else
+                d.bar:SetPoint("LEFT"); d.bar:SetPoint("RIGHT")
+                d.bar:SetHeight(SL.track)
+                d.fill:SetPoint("LEFT", d.bar, "LEFT")
+                d.fill:SetHeight(SL.track)
+                if thumb then d.fill:SetPoint("RIGHT", thumb, "CENTER") end
+            end
+            if thumb then d.halo:SetPoint("CENTER", thumb, "CENTER") else d.halo:Hide() end
+        end
+        if thumb then
             if thumb.SetAtlas then pcall(thumb.SetAtlas, thumb, nil) end
-            local function Paint(t) t:SetColorTexture(T.C4(T.Resolve(LOOK.slider).thumb)) end
-            Paint(thumb)
-            T.Watch(thumb, Paint)
+            if thumb.SetDrawLayer then thumb:SetDrawLayer("ARTWORK", 2) end
+        end
+        local function Paint(r)
+            local big = d.hover or d.pressed
+            local t, h = big and SL.thumbHover or SL.thumb, big and SL.haloHover or SL.halo
+            d.halo:SetSize(h, h)
+            d.halo:SetColorTexture(T.C4(r.halo))
+            d.bar:SetColorTexture(T.C4(r.bar))
+            d.fill:SetColorTexture(T.C4(r.fill))
+            if thumb then
+                thumb:SetSize(t, t)
+                thumb:SetColorTexture(T.C4(r.thumb))
+            end
+        end
+        p:States(SL, { after = Paint })
+
+        local okP, par = pcall(sl.GetParent, sl)
+        if not (okP and par) or rawget(par, "Slider") ~= sl then return end
+        for key, dir in pairs({ Back = "left", Forward = "right" }) do
+            local step = rawget(par, key)
+            if type(step) == "table" and step.CreateTexture then
+                S.Blank(step)
+                S.PainterFor(step):Fade()
+                local sd = S.D(step)
+                if not sd.chev then
+                    sd.chev = S.Ours(T.Chevron(step, LOOK.pager.chevron))
+                    sd.chev:SetPoint("CENTER")
+                    sd.chev:Point(dir)
+                end
+                S.PainterFor(step):States(LOOK.stepper, { chev = sd.chev })
+            end
+        end
+        for _, key in ipairs({ "LeftText", "RightText", "TopText", "MinText", "MaxText" }) do
+            local fs = rawget(par, key)
+            if type(fs) == "table" and fs.SetTextColor then S.PainterFor(par):Label(fs, "text") end
         end
     end,
 }
@@ -2757,6 +2828,75 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  9o. Settings row       SettingsListElementTemplate and everything built on
+--     it (check box, slider, dropdown, button, swatch rows): a label, the
+--     control, and a HoverBackground (HoverBackgroundTemplate, white at 10%)
+--     shown across the row under the mouse. Blizzard colours the label on
+--     every DisplayEnabled (NORMAL_FONT_COLOR, the gold, or grey) and resets
+--     its font object on every Init. Ours: body text, or disabled text, put
+--     back after both; the hover in our list colour, on the row's own
+--     texture and on every control's in it (each carries its own copy).
+--
+--  9p. Settings section   SettingsListSectionHeaderTemplate: a heading inside
+--     a page ("Mouse", "Camera"). Ours: the section Look, the name in gold
+--     with a rule running from it to the row's right edge.
+--------------------------------------------------------------------------------
+local function HoverTint(t)
+    if not (t and t.SetColorTexture) then return end
+    local function Paint(tex) tex:SetColorTexture(T.C4(T.Resolve(LOOK.listItem, { hover = true }).fill)) end
+    Paint(t)
+    T.Watch(t, Paint)
+end
+
+R{
+    name = "settingsRow",
+    keys = { "Text", "Tooltip", "NewFeature" },
+    paint = function(f, p)
+        local d = S.D(f)
+        d.enabled = true
+        local function Colour()
+            f.Text:SetTextColor(S.Colour(d.enabled and "text" or "textDisabled"))
+        end
+        p:Label(f.Text, false)
+        Colour()
+        T.Watch(f.Text, Colour)
+        p:After("DisplayEnabled", function(_, enabled)
+            d.enabled = enabled and true or false
+            Colour()
+        end)
+        p:After("Init", Colour)
+        if f.Tooltip then HoverTint(f.Tooltip.HoverBackground) end
+        local ok, kids = pcall(function() return { f:GetChildren() } end)
+        for _, kid in ipairs(ok and kids or {}) do
+            if type(kid) == "table" then HoverTint(rawget(kid, "HoverBackground")) end
+        end
+    end,
+}
+
+R{
+    name = "settingsSection",
+    keys = { "Title", "NewFeature" },
+    without = { "Tooltip" },
+    paint = function(f, p)
+        local SC = LOOK.section
+        p:Label(f.Title, "title", true)
+        local d = S.D(f)
+        if not d.rule then
+            d.rule = S.Ours(f:CreateTexture(nil, "BORDER"))
+            EV.Pixel.NoSnap(d.rule)
+            d.rule:SetPoint("LEFT", f.Title, "RIGHT", SC.gap, 0)
+            d.rule:SetPoint("RIGHT", f, "RIGHT", -SC.pad, 0)
+            local function Paint()
+                d.rule:SetHeight(EV.Pixel:One(f))
+                d.rule:SetColorTexture(T.C4(T.Resolve(SC).rule))
+            end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  9b. Legacy scroll bar  Slider-based, 10 templates
 --      MinimalScrollBar (the modern one, an EventFrame with a Track) is part
 --      9. Everything older is a Slider with ScrollUpButton/ScrollDownButton
@@ -3113,6 +3253,8 @@ local function TitleBar(f, p, tc, title)
     p:Hook("OnShow", Centre)
     p:After("SetTitleOffsets", Centre)
 end
+
+S.TitleBar = TitleBar
 
 -- The portrait toggles are global functions, taking the window.
 local portraitHooked = false

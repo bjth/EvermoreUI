@@ -1154,3 +1154,138 @@ P{
         end
     end,
 }
+
+--------------------------------------------------------------------------------
+--  SettingsPanel (Blizzard_Settings_Shared, SettingsPanel.xml on the
+--  SettingsFrameTemplate from Mainline/Blizzard_SettingsPanelTemplates.xml)
+--
+--  Blizzard's layout, from the XML:
+--
+--    NineSlice.Text   the title, TOP y=-5 on the NineSlice (the window's
+--                     rect). No TitleContainer, so the window part never
+--                     gave this window a title band.
+--    ClosePanelButton UIPanelCloseButtonDefaultAnchors, the top corner.
+--    GameTab/AddOnsTab MinimalTabTemplate at TOPLEFT x=32 y=-27, hidden when
+--                     no addon has a category (SettingsPanelMixin:OnShow).
+--    SearchBox        350x22, BOTTOMRIGHT on the container's TOPRIGHT
+--                     x=4 y=20: floating over the page.
+--    CategoryList     199 wide, TOPLEFT x=18 y=-76, down to y=46.
+--    Container        the page: CategoryList's right +16 to the window's
+--                     right -22. Its SettingsList has a Header (the page's
+--                     title, Defaults, an Options_HorizontalDivider at y=-50).
+--    Close/Apply      96x22 at BOTTOMRIGHT x=-16 y=16, Apply 2 left of Close.
+--    OutputText       BOTTOM y=24, the key binding prompt.
+--    Options_InnerFrame  an OVERLAY frame drawn round list and page.
+--
+--  Ours, the spellbook's way: the title in a band, a tool bar under it with
+--  the search box (and the tabs, standing on its rule, when they show), the
+--  category list and the page side by side with one hairline between them,
+--  and a footer band holding Close and Apply, with the key binding prompt on
+--  its left. The page's title sits over a rule of ours.
+--------------------------------------------------------------------------------
+local SET = { toolbar = 40, footer = 36, pad = 10, search = 280, control = 24, button = 22 }
+
+P{
+    name  = "SettingsPanel",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        k:Fade(f)
+        if f.Bg then k:Fade(f.Bg) end
+        local W = T.LOOK.window.rest
+        k:Fill(f, W.fill)
+        k:Border(f, W.edge)
+        S.Shadow(f)
+
+        -- Title band, the title centred in it, the close button in its corner.
+        local slice = f.NineSlice
+        if slice then
+            S.PainterFor(slice):Fade()
+            if slice.Text then k:Label(slice.Text, W.title, true) end
+            S.TitleBar(f, S.PainterFor(f), slice, slice.Text)
+        end
+        local close = f.ClosePanelButton
+        if close then k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1) end
+
+        -- The tool bar: search on the right, the tabs on the left.
+        local bar = Band(f, "toolbar", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(SET.toolbar)
+        end)
+        local search = f.SearchBox
+        if search then
+            k:Size(search, SET.search, SET.control)
+            k:Move(search, "RIGHT", bar, "RIGHT", -SET.pad, 0)
+        end
+        if f.GameTab then
+            k:Size(f.GameTab, nil, SET.toolbar - 8)
+            k:Move(f.GameTab, "BOTTOMLEFT", bar, "BOTTOMLEFT", SET.pad, 0)
+        end
+        if f.AddOnsTab then
+            k:Size(f.AddOnsTab, nil, SET.toolbar - 8)
+            if f.GameTab then k:Move(f.AddOnsTab, "BOTTOMLEFT", f.GameTab, "BOTTOMRIGHT", 4, 0) end
+        end
+
+        -- The footer.
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(SET.footer)
+        end)
+        local closeBtn, apply = f.CloseButton, f.ApplyButton
+        if closeBtn then
+            k:Size(closeBtn, nil, SET.button)
+            k:Move(closeBtn, "RIGHT", foot, "RIGHT", -SET.pad, 0)
+        end
+        if apply and closeBtn then
+            k:Size(apply, nil, SET.button)
+            k:Move(apply, "RIGHT", closeBtn, "LEFT", -6, 0)
+        end
+        if f.OutputText then
+            k:Label(f.OutputText, "text")
+            k:Move(f.OutputText, "LEFT", foot, "LEFT", SET.pad, 0)
+        end
+
+        -- The category list, tool bar to footer, and one line between it and
+        -- the page (the container hangs off the list's right, 16 along).
+        local list = f.CategoryList
+        if list then
+            k:Anchors(list, { { "TOPLEFT", f, "TOPLEFT", SET.pad, -(top + SET.toolbar + SET.pad) },
+                              { "BOTTOMLEFT", foot, "TOPLEFT", SET.pad - 1, SET.pad } })
+            k:Once(f, "divider", function()
+                local rule = S.Ours(f:CreateTexture(nil, "BORDER"))
+                EV.Pixel.NoSnap(rule)
+                rule:SetPoint("TOP", bar, "BOTTOM", 0, 0)
+                rule:SetPoint("BOTTOM", foot, "TOP", 0, 0)
+                rule:SetPoint("LEFT", list, "RIGHT", 8, 0)
+                local function Paint()
+                    rule:SetWidth(EV.Pixel:One(f))
+                    rule:SetColorTexture(S.Colour("border"))
+                end
+                Paint()
+                T.Watch(rule, Paint)
+            end)
+        end
+
+        -- The page's header: its title and Defaults over a rule of ours in
+        -- place of Options_HorizontalDivider.
+        local header = f.Container and f.Container.SettingsList and f.Container.SettingsList.Header
+        if header then
+            k:Fade(header)
+            if header.Title then k:Label(header.Title, "text", true) end
+            if header.DefaultsButton then k:Size(header.DefaultsButton, nil, SET.button) end
+            k:Once(header, "rule", function()
+                local rule = S.Ours(header:CreateTexture(nil, "BORDER"))
+                EV.Pixel.NoSnap(rule)
+                rule:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+                rule:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
+                local function Paint()
+                    rule:SetHeight(EV.Pixel:One(header))
+                    rule:SetColorTexture(S.Colour("border"))
+                end
+                Paint()
+                T.Watch(rule, Paint)
+            end)
+        end
+    end,
+}

@@ -176,8 +176,7 @@ L.slider = {
     track = 4, thumb = 12, thumbHover = 14, halo = 16, haloHover = 18,
     rest     = { bar = "surface3", fill = "accent", thumb = "accent", halo = "surface0" },
     hover    = { bar = "borderStrong" },
-    -- A Blizzard slider is a box with a thumb in it, not a thin track.
-    groove   = { fill = "surfaceSunk", edge = "border" },
+    disabled = { bar = "surface2", fill = "textDisabled", thumb = "textDisabled" },
 }
 L.swatch = {
     rest  = { edge = "borderStrong" },
