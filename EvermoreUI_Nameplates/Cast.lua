@@ -293,7 +293,7 @@ ns.Widget{
         local tex = EV.Media:Fetch("statusbar", cfg.texture)
         bar:SetStatusBarTexture(tex)
         bar.bg:SetTexture(tex)
-        bar.bg:SetVertexColor(T.RGBA("surfaceSunk", 0.9))
+        bar.bg:SetVertexColor(T.RGBA("surfaceSunk", 0.9))   -- content colour: the track under the cast
 
         -- Left of the PLATE, top aligned with it, as tall as the health bar
         -- and the cast bar together. In the reference it measures 59px square

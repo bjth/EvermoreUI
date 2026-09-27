@@ -415,7 +415,10 @@ function UF.Dress(f, key, unit, preview)
     f.portrait = CreateFrame("Frame", nil, f)
     f.portrait.bg = f.portrait:CreateTexture(nil, "BACKGROUND")
     f.portrait.bg:SetAllPoints()
-    f.portrait.bg:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 0.6))
+    do  -- the empty slot behind a portrait: an inset well
+        local c1, c2, c3 = EV.Theme.C4(EV.Theme.Resolve(EV.Theme.LOOK.inset).fill)
+        f.portrait.bg:SetColorTexture(c1, c2, c3, 0.6)
+    end
     f.portrait.model = CreateFrame("PlayerModel", nil, f.portrait)
     f.portrait.model:SetAllPoints()
     f.portrait.tex = f.portrait:CreateTexture(nil, "ARTWORK")

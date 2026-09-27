@@ -93,16 +93,14 @@ end
 
 local function NewRow()
     local r = CreateFrame("Frame", nil, holder)
-    r.bg = T.Fill(r, "BACKGROUND", "surface1", 0.95)
-    r.bg:SetAllPoints()
-    T.TokenBorder(r, "border")
+    r.bg = EV.UI.Surface(r, "raised", 0.95)
 
     r.item = CreateFrame("Button", nil, r)
     r.item.icon = r.item:CreateTexture(nil, "ARTWORK")
     r.item.icon:SetPoint("TOPLEFT", 1, -1)
     r.item.icon:SetPoint("BOTTOMRIGHT", -1, 1)
     r.item.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    T.TokenBorder(r.item, "border")
+    T.TokenBorder(r.item)
     r.item.count = r.item:CreateFontString(nil, "OVERLAY")
     r.item.count:SetPoint("BOTTOMRIGHT", -2, 2)
     r.item:SetScript("OnEnter", function(self)
@@ -222,7 +220,7 @@ local function Fill(r, info)
     r.item.count:SetText((info.count or 1) > 1 and info.count or "")
     r.name:SetText(info.name or "")
     r.name:SetTextColor(Quality(info.quality))
-    T.SetBorderToken(r.item, "border")
+    T.SetEdge(r.item, T.Resolve(T.LOOK.slot).edge)
     r.bind:SetText(info.bop and (ITEM_BIND_ON_PICKUP or L["Binds when picked up"]) or "")
     local can = { need = info.canNeed, greed = info.canGreed, de = info.canDE, pass = true }
     local why = { need = info.reasonNeed, greed = info.reasonGreed, de = info.reasonDE }

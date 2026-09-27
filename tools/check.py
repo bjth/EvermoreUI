@@ -7,6 +7,8 @@
   * EvermoreUI/Core/Changelog.lua is what CHANGELOG.md generates
   * the palette and every control Look pass their contrast audit, if lua5.1
     is on the PATH (tools/looks/audit.lua)
+  * no module paints chrome from raw surface or border tokens
+    (tools/lint_tokens.py)
 """
 import os
 import shutil
@@ -82,10 +84,18 @@ def check_looks():
         failures.append("looks audit:\n" + (r.stdout + r.stderr).strip())
 
 
+def check_tokens():
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import lint_tokens  # noqa: E402
+    for hit in lint_tokens.hits():
+        failures.append("raw chrome token (use a Look): " + hit)
+
+
 check_tocs()
 check_lua()
 check_changelog()
 check_looks()
+check_tokens()
 for f in failures:
     print("FAIL", f)
 print("%d problem%s" % (len(failures), "" if len(failures) == 1 else "s"))

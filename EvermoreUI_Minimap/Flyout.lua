@@ -22,6 +22,7 @@ if not M then return end
 local EV = EvermoreUI
 local L = EV.L
 local T = EV.Theme
+local wells = setmetatable({}, { __mode = "k" })   -- a collected button -> our well behind it
 local floor, max, min, ceil = math.floor, math.max, math.min, math.ceil
 
 local CELL, GAP, PAD = 26, 4, 6
@@ -103,15 +104,13 @@ local function Dress(b)
         hl:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
         hl:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
     end
-    if not b.evWell then
-        b.evWell = T.Fill(b, "BACKGROUND", "surfaceSunk", 0.9, -8)
-        b.evWell:SetAllPoints()
+    -- Another addon's button: our well behind it, kept in our own table.
+    if not wells[b] then
         local edge = CreateFrame("Frame", nil, b)
         edge:SetAllPoints()
         edge:SetFrameLevel(b:GetFrameLevel() + 3)
         edge:EnableMouse(false)
-        T.TokenBorder(edge, "border")
-        b.evEdge = edge
+        wells[b] = EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
     end
 end
 
@@ -225,17 +224,10 @@ function ns.AdoptFlyout()
     panel:EnableMouse(true)
     panel:SetClampedToScreen(true)
     panel:Hide()
-    panel.bg = T.Fill(panel, "BACKGROUND", "surface1", 0.97, -8)
-    panel.bg:SetAllPoints()
     panel.edge = CreateFrame("Frame", nil, panel)
     panel.edge:SetAllPoints()
     panel.edge:EnableMouse(false)
-    T.TokenBorder(panel.edge, "border")
-    panel.Paint = function()
-        panel.bg:SetColorTexture(T.RGBA("surface1", 0.97))
-        T.SetBorderToken(panel.edge, "border")
-    end
-    T.Watch(panel)
+    panel.bg = EV.UI.Surface(panel, "raised", 0.97, { edgeOn = panel.edge })
     panel:SetScript("OnUpdate", Watch)
     panel:SetScript("OnShow", function() if entry then entry.Paint() end end)
     panel:SetScript("OnHide", function() if entry then entry.Paint() end end)

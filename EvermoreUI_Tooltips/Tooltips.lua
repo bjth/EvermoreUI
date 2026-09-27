@@ -357,7 +357,7 @@ local function StyleBar()
     if not d.bg then
         d.bg = bar:CreateTexture(nil, "BACKGROUND")
         d.bg:SetAllPoints()
-        d.bg:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 0.8))
+        d.bg:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 0.8))   -- content colour: the track under the health
     end
     local one = EV.Pixel:One(GameTooltip)
     bar:ClearAllPoints()
@@ -459,24 +459,27 @@ local function Glyph(tex, name, size, token)
     tex:SetTexture(UI_MEDIA .. name .. ".png")
     tex:SetTexCoord(0, 1, 0, 1)
     if size then tex:SetSize(size, size) end
-    tex:SetVertexColor(TH.RGBA(token))
+    if type(token) == "table" then tex:SetVertexColor(TH.C4(token)) else tex:SetVertexColor(TH.RGBA(token)) end
 end
 
 local function StyleSelection(frame, radio)
     local t1, t2 = frame.leftTexture1, frame.leftTexture2
     if not t1 then return end
     local selected = t2 ~= nil
+    -- The same Looks as our own radios and check boxes.
     if radio then
-        Glyph(t1, selected and "circle" or "ring", 14, selected and "accent" or "borderStrong")
+        local r = TH.Resolve(TH.LOOK.radio, { on = selected })
+        Glyph(t1, selected and "circle" or "ring", TH.LOOK.radio.ring - 2, r.ring)
         if t2 then
-            Glyph(t2, "circle", 6, "onAccent")
+            Glyph(t2, "circle", TH.LOOK.radio.dot, TH.Resolve(TH.LOOK.radio, { on = true }).dot)
             t2:ClearAllPoints()
             t2:SetPoint("CENTER", t1, "CENTER")
         end
     else
-        Glyph(t1, selected and "boxfill" or "box", 14, selected and "accent" or "borderStrong")
+        local r = TH.Resolve(TH.LOOK.checkbox, { on = selected })
+        Glyph(t1, selected and "boxfill" or "box", TH.LOOK.checkbox.box - 2, selected and r.fill or r.edge)
         if t2 then
-            Glyph(t2, "check", 12, "onAccent")
+            Glyph(t2, "check", TH.LOOK.checkbox.tick, TH.Resolve(TH.LOOK.checkbox, { on = true }).glyph)
             t2:ClearAllPoints()
             t2:SetPoint("CENTER", t1, "CENTER")
         end
@@ -503,7 +506,7 @@ local function StyleMenuRows()
         local h = frame and frame.highlight
         if h and h.SetColorTexture then
             h:SetBlendMode("BLEND")
-            h:SetColorTexture(TH.RGBA("surface3", 1))
+            h:SetColorTexture(TH.C4(TH.Resolve(TH.LOOK.menu, { hover = true }).row))
         end
     end)
     -- A divider row holds just the one texture: a 1px line in the theme's

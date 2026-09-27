@@ -64,9 +64,9 @@ L.buttonPrimary = {
 L.buttonGhost = {                              -- text only; a box on hover
     height = 30,
     rest     = { fill = "none", edge = "none", text = "textMuted", glyph = "textMuted" },
-    on       = { glyph = "accent", bar = "accent" },
+    on       = { fill = "surface2", glyph = "accent", bar = "accent" },
     hover    = { fill = "surface3", edge = "border", text = "text", glyph = "text" },
-    onHover  = { glyph = "accent" },
+    onHover  = { fill = "surface2", glyph = "accent" },
     pressed  = { fill = "surfaceSunk", text = "text" },
     focus    = { edge = "accent" },
     disabled = { text = "textDisabled", glyph = "textDisabled" },
@@ -194,6 +194,51 @@ L.window = {
 L.raised = { rest = { fill = "surface1", edge = "border" } }    -- panels, dialogs, nineslice boxes, menus
 L.inset  = { rest = { fill = "surfaceSunk", edge = "border" } } -- wells inside a window
 L.control = { rest = { fill = "surface2", edge = "borderStrong" } } -- a plain control box
+
+--------------------------------------------------------------------------------
+--  Slots, rows and lists: the repeated pieces modules draw many of
+--------------------------------------------------------------------------------
+L.slot = {                                     -- the well behind an icon: action, bag, item buttons
+    rest    = { fill = { "surfaceSunk", a = 0.9 }, edge = "border" },
+    on      = { edge = "accent" },             -- open, picked, the one you're on
+    hover   = { edge = HOVER_EDGE },
+    onHover = { edge = "accent" },
+    pressed = { fill = { "surfaceSunk", a = 0.5 } },
+}
+L.slotEquipped = {                             -- an action slot holding something you're wearing
+    rest = { fill = { "surfaceSunk", a = 0.9 }, edge = "success" },
+}
+L.plateButton = {                              -- a small button on a plate over the map
+    rest    = { fill = { "surface1", a = 0.92 }, edge = "border", glyph = "textMuted" },
+    on      = { edge = "accent", glyph = "accent" },                    -- wants your attention
+    hover   = { fill = { "surface3", a = 0.92 }, glyph = "text" },
+    onHover = { glyph = "accent" },
+}
+L.row = {                                      -- striped rows in a table or options page
+    rest  = { fill = { "surfaceSunk", a = 0.25 }, highlight = "none" },
+    on    = { fill = { "surfaceSunk", a = 0.5 } },   -- every other row
+    hover = { highlight = { "surface2", a = 0.35 } },
+}
+L.listItem = {                                 -- a pickable line in a list or sidebar
+    rest    = { fill = "none", text = "textMuted" },
+    on      = { fill = { "accent", a = 0.25 }, text = "text" },
+    hover   = { fill = { "surface2", a = 0.6 }, text = "text" },
+    onHover = { fill = { "accent", a = 0.25 } },
+    disabled = { text = "textDisabled" },
+}
+L.mover = {                                    -- an edit mode handle over a frame you can move
+    rest    = { fill = { "accent", a = 0.13 }, backing = { "surfaceSunk", a = 0.55 }, edge = { "accent", a = 0.75 } },
+    on      = { fill = { "accent", a = 0.32 }, edge = "text" },            -- selected
+    hover   = { fill = { "accent", a = 0.22 }, edge = "accent" },
+    onHover = { edge = "text" },
+    focus   = { edge = "warning" },            -- the target of an anchor pick, under the mouse
+}
+L.chatTab = {                                  -- the chat's tabs; their opacity is the chat's setting
+    rest    = { fill = "surface0", edge = "border", bar = "none", text = "textMuted" },
+    on      = { fill = "surface1", bar = "accent", text = "text" },
+    hover   = { fill = "surface1", bar = "borderStrong", text = "text" },
+    onHover = { bar = "accent" },
+}
 
 --------------------------------------------------------------------------------
 --  Resolving

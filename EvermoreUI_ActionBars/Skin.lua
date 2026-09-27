@@ -34,7 +34,7 @@ local function States(b)
     end
     local pt = b.GetPushedTexture and b:GetPushedTexture()
     if pt then
-        pt:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 0.5))
+        pt:SetColorTexture(EV.Theme.C4(EV.Theme.Resolve(EV.Theme.LOOK.slot, { pressed = true }).fill))
         pt:ClearAllPoints(); pt:SetAllPoints(icon)
     end
     local ct = b.GetCheckedTexture and b:GetCheckedTexture()
@@ -264,7 +264,7 @@ local function Equipped(b)
         on = ok and eq == true
     end
     if b.Border then b.Border:SetAlpha(0) end
-    T.SetBorderToken(s.edge, on and "success" or "border")
+    T.SetEdge(s.edge, T.Resolve(on and T.LOOK.slotEquipped or T.LOOK.slot).edge)
 end
 
 --------------------------------------------------------------------------------
@@ -355,15 +355,13 @@ function ns.SkinButton(b)
             icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
         end
         -- Our well behind the icon (shows on empty slots).
-        s.well = T.Fill(b, "BACKGROUND", "surfaceSunk", 0.9, -8)
-        s.well:SetAllPoints(b)
-        -- Border on our own child frame, above the icon.
+        -- Border on our own child frame, above the icon (T.LOOK.slot).
         local edge = CreateFrame("Frame", nil, b)
         edge:SetAllPoints(b)
         edge:SetFrameLevel(b:GetFrameLevel() + 2)
         edge:EnableMouse(false)
-        T.TokenBorder(edge, "border")
         s.edge = edge
+        s.well = EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
         -- Cooldowns fill the icon exactly.
         for _, k in ipairs({ "cooldown", "chargeCooldown", "lossOfControlCooldown" }) do
             local cd = b[k]
@@ -390,7 +388,6 @@ function ns.SkinButton(b)
             hooksecurefunc(b, "Update", function(btn) Equipped(btn); Rank(btn) end)
         end
         function s.Paint()
-            s.well:SetColorTexture(T.RGBA("surfaceSunk", 0.9))
             States(b)
             Equipped(b)
         end

@@ -41,9 +41,7 @@ local function Build()
     frame:SetToplevel(true)
     frame:EnableMouse(true)
     frame:Hide()
-    frame.bg = T.Fill(frame, "BACKGROUND", "surface0", 0.97)
-    frame.bg:SetAllPoints()
-    T.TokenBorder(frame, "border")
+    frame.bg = EV.UI.Surface(frame, "window", 0.97)
     if T.Shadow then T.Shadow(frame, 12) end
 
     frame.title = T.Text(frame, "title", "title", true)

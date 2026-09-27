@@ -206,7 +206,7 @@ end
 --------------------------------------------------------------------------------
 local function PaintTile(t)
     local on = t.item and EV.DesignerUI:Selected() == PickFor(t.item) and (t.item.group == "cd" or t.item.extra)
-    T.SetBorderToken(t, (on or t:IsMouseOver()) and "accent" or "border")
+    T.SetEdge(t, T.Resolve(T.LOOK.slot, { on = on or t:IsMouseOver() }).edge)
 end
 
 local function Tile(i)
@@ -225,11 +225,11 @@ local function Tile(i)
     t.plus:SetPoint("CENTER", 0, 1)
     t.plus:SetText("+")
     t.plus:Hide()
-    T.TokenBorder(t, "border")
+    T.TokenBorder(t)
     t:RegisterForClicks("AnyUp")
     t:SetScript("OnEnter", function(self)
         if dragging then return end
-        T.SetBorderToken(self, "accent")
+        T.SetEdge(self, T.Resolve(T.LOOK.slot, { on = true }).edge)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         if self.item.extra then
             GameTooltip:AddLine(self.name, 1, 1, 1)
@@ -286,9 +286,7 @@ local function Row(key, label)
         if button ~= "LeftButton" or key == HIDDEN then return end
         EV.DesignerUI:Select(BarKey(key))
     end)
-    r.bg = T.Fill(r, "BACKGROUND", "surfaceSunk", 0.6)
-    r.bg:SetAllPoints()
-    T.TokenBorder(r, "border")
+    r.bg = W.Surface(r, "inset", 0.6)
     r.label = T.Text(r, 12, "textMuted", true)
     r.label:SetPoint("BOTTOMLEFT", r, "TOPLEFT", 2, 4)
     r.label:SetText(label)
@@ -356,7 +354,7 @@ local function Build(stage)
     function grid.Paint(sel)
         for key, r in pairs(rows) do
             local picked = key ~= HIDDEN and sel == BarKey(key)
-            T.SetBorderToken(r, picked and "accent" or "border")
+            T.SetEdge(r, T.Resolve(T.LOOK.slot, { on = picked }).edge)
         end
         for _, t in ipairs(tiles) do if t:IsShown() then PaintTile(t) end end
     end

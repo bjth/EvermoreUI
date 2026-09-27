@@ -534,8 +534,8 @@ local function SyncList()
             b.text:SetPoint("RIGHT", -6, 0)
             b.text:SetJustifyH("LEFT")
             b:SetScript("OnClick", function(self) Select(self.key) end)
-            b:SetScript("OnEnter", function(self) if selected ~= self.key then self.bg:SetColorTexture(T.RGBA("surface2", 0.6)) end end)
-            b:SetScript("OnLeave", function(self) if selected ~= self.key then self.bg:SetColorTexture(0, 0, 0, 0) end end)
+            b:SetScript("OnEnter", function(self) self.bg:SetColorTexture(T.C4(T.Resolve(T.LOOK.listItem, { hover = true, on = selected == self.key }).fill)) end)
+            b:SetScript("OnLeave", function(self) self.bg:SetColorTexture(T.C4(T.Resolve(T.LOOK.listItem, { on = selected == self.key }).fill)) end)
             listButtons[i] = b
         end
         b.key = e.key
@@ -545,7 +545,7 @@ local function SyncList()
         local on = Shown(e)
         b.text:SetText(on and e.label or (e.label .. "  |cff808080" .. L["off"] .. "|r"))
         b.text:SetTextColor(T.RGBA(on and "text" or "textMuted"))
-        if selected == e.key then b.bg:SetColorTexture(T.RGBA("accent", 0.25)) else b.bg:SetColorTexture(0, 0, 0, 0) end
+        b.bg:SetColorTexture(T.C4(T.Resolve(T.LOOK.listItem, { on = selected == e.key }).fill))
         b:Show()
         y = y - 26
       end
@@ -780,9 +780,7 @@ local function BuildConfirm()
     f:SetPoint("CENTER")
     f:SetFrameLevel(win:GetFrameLevel() + 200)
     f:EnableMouse(true)
-    local bg = T.Fill(f, "BACKGROUND", "surface1", 1)
-    bg:SetAllPoints()
-    T.TokenBorder(f, "borderStrong")
+    W.Surface(f, "raised", 1)
     T.Shadow(f, 10)
     local t = Txt(f, 17, "text", true)
     t:SetPoint("TOPLEFT", 20, -18)
@@ -823,8 +821,7 @@ local function Build()
     left:SetPoint("TOPLEFT", body, "TOPLEFT", 12, -84)
     left:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", 12, 52)
     left:SetWidth(176)
-    local lbg = T.Fill(left, "BACKGROUND", "surfaceSunk", 0.5)
-    lbg:SetAllPoints()
+    W.Surface(left, "inset", 0.5, { edge = false })
     local lt = Txt(left, 11, "textDisabled", true)
     lt:SetPoint("BOTTOMLEFT", left, "TOPLEFT", 2, 6)
     lt:SetText(L["PARTS"])
@@ -836,8 +833,7 @@ local function Build()
     inspector:SetPoint("TOPRIGHT", body, "TOPRIGHT", -12, -84)
     inspector:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -12, 52)
     inspector:SetWidth(420)
-    local ibg = T.Fill(inspector, "BACKGROUND", "surfaceSunk", 0.5)
-    ibg:SetAllPoints()
+    W.Surface(inspector, "inset", 0.5, { edge = false })
     inspector.title = Txt(inspector, 16, "text", true)
     inspector.title:SetPoint("TOPLEFT", 14, -12)
     inspector.title:SetPoint("RIGHT", -90, 0)
@@ -872,9 +868,9 @@ local function Build()
     canvas:SetScript("OnMouseDown", function(_, button)
         if button == "LeftButton" then Select(nil) end
     end)
-    local cbg = T.Solid(canvas, "BACKGROUND", 0.06, 0.07, 0.08, 1)
+    local cbg = T.Solid(canvas, "BACKGROUND", 0.06, 0.07, 0.08, 1)   -- the canvas: a neutral stage, not a surface
     cbg:SetAllPoints()
-    T.TokenBorder(canvas, "border")
+    T.TokenBorder(canvas, "border")   -- content colour: the stage's frame
     -- A faint dot grid, so empty space reads as a canvas rather than a hole.
     for gx = 1, 30 do
         for gy = 1, 20 do

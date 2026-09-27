@@ -113,8 +113,9 @@ local function CharLine(page, i)
     f = CreateFrame("Frame", nil, page.scroll.content)
     f:SetHeight(ROW)
     f:EnableMouse(true)
-    f.bg = T.Fill(f, "BACKGROUND", "surfaceSunk", (i % 2 == 1) and 0.25 or 0.5)
+    f.bg = T.Solid(f, "BACKGROUND", 0, 0, 0, 0)
     f.bg:SetAllPoints()
+    EV.UI.PaintRow(f.bg, i)
     f.cells = {}
     local x = 8
     for c, col in ipairs(COLS) do
@@ -201,8 +202,9 @@ local function FindLine(page, i)
     f = CreateFrame("Frame", nil, page.scroll.content)
     f:SetHeight(ROW)
     f:EnableMouse(true)
-    f.bg = T.Fill(f, "BACKGROUND", "surfaceSunk", (i % 2 == 1) and 0.25 or 0.5)
+    f.bg = T.Solid(f, "BACKGROUND", 0, 0, 0, 0)
     f.bg:SetAllPoints()
+    EV.UI.PaintRow(f.bg, i)
     f.icon = f:CreateTexture(nil, "ARTWORK")
     f.icon:SetSize(20, 20)
     f.icon:SetPoint("LEFT", 8, 0)
@@ -304,7 +306,7 @@ local function InvButton(page, i)
     b.icon = b:CreateTexture(nil, "ARTWORK")
     b.icon:SetAllPoints()
     b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    T.TokenBorder(b, "border")
+    T.TokenBorder(b)
     b.count = b:CreateFontString(nil, "OVERLAY")
     b.count:SetFont(EV.Media:Fetch("font"), 12, "OUTLINE")
     b.count:SetPoint("BOTTOMRIGHT", -2, 2)
@@ -363,7 +365,8 @@ local function FillInv(page)
         b.icon:SetTexture(C_Item.GetItemIconByID(it.id) or 134400)
         b.count:SetText(it.n > 1 and tostring(it.n) or "")
         local qc = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[it.q]
-        if qc and it.q >= 2 then T.SetBorderColor(b, qc.r, qc.g, qc.b, 1) else T.SetBorderToken(b, "border") end
+        -- Quality is content; an ordinary item keeps the slot's own edge.
+        if qc and it.q >= 2 then T.SetBorderColor(b, qc.r, qc.g, qc.b, 1) else T.SetEdge(b, T.Resolve(T.LOOK.slot).edge) end
         b:Show()
     end
     for i = #list + 1, #page.lines do page.lines[i]:Hide(); page.lines[i].id = nil end

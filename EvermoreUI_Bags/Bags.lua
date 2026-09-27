@@ -277,22 +277,19 @@ local function Holder(view, bag)
     return h
 end
 
+local edges = setmetatable({}, { __mode = "k" })   -- item button -> our border frame
+
 local function Skin(b)
-    if b.evSkinned then return end
-    b.evSkinned = true
+    if edges[b] then return end
     local nt = b.GetNormalTexture and b:GetNormalTexture()
     if nt then nt:SetAlpha(0) end
     local icon = b.icon or b.Icon
     if icon then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
-    local well = b:CreateTexture(nil, "BACKGROUND", nil, -8)
-    well:SetAllPoints()
-    well:SetColorTexture(T.RGBA("surfaceSunk", 0.9))
-    b.evWell = well
     local edge = CreateFrame("Frame", nil, b)
     edge:SetAllPoints()
     edge:EnableMouse(false)
-    T.TokenBorder(edge, "border")
-    b.evEdge = edge
+    edges[b] = edge
+    EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
 end
 
 local function Button(view, bag, slot)
@@ -326,9 +323,9 @@ local function Paint(b, i)
     local q = i and i.quality
     if q and q > 1 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
         local c = ITEM_QUALITY_COLORS[q]
-        T.SetBorderColor(b.evEdge, c.r, c.g, c.b, 1)
+        T.SetBorderColor(edges[b], c.r, c.g, c.b, 1)
     else
-        T.SetBorderToken(b.evEdge, "border")
+        T.SetEdge(edges[b], T.Resolve(T.LOOK.slot).edge)
     end
 end
 
@@ -761,8 +758,7 @@ bankView = NewView("bank", {
         if ok and made then
             buy = made
             buy:SetSize(96, 22)
-            buy.bg = T.Fill(buy, "BACKGROUND", "surface2")
-            buy.bg:SetAllPoints()
+            buy.bg = EV.UI.Surface(buy, "control")
             T.TokenBorder(buy, "accent")
             buy.label = T.Text(buy, "small", "text", true)
             buy.label:SetPoint("CENTER")

@@ -23,14 +23,7 @@ local L = EV.L
 -- Theme helpers: every colour here is a token, kept in step with the
 -- contrast setting.
 local function PanelBg(f, alpha)
-    local bg = T.Fill(f, "BACKGROUND", "surface0", alpha or 0.97)
-    bg:SetAllPoints()
-    T.TokenBorder(f, "border")
-    T.OnTheme(function()
-        bg:SetColorTexture(T.RGBA("surface0", alpha or 0.97))
-        T.SetBorderToken(f, "border")
-    end)
-    return bg
+    return (W.Surface(f, "window", alpha or 0.97))
 end
 local function Txt(parent, size, token, bold, justify)
     local fs = T.Text(parent, size, token, bold, justify)
@@ -261,11 +254,10 @@ local function PaintHandle(h)
     local anchored = Movers:GetAnchor(key) ~= nil
     local isPickTarget = pick and pick.key ~= key
 
-    h.fill:SetColorTexture(T.RGBA("accent", sel and 0.32 or (hover and 0.22 or 0.13)))
-    h.backing:SetColorTexture(T.RGBA("surfaceSunk", 0.55))
-    if sel then T.SetBorderToken(h, "text")
-    elseif isPickTarget and hover then T.SetBorderToken(h, "warning")
-    else T.SetBorderToken(h, "accent", hover and 1 or 0.75) end
+    local r = T.Resolve(T.LOOK.mover, { on = sel, hover = hover, focus = isPickTarget and hover and not sel })
+    h.fill:SetColorTexture(T.C4(r.fill))
+    h.backing:SetColorTexture(T.C4(r.backing))
+    T.SetEdge(h, r.edge)
 
     h.label:SetTextColor(T.RGBA("text", sel and 1 or 0.85))
     h.sub:SetTextColor(T.RGBA("textMuted"))
@@ -368,9 +360,10 @@ local function CreateHandle(key)
     h.key = key
     h:SetAllPoints(e.frame)
     h:RegisterForClicks("AnyUp")
-    h.fill = T.Fill(h, "BACKGROUND", "accent", 0.13)
+    -- Coloured from T.LOOK.mover when painted.
+    h.fill = T.Solid(h, "BACKGROUND", 0, 0, 0, 0)
     h.fill:SetAllPoints()
-    h.backing = T.Fill(h, "BACKGROUND", "surfaceSunk", 0.55, -1)
+    h.backing = T.Solid(h, "BACKGROUND", 0, 0, 0, 0, -1)
     h.backing:SetAllPoints()
     T.TokenBorder(h, "accent", 0.75)
 

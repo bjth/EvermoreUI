@@ -47,7 +47,7 @@ local function Deselect()
     selected = nil
     if s then
         s:EnableKeyboard(false)
-        T.SetBorderToken(s, "border")
+        T.SetEdge(s, T.Resolve(T.LOOK.slot).edge)
         if s.editor then s.editor:Prompt() end
     end
 end
@@ -81,8 +81,7 @@ end
 local function NewSlot(editor)
     local s = CreateFrame("Button", nil, editor)
     s.editor = editor
-    s.well = T.Fill(s, "BACKGROUND", "surfaceSunk", 0.9)
-    s.well:SetAllPoints()
+    s.well = EV.UI.Surface(s, "slot", nil, { sub = 0 })
     s.icon = s:CreateTexture(nil, "ARTWORK")
     s.icon:SetPoint("TOPLEFT", 1, -1)
     s.icon:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -92,7 +91,6 @@ local function NewSlot(editor)
     s.key:SetJustifyH("RIGHT")
     s.num = s:CreateFontString(nil, "OVERLAY")
     s.num:SetPoint("BOTTOMLEFT", 3, 3)
-    T.TokenBorder(s, "border")
     local hl = s:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints(s.icon)
     hl:SetColorTexture(1, 1, 1, 0.15)
@@ -387,13 +385,11 @@ function E.Book(parent, width)
         if b then return b end
         b = CreateFrame("Button", nil, grid)
         b:SetSize(ICON, ICON)
-        b.well = T.Fill(b, "BACKGROUND", "surfaceSunk", 0.9)
-        b.well:SetAllPoints()
+        b.well = EV.UI.Surface(b, "slot", nil, { sub = 0 })
         b.icon = b:CreateTexture(nil, "ARTWORK")
         b.icon:SetPoint("TOPLEFT", 1, -1)
         b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
         b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        T.TokenBorder(b, "border")
         local hl = b:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints(b.icon)
         hl:SetColorTexture(1, 1, 1, 0.15)

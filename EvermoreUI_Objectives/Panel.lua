@@ -122,7 +122,7 @@ local function DressHeader(h)
     if not d then
         d = {}
         dressed[h] = d
-        d.bar = T.Fill(h, "BACKGROUND", "surface1", 0.9, -8)
+        d.bar = T.Solid(h, "BACKGROUND", 0, 0, 0, 0, -8)   -- T.LOOK.raised at 0.9
         d.bar:SetPoint("TOPLEFT", -4, 0)
         d.bar:SetPoint("BOTTOMRIGHT", 0, 2)
         d.line = T.Fill(h, "BORDER", "accent", 0.9)
@@ -130,7 +130,8 @@ local function DressHeader(h)
         d.line:SetPoint("BOTTOMRIGHT", d.bar, "BOTTOMRIGHT")
         d.line:SetHeight(1)
         function d.Paint()
-            d.bar:SetColorTexture(T.RGBA("surface1", 0.9))
+            local c1, c2, c3 = T.C4(T.Resolve(T.LOOK.raised).fill)
+            d.bar:SetColorTexture(c1, c2, c3, 0.9)
             d.line:SetColorTexture(T.RGBA("accent", 0.9))
             if h.Text then h.Text:SetTextColor(T.RGBA("title")) end
         end
@@ -175,12 +176,14 @@ local function Build()
     panel:SetFrameStrata("LOW")
     panel:SetPoint("TOPLEFT", holder, "TOPLEFT")
     panel:SetSize(M.db.width, M.db.height)
-    panel.bg = T.Fill(panel, "BACKGROUND", "surface0", M.db.bgAlpha)
+    panel.bg = T.Solid(panel, "BACKGROUND", 0, 0, 0, 0)   -- T.LOOK.window at your opacity
     panel.bg:SetAllPoints()
-    T.TokenBorder(panel, "border")
+    T.TokenBorder(panel)
     function panel:Paint()
-        self.bg:SetColorTexture(T.RGBA("surface0", M.db.bgAlpha))
-        T.SetBorderToken(self, "border")
+        local r = T.Resolve(T.LOOK.window)
+        local c1, c2, c3 = T.C4(r.fill)
+        self.bg:SetColorTexture(c1, c2, c3, M.db.bgAlpha)
+        T.SetEdge(self, r.edge)
         T.ShowBorder(self, M.db.border)
     end
     T.Watch(panel)

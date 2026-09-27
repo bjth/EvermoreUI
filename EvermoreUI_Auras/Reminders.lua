@@ -379,8 +379,7 @@ local function Button(i)
     -- release when it is off, and ignores the other. Registering only one
     -- makes the button do nothing for half of all players.
     b:RegisterForClicks("AnyUp", "AnyDown")
-    b.well = T.Fill(b, "BACKGROUND", "surfaceSunk", 0.9)
-    b.well:SetAllPoints()
+    b.well = EV.UI.Surface(b, "slot", nil, { edge = false, sub = 0 })
     b.icon = b:CreateTexture(nil, "ARTWORK")
     b.icon:SetPoint("TOPLEFT", 1, -1)
     b.icon:SetPoint("BOTTOMRIGHT", -1, 1)

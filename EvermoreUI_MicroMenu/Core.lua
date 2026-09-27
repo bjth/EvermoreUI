@@ -163,21 +163,14 @@ function ns.Holder(name)
     f:SetFrameStrata("MEDIUM")
     f:SetFrameLevel(10)
     f:SetSize(40, 40)
-    f.bg = T.Fill(f, "BACKGROUND", "surface1", 0.92, -8)
-    f.bg:SetAllPoints()
     f.edge = CreateFrame("Frame", nil, f)
     f.edge:SetAllPoints()
     f.edge:EnableMouse(false)
-    T.TokenBorder(f.edge, "border")
+    f.bg = EV.UI.Surface(f, "raised", 0.92, { edgeOn = f.edge })
     function f:SetPanel(on)
         self.bg:SetShown(on)
         self.edge:SetShown(on)
     end
-    f.Paint = function()
-        f.bg:SetColorTexture(T.RGBA("surface1", 0.92))
-        T.SetBorderToken(f.edge, "border")
-    end
-    T.Watch(f)
     return f
 end
 

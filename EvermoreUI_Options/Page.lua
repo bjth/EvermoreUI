@@ -114,9 +114,10 @@ local function BuildCell(builder, host, cfg)
     end
 
     -- Hover: faint highlight and the tooltip, if there is one.
-    local hl = T.Fill(host, "BORDER", "surface2", 0.35)
+    local hl = T.Solid(host, "BORDER", 0, 0, 0, 0)
     hl:SetAllPoints()
     hl:Hide()
+    T.OnTheme(function() hl:SetColorTexture(T.C4(T.Resolve(T.LOOK.row, { hover = true }).highlight)) end)
     host:EnableMouse(true)
     host:SetScript("OnEnter", function(self)
         hl:Show()
@@ -133,8 +134,10 @@ local function NewRowFrame(builder, height)
     row:SetPoint("TOPLEFT", builder.parent, "TOPLEFT", T.PAD, builder.y)
     builder.y = builder.y - height
     builder.stripe = builder.stripe + 1
-    -- Alternate rows: a light and a deeper sunk stripe.
-    T.Fill(row, "BACKGROUND", "surfaceSunk", (builder.stripe % 2 == 1) and 0.25 or 0.5):SetAllPoints()
+    -- Alternate rows: a light and a deeper sunk stripe (T.LOOK.row).
+    local stripe = T.Solid(row, "BACKGROUND", 0, 0, 0, 0)
+    stripe:SetAllPoints()
+    W.PaintRow(stripe, builder.stripe)
     return row
 end
 

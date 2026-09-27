@@ -134,20 +134,39 @@ end
 --- its fill and its border, kept in step with the theme. For module frames
 --- that are panels rather than controls, so they don't compose one from raw
 --- tokens. alpha overrides the fill's.
-function U.Surface(frame, look, alpha)
+---
+--- opts: edgeOn = the frame the border goes on (default the frame itself),
+---       edge = false for no border, sub = the fill's sublevel (default -8).
+--- The alpha can be a function, read on every repaint, for a setting.
+function U.Surface(frame, look, alpha, opts)
     if type(look) == "string" then look = T.LOOK[look] end
     look = look or T.LOOK.raised
-    local fill = EV.Pixel:Fill(frame, "BACKGROUND", -8)
-    T.TokenBorder(frame, "border")
+    opts = opts or {}
+    local fill = EV.Pixel:Fill(frame, "BACKGROUND", opts.sub or -8)
+    local edgeOn = opts.edge ~= false and (opts.edgeOn or frame) or nil
+    if edgeOn then T.TokenBorder(edgeOn, "border") end
     local function Paint()
         local r = T.Resolve(look)
         local c1, c2, c3, c4 = T.C4(r.fill)
-        fill:SetColorTexture(c1, c2, c3, alpha or c4)
-        T.SetEdge(frame, r.edge)
+        local a = alpha
+        if type(a) == "function" then a = a() end
+        fill:SetColorTexture(c1, c2, c3, a or c4)
+        -- Colour only: a module that hides the border (a setting) keeps it hidden.
+        if edgeOn and r.edge then EV.Pixel:SetEdgeColor(edgeOn, T.C4(r.edge)) end
     end
     Paint()
     T.Watch(fill, Paint)
-    return fill
+    return fill, Paint
+end
+
+--- Paint a striped row's background (T.LOOK.row) for its position.
+local rowState = {}
+function U.PaintRow(tex, index, hover)
+    local st = rowState
+    st.on, st.hover = index % 2 == 0, hover
+    local r = T.Resolve(T.LOOK.row, st)
+    tex:SetColorTexture(T.C4(r.fill))
+    return r
 end
 
 --- A texture from our own media (circle, ring, check, search, close).

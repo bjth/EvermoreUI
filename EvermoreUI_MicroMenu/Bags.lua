@@ -72,7 +72,7 @@ local function States(b)
     if nt then nt:SetAlpha(0) end
     local pt = b:GetPushedTexture()
     if pt then
-        pt:SetColorTexture(T.RGBA("surfaceSunk", 0.5))
+        pt:SetColorTexture(T.C4(T.Resolve(T.LOOK.slot, { pressed = true }).fill))
         pt:ClearAllPoints(); pt:SetAllPoints(icon)
     end
     local hl = b:GetHighlightTexture()
@@ -88,7 +88,7 @@ local function States(b)
         sh:ClearAllPoints(); sh:SetAllPoints(icon)
     end
     if b.IconBorder then b.IconBorder:SetAlpha(0) end
-    T.SetBorderToken(s.edge, IsOpen(b) and "accent" or "border")
+    T.SetEdge(s.edge, T.Resolve(T.LOOK.slot, { on = IsOpen(b) }).edge)
 end
 
 local function Texts(b)
@@ -118,14 +118,12 @@ local function Dress(b)
         icon:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
         icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
     end
-    s.well = T.Fill(b, "BACKGROUND", "surfaceSunk", 0.9, -8)
-    s.well:SetAllPoints(b)
     local edge = CreateFrame("Frame", nil, b)
     edge:SetAllPoints(b)
     edge:SetFrameLevel(b:GetFrameLevel() + 2)
     edge:EnableMouse(false)
-    T.TokenBorder(edge, "border")
     s.edge = edge
+    s.well = EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
     -- Blizzard fits these to its 45px art; fit them to our icon.
     for _, k in ipairs({ "searchOverlay", "ItemContextOverlay", "IconOverlay", "IconOverlay2" }) do
         local t = b[k]
@@ -142,10 +140,7 @@ local function Dress(b)
         hooksecurefunc(sh, "Hide", Open)
         hooksecurefunc(sh, "SetShown", Open)
     end
-    s.Paint = function()
-        s.well:SetColorTexture(T.RGBA("surfaceSunk", 0.9))
-        States(b); Texts(b)
-    end
+    s.Paint = function() States(b); Texts(b) end
     T.Watch(s)
     States(b)
     Texts(b)
@@ -179,8 +174,9 @@ local function PaintToggle()
     local grow = ns.Grow(M.db, "left", "up")
     local back = ({ left = "right", right = "left", up = "down", down = "up" })[grow]
     toggle.chevron:Point(Expanded() and back or grow)
-    toggle.chevron:SetColorLines(T.RGBA(toggle.hot and "text" or "textMuted"))
-    toggle.bg:SetColorTexture(T.RGBA("surface3", toggle.hot and 0.6 or 0))
+    local r = T.Resolve(T.LOOK.buttonGhost, { hover = toggle.hot })
+    toggle.chevron:SetColorLines(T.C4(r.glyph))
+    toggle.bg:SetColorTexture(T.C4(r.fill))
 end
 
 local Layout

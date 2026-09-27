@@ -329,7 +329,8 @@ local function Skin(f, def)
     edge:SetAllPoints(f)
     edge:EnableMouse(false)
     edge:SetFrameLevel(f:GetFrameLevel() + 3)
-    T.TokenBorder(edge, "border")
+    -- Its colour and thickness are the Icon look setting (Look.lua).
+    T.TokenBorder(edge)
     s.edge = edge
 
     if def.buff then
@@ -522,7 +523,7 @@ local function EndTimer(f, s)
     Under(f, s, 1)
     if s.edge then
         if ns.LookColour then T.SetBorderColor(s.edge, ns.LookColour(M.db.look.borderColour))
-        else T.SetBorderToken(s.edge, "border") end
+        else T.SetEdge(s.edge, T.Resolve(T.LOOK.slot).edge) end
     end
 end
 

@@ -206,32 +206,27 @@ local function Style(g, cf, tab, active, inBand)
     g.bg:ClearAllPoints()
     g.bg:SetPoint("TOPLEFT", g, "TOPLEFT", 0, inBand and -one or 0)
     g.bg:SetPoint("BOTTOMRIGHT", g, "BOTTOMRIGHT", 0, 0)
+    -- Colours from T.LOOK.chatTab; how opaque the fill is stays the chat's
+    -- own setting.
+    local look = TH.Resolve(TH.LOOK.chatTab, { on = active, hover = hover })
+    local fr, fg, fb = TH.C4(look.fill)
     if inBand then
-        if active then g.bg:SetColorTexture(TH.RGBA("surface1", 1))
-        elseif hover then g.bg:SetColorTexture(TH.RGBA("surface1", 0.5))
-        else g.bg:SetColorTexture(0, 0, 0, 0) end
+        g.bg:SetColorTexture(fr, fg, fb, active and 1 or (hover and 0.5 or 0))
     else
-        local token = (active or hover) and "surface1" or "surface0"
-        g.bg:SetColorTexture(TH.RGBA(token, active and db.tabActiveBgAlpha or db.tabBgAlpha))
+        g.bg:SetColorTexture(fr, fg, fb, active and db.tabActiveBgAlpha or db.tabBgAlpha)
     end
 
     g.line:SetHeight(ns.Px(2))
-    if active and db.tabUnderline then
-        g.line:SetColorTexture(TH.RGBA("accent"))
-        g.line:Show()
-    elseif hover and db.tabUnderline then
-        g.line:SetColorTexture(TH.RGBA("borderStrong"))
-        g.line:Show()
-    else
-        g.line:Hide()
-    end
+    local lineShown = db.tabUnderline and TH.Visible(look.bar)
+    if lineShown then g.line:SetColorTexture(TH.C4(look.bar)) end
+    g.line:SetShown(lineShown and true or false)
 
     g.sep:SetWidth(one)
     g.sep:SetColorTexture(unpack(ns.DIVIDER))
     g.sep:SetShown(inBand and db.dividers)
 
     local showEdge = not inBand and db.border
-    local er, eg, eb = TH.RGBA("border")
+    local er, eg, eb = TH.C4(look.edge)
     EV.Pixel:CreateBorder(g.edge, 1, er, eg, eb, showEdge and 1 or 0)
     g.edge:SetShown(showEdge)
 end

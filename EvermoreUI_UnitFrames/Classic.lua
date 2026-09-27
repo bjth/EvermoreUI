@@ -134,7 +134,7 @@ local function PaintRow(r)
     local db = SW.db
     local font = EV.Media:Fetch("font")
     local size = max(8, min(14, db.rowHeight))
-    r.bg:SetColorTexture(T.RGBA("surfaceSunk", 0.85))
+    r.bg:SetColorTexture(T.RGBA("surfaceSunk", 0.85))   -- content colour: the track under the timer
     r.bar:SetStatusBarTexture(EV.Media:Fetch("statusbar", "Flat"))
     local cr, cg, cb = T.RGBA(r.def.token)
     r.bar:SetStatusBarColor(cr, cg, cb, 1)
