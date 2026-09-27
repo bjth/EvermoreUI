@@ -14,4 +14,5 @@ Parts.lua
 Packs.lua
 WindowPacks.lua
 Discover.lua
+DamageMeter.lua
 Dev.lua

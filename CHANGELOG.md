@@ -1,5 +1,106 @@
 # EvermoreUI
 
+## 0.13.0
+
+Built around how Forever plays: a setup that gets you going in a minute,
+every character's bags, bank and gold from any of them, the built-in damage
+meter in our style, and cooldown icons that tell you more.
+
+### New
+- **Setup.** The first time you log in, a short walkthrough: whether this
+  character shares its setup with your others, contrast, font and size,
+  which modules to use, a starting layout for tanking, healing or damage,
+  and the everyday conveniences. Nothing moves until you press Use this
+  layout, and Undo puts it back. Your settings are all kept if you've used
+  EvermoreUI before. /evui install runs it again. Tell us how it went on
+  the Discord: setup is the part we most want feedback on.
+- **Characters** (/evui alts). Every character's gold, rested XP,
+  professions and when you last played them, side by side, with the total
+  at the foot. Browse any character's bags, bank or mail, or the account
+  bank, from any other. Find an item across all of them by name. Items you
+  mail to your own characters count straight away. Mail about to run out
+  gets a line in chat at login.
+- **Item counts in tooltips**: how many each of your characters has, and
+  where (bags, bank, mail, equipped), plus the account bank.
+- **A gold readout** on the Data Bars, off by default: this character's
+  gold or everyone's, with every character's on hover.
+- **The damage meter**, Forever's built-in one, in our style: title bar,
+  surface, flat bars and our font. Its own settings keep working. Window
+  Skins page, or setup.
+- **Cooldown icons**, all in the designer:
+  - **Icon look**: border thickness and colour (theme, gold, class), crop
+    and how dark the cooldown sweep is.
+  - **Procs**: when the game lights a spell up, a pulsing or solid border
+    of ours, Blizzard's glow sized to our square icons, or nothing.
+  - **Reactive abilities** glow while they're usable: Overpower, Revenge,
+    Execute, Riposte, Counterattack, Mongoose Bite and Hammer of Wrath to
+    start with, and any cooldown can be switched on.
+  - **Refresh window**: a tracked buff or debuff lights up for its last
+    part (30% by default) or last few seconds, so you know when re-casting
+    wastes nothing. Works in combat.
+
+### Changed
+- **One icon style for everything** (General > Icons): how much of each
+  icon's baked-in edge is cropped, how thick its border is and what colour
+  it rests in, set once and used by every icon EvermoreUI draws or skins:
+  action bars, bags, auras on your frames and nameplates, buff reminders,
+  quest items, loot rolls, the cooldown manager, and Blizzard's own windows
+  (character, spellbook, merchant, loot, mail). An edge that means
+  something keeps its colour: an item's quality, a debuff you can dispel, a
+  reminder. The cooldown manager follows it unless you give it its own.
+- **One look for every control.** Our buttons, boxes, tabs, lists and
+  scroll bars, and Blizzard's own once skinned, now come from the same
+  recipe, so a skinned window's buttons match ours in every state. Close
+  buttons turn red on hover, the selected tab and window titles are gold,
+  a greyed-out control shows it in its own colours rather than fading, and
+  icon wells on the action bars, bags and quest items are all the same.
+- **Windows open without a stutter.** Skinning a window as it opens does
+  far less work than it did, and a large one, like professions or the
+  auction house, is spread over a few frames instead of done all at once.
+  Windows skinned in the background after you log in share the same small
+  allowance each frame. Lists that rebuild themselves, after a sort or a
+  filter, keep their look.
+- **The spellbook, redone.** The school tabs, the search box and the
+  filter button sit on a tool bar under the title, all the same height;
+  each spell is a card, with passives a step quieter and spells not yet
+  learned dimmed; the pager has a footer of its own with flat arrows. The
+  pulsing glow and the sweep over every icon are gone: a spell on none of
+  your bars has a small copper mark in its corner instead.
+- **The character window, redone.** Stat groups are a gold heading
+  between two rules instead of a box each. The stats, titles and sets
+  buttons and your level sit on a band at the top of the pane. The model's
+  backdrop stays inside the window. The tabs down the side are compact
+  squares. The tabs beside each slot are slim, flat, with an arrow, and
+  their list has a plain panel. New Set, Equip and Save are one set of
+  buttons with room between them; titles and equipment sets are rows and
+  cards in our look.
+- **Reputation, Skills, Currency and Statistics**: flat group headers with
+  an arrow, flat progress bars in a well, a copper highlight on the row
+  you've picked, and the detail pane's rule in our colours.
+- **Professions.** The skill bar sits on a tool bar under the title, flat
+  copper in a well. The recipe list and the recipe sit side by side with
+  one line between them, no boxes. The list has its search box and a
+  proper filter button on one line, and plain rows with a copper highlight
+  for the recipe you've picked (recipe colours still show how hard each
+  one is). Create All, the count and Create are one group on a footer
+  across the bottom, with the count centred. The profession tabs down the
+  side match the character window's. Reagent and result icons use the icon style. The
+  overview's cards are plain cards, their spells in the icon style and
+  Unlearn a small red cross button, which now also sits beside the skill
+  bar on a primary profession's own page.
+- **Pop-ups** (confirming an unlearn, deleting an item, naming a set) are
+  a plain window with our buttons, the one that confirms in copper, and a
+  proper box round the text field.
+- **Text on a control always reads.** Where a button's colour and its
+  label would be too close, the label switches to light or dark to suit,
+  and dark text drops the shadow that smeared it.
+- **Page arrows** in every window that uses the spellbook's (mail, the
+  merchant, collections) are flat buttons with a chevron.
+
+### Fixes
+- Parts of the options window and edit mode could stop following a
+  contrast or colour change partway through a session, until a reload.
+
 ## 0.12.5
 
 Your own cooldowns: the bars now take what the game's Cooldown Manager

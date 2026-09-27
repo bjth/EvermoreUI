@@ -200,6 +200,7 @@ end
 --------------------------------------------------------------------------------
 local function Layer(parent, level)
     local sb = CreateFrame("StatusBar", nil, parent)
+    EV.Pixel:Bar(sb)
     sb:SetAllPoints()
     sb:SetFrameLevel(level)
     sb:SetMinMaxValues(0, 1)
@@ -219,9 +220,7 @@ local function CreateBar()
     f:SetFrameStrata("LOW")
     f:EnableMouse(true)
     -- Our panel look: a sunk well with the theme's border.
-    f.bg = TH.Fill(f, "BACKGROUND", "surfaceSunk", 0.9, -8)
-    f.bg:SetAllPoints()
-    TH.TokenBorder(f, "border")
+    f.bg = EV.UI.Surface(f, "inset", 0.9)
 
     -- Back to front. Each layer's value is cumulative, so they read as
     -- consecutive segments: XP | quests | rested.
@@ -523,8 +522,6 @@ function M:ApplySettings()
     bar.quests:SetStatusBarTexture(tex);   bar.quests:SetStatusBarColor(TH.RGBA("quest"))
     bar.rested:SetStatusBarTexture(tex);   bar.rested:SetStatusBarColor(TH.RGBA("rested", 0.75))
     bar.questLog:SetStatusBarTexture(tex); bar.questLog:SetStatusBarColor(TH.RGBA("quest", 0.3))
-    bar.bg:SetColorTexture(TH.RGBA("surfaceSunk", 0.9))
-    TH.SetBorderToken(bar, "border")
 
     local font = EV.Media:Fetch("font")
     local size = cfg.fontSize

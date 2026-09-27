@@ -206,7 +206,7 @@ end
 --------------------------------------------------------------------------------
 local function PaintTile(t)
     local on = t.item and EV.DesignerUI:Selected() == PickFor(t.item) and (t.item.group == "cd" or t.item.extra)
-    T.SetBorderToken(t, (on or t:IsMouseOver()) and "accent" or "border")
+    T.SetEdge(t, T.Resolve(T.LOOK.slot, { on = on or t:IsMouseOver() }).edge)
 end
 
 local function Tile(i)
@@ -220,16 +220,16 @@ local function Tile(i)
     t.icon = t:CreateTexture(nil, "ARTWORK")
     t.icon:SetPoint("TOPLEFT", 1, -1)
     t.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-    t.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    t.icon:SetTexCoord(EV.Icons:Coords())
     t.plus = T.Text(t, 22, "textMuted", true)
     t.plus:SetPoint("CENTER", 0, 1)
     t.plus:SetText("+")
     t.plus:Hide()
-    T.TokenBorder(t, "border")
+    T.TokenBorder(t)
     t:RegisterForClicks("AnyUp")
     t:SetScript("OnEnter", function(self)
         if dragging then return end
-        T.SetBorderToken(self, "accent")
+        T.SetEdge(self, T.Resolve(T.LOOK.slot, { on = true }).edge)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         if self.item.extra then
             GameTooltip:AddLine(self.name, 1, 1, 1)
@@ -286,9 +286,7 @@ local function Row(key, label)
         if button ~= "LeftButton" or key == HIDDEN then return end
         EV.DesignerUI:Select(BarKey(key))
     end)
-    r.bg = T.Fill(r, "BACKGROUND", "surfaceSunk", 0.6)
-    r.bg:SetAllPoints()
-    T.TokenBorder(r, "border")
+    r.bg = W.Surface(r, "inset", 0.6)
     r.label = T.Text(r, 12, "textMuted", true)
     r.label:SetPoint("BOTTOMLEFT", r, "TOPLEFT", 2, 4)
     r.label:SetText(label)
@@ -307,7 +305,7 @@ local function Build(stage)
     grid.ghost:SetFrameLevel(grid:GetFrameLevel() + 50)
     grid.ghost.icon = grid.ghost:CreateTexture(nil, "OVERLAY")
     grid.ghost.icon:SetAllPoints()
-    grid.ghost.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    grid.ghost.icon:SetTexCoord(EV.Icons:Coords())
     grid.ghost:SetAlpha(0.85)
     grid.ghost:Hide()
     -- Hidden mid-drag (combat, or the window closing): drop nothing. An
@@ -356,7 +354,7 @@ local function Build(stage)
     function grid.Paint(sel)
         for key, r in pairs(rows) do
             local picked = key ~= HIDDEN and sel == BarKey(key)
-            T.SetBorderToken(r, picked and "accent" or "border")
+            W.SurfaceEdge(r.bg, picked and T.LOOK.slot.on.edge or nil)
         end
         for _, t in ipairs(tiles) do if t:IsShown() then PaintTile(t) end end
     end
@@ -612,6 +610,22 @@ function Elements()
         key = "timers", label = L["Linked timers"],
         Options = function(p) ns.TimerList(p, Rebuild) end,
     }
+    list[#list + 1] = {
+        key = "look", label = L["Icon look"],
+        sub = L["Border, crop and cooldown darkness, for every bar."],
+        Options = function(p) ns.LookSettings(p) end,
+        Reset = function() wipe(M.db.look); EV.DB.Merge(M.db.look, M.defaults.look); M:Refresh() end,
+    }
+    list[#list + 1] = {
+        key = "procs", label = L["Procs and reactives"], fresh = true,
+        sub = L["How a lit-up spell shows, and abilities that glow while usable."],
+        Options = function(p) ns.ProcSettings(p) end,
+    }
+    list[#list + 1] = {
+        key = "refresh", label = L["Refresh window"],
+        sub = L["When re-casting a tracked buff or debuff wastes nothing."],
+        Options = function(p) ns.RefreshSettings(p) end,
+    }
     for _, f in ipairs(ns.CustomFrames and ns.CustomFrames() or {}) do
         local frame = f
         list[#list + 1] = {
@@ -636,7 +650,7 @@ function Elements()
                 list[#list + 1] = {
                     key = key, label = Name(it.f) or L["Cooldown"], unlisted = true,
                     sub = L["Drag it on the grid to move it. Its bar's settings are in the list."],
-                    Options = function(p) ns.IconTimer(p, spell) end,
+                    Options = function(p) ns.IconTimer(p, spell); ns.IconUsable(p, spell) end,
                 }
             end
         end
@@ -675,7 +689,8 @@ EV.Designers:Register{
         local a = M:Arrangement(false)
         return { spec = M.SpecKey(), data = a and EV.CopyTable(a) or nil,
                  bars = EV.CopyTable(M.db.bars), timers = EV.CopyTable(M:Timers()),
-                 custom = EV.CopyTable(M:CustomList()), userBars = EV.CopyTable(M:UserBars()) }
+                 custom = EV.CopyTable(M:CustomList()), userBars = EV.CopyTable(M:UserBars()),
+                 look = EV.CopyTable(M.db.look), usable = EV.CopyTable(M.db.usable) }
     end,
     Restore = function(_, snap)
         if not snap then return end
@@ -699,6 +714,14 @@ EV.Designers:Register{
                 for i, t in ipairs(snap[field]) do list[i] = EV.CopyTable(t) end
             end
         end
+        for _, field in ipairs({ "look", "usable" }) do
+            if snap[field] then
+                wipe(M.db[field])
+                for k, v in pairs(EV.CopyTable(snap[field])) do M.db[field][k] = v end
+            end
+        end
+        if ns.UsableChanged then ns.UsableChanged() end
+        if ns.RefreshCurveChanged then ns.RefreshCurveChanged() end
         if ns.SyncUserBars then ns.SyncUserBars() end
         if ns.SyncCustom then ns.SyncCustom() end
         M:Refresh()

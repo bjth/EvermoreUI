@@ -69,12 +69,13 @@ local function FadeVertex(tex)
     if tex and tex.SetVertexColor then tex:SetVertexColor(1, 1, 1, 0) end
 end
 
+local state = {}
 local function Paint(e)
-    local hot = e.hover
-    local alert = e.alert and e.alert()
-    e.glyph:SetVertexColor(T.RGBA(alert and "accent" or (hot and "text" or "textMuted")))
-    e.cell:SetColorTexture(T.RGBA(hot and "surface3" or "surface1", 0.92))
-    T.SetBorderToken(e.edge, alert and "accent" or "border")
+    state.hover, state.on = e.hover, e.alert and e.alert() or false
+    local r = T.Resolve(T.LOOK.plateButton, state)
+    e.glyph:SetVertexColor(T.C4(r.glyph))
+    e.cell:SetColorTexture(T.C4(r.fill))
+    T.SetEdge(e.edge, r.edge)
 end
 
 local function Dress(e)
@@ -86,7 +87,7 @@ local function Dress(e)
     e.edge:SetAllPoints(e.frame)
     e.edge:SetFrameLevel(host:GetFrameLevel() + 2)
     e.edge:EnableMouse(false)
-    T.TokenBorder(e.edge, "border")
+    T.TokenBorder(e.edge)
     e.glyph = host:CreateTexture(nil, "OVERLAY", nil, 3)
     e.glyph:SetTexture(ns.GLYPH .. e.glyphFile .. ".png")
     e.glyph:SetSize(13, 13)

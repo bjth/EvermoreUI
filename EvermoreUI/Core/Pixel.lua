@@ -75,7 +75,7 @@ function Pixel:SetPoint(frame, point, rel, relPoint, x, y)
 end
 
 --------------------------------------------------------------------------------
---  Pixel snapping, turned off across the whole UI
+--  Pixel snapping, turned off on our own regions
 --
 --  Snapping is a property of each texture OBJECT and it defaults ON. It rounds
 --  that region's coordinates to the pixel grid INDEPENDENTLY of every other
@@ -97,26 +97,28 @@ end
 --  missed: font strings, and the StatusBar FILL, which is a brand new texture
 --  object after every SetStatusBarTexture.
 --
---  So it is hooked once, at the metatable. Every widget of a type shares one
---  method table, so hooking it covers every object of that type that exists
---  now or is created later, ours and Blizzard's alike. The image setters are
---  the signal: they are what a newly minted texture gets called with first.
+--  It used to be hooked once, at the widget metatables (SetTexture,
+--  SetColorTexture, SetAtlas, SetStatusBarTexture, SetSnapToPixelGrid), so
+--  every region in the game was unsnapped on first touch. That cannot be done
+--  on Forever. The metatables are shared with Blizzard's secure code, and
+--  under the secret-value rules a hooked method counts as ours when that code
+--  calls it with secrets in play: the taint log showed "An attempt to call a
+--  secret value was blocked because of taint from EvermoreUI -
+--  SetStatusBarTexture()" from the cast bar on every cast, and with that hook
+--  gone the XP bar's next line, SetAtlas, was blocked the same way.
 --
---  What is deliberately NOT hooked:
+--  So snapping is taken off OUR regions, by us:
 --
---   * SetVertexColor and SetTexCoord. They fire constantly -- every nameplate
---     recolour, every cooldown tick -- and neither can blur a texture. Hooking
---     them would be pure cost.
---   * A frame tree walk at load. With a full UI loaded that is well over ten
---     thousand frames and a large share of login time, and the only widget
---     type such a walk would reach that the metatable hooks below miss is
---     StatusBar, which is hooked explicitly.
+--   * Pixel.NoSnap(region), for a texture, mask or font string, or a
+--     StatusBar's current fill.
+--   * Pixel:Bar(bar), once after CreateFrame("StatusBar"): SetStatusBarTexture
+--     mints a new fill texture every call, so each of our bars is hooked on
+--     its own to unsnap the new one. Our frame, never Blizzard's.
+--   * Anything that moves walks its own regions: the nameplates' layout pass
+--     (Nameplates/Core.lua, SnapOff) does every region on every plate.
 --
---  The cache is keyed on the REGION, never on the StatusBar that owns it, so a
---  runtime fill swap unsnaps the new texture instead of being skipped as
---  already done. And SetSnapToPixelGrid is itself watched, so foreign code
---  turning snapping back on drops the entry and the next image setter takes it
---  off again.
+--  Blizzard's own regions keep the client's default snapping, which is what
+--  it was built for.
 --
 --  Never a field written onto a widget: the cache is an external weak-keyed
 --  table, because a stray key on a Blizzard frame taints it.
@@ -125,17 +127,17 @@ local snapOff = true
 local done = setmetatable({}, { __mode = "k" })
 
 -- Regions that have deliberately been put back ON the grid (nameplates in
--- crisp mode). The image-setter hooks below would otherwise take snapping
--- off again the next time anything called SetTexture or SetColorTexture on
--- them, which left a crisp plate half snapped and half not within seconds of
--- play: the exact mix that makes plate contents move against each other.
+-- crisp mode), so NoSnap leaves them alone.
 local keep = setmetatable({}, { __mode = "k" })
 
 --- Mark a region as intentionally snapped (true) or hand it back to the
---- suite wide default (false).
+--- suite wide default (false). Marking one snapped also forgets that it was
+--- unsnapped, so handing it back later unsnaps it again rather than stopping
+--- at the cache (crisp mode switched back to smooth).
 function Pixel.KeepSnap(r, on)
     if r == nil then return end
     keep[r] = on and true or nil
+    if on then done[r] = nil end
 end
 
 local function Usable(obj)
@@ -158,8 +160,8 @@ end
 --- Textures, mask textures and font strings carry the setter themselves; a
 --- StatusBar is a frame and carries it on the fill it owns.
 ---
---- Order matters here, because this runs on EVERY image setter call in the
---- game. The secret guards are one C call each and have to come first, since a
+--- Order matters here: nameplates call this for every region on every layout.
+--- The secret guards are one C call each and have to come first, since a
 --- secret is not safe to use as a table key. The cache lookup comes next and
 --- is where the hot path ends: a texture that has already been unsnapped never
 --- reaches the pcall below it. A StatusBar is the exception and is meant to
@@ -182,59 +184,46 @@ local function NoSnap(obj)
 end
 Pixel.NoSnap = NoSnap
 
---- Something turned snapping back on for this region. Forget it, so the next
---- image setter takes it off again rather than short-circuiting on the cache.
-local function Watch(r, snap)
-    if snap and r and done[r] then done[r] = nil end
-end
-
-local hookedTypes = {}
-local function HookType(obj)
-    if not obj then return end
-    local mt = getmetatable(obj)
-    mt = mt and mt.__index
-    if type(mt) ~= "table" or hookedTypes[mt] then return end
-    hookedTypes[mt] = true
-    if mt.SetSnapToPixelGrid  then hooksecurefunc(mt, "SetSnapToPixelGrid", Watch) end
-    if mt.SetTexture          then hooksecurefunc(mt, "SetTexture", NoSnap) end
-    if mt.SetColorTexture     then hooksecurefunc(mt, "SetColorTexture", NoSnap) end
-    if mt.SetAtlas            then hooksecurefunc(mt, "SetAtlas", NoSnap) end
-    if mt.SetStatusBarTexture then hooksecurefunc(mt, "SetStatusBarTexture", NoSnap) end
-end
-
-do
-    local probe = CreateFrame("Frame")
-    HookType(probe)
-    HookType(probe:CreateTexture())
-    HookType(probe:CreateFontString())
-    HookType(probe:CreateMaskTexture())
-    HookType(CreateFrame("ScrollFrame"))
-    -- StatusBar has to be seeded with a fill before its inner texture exists.
-    local sb = CreateFrame("StatusBar")
-    sb:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    HookType(sb)
-    HookType(sb:GetStatusBarTexture())
-end
-
-function Pixel:CreateBackdrop(frame, r, g, b, a)
-    local bg = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bg:SetAllPoints()
-    bg:SetColorTexture(r or 0.05, g or 0.05, b or 0.06, a or 0.85)
-    NoSnap(bg)
-    frame.evBackdrop = bg
-    return bg
+--- Our own status bars, one at a time: SetStatusBarTexture mints a new fill
+--- texture on every call, so each bar of ours is hooked on its own to unsnap
+--- the new one. Call once, right after CreateFrame("StatusBar"). Never on a
+--- bar of Blizzard's (see the header: the metatable version of this was what
+--- tainted the cast bar).
+local barred = setmetatable({}, { __mode = "k" })
+function Pixel:Bar(bar)
+    if bar == nil or barred[bar] then return bar end
+    barred[bar] = true
+    hooksecurefunc(bar, "SetStatusBarTexture", NoSnap)
+    NoSnap(bar)
+    return bar
 end
 
 --------------------------------------------------------------------------------
---  Borders: four edge strips, `size` physical pixels thick. Every border is
---  remembered (weakly) and re-snapped whenever the scale changes.
+--  Hairlines and fills
+--
+--  The one implementation of "four one-physical-pixel textures in a colour"
+--  and "a flat texture behind everything", for our own frames and Blizzard's
+--  alike. Both live in weak tables keyed by the object, so nothing is ever
+--  written onto the object itself: a field on one of Blizzard's frames can
+--  taint it, and the skins paint Blizzard's frames with these same calls.
+--
+--    Pixel:Edges(obj, opts)      create or return; opts: size (px), decouple,
+--                                layer, sub. Returns the edge list and the
+--                                border record { edges, size, host }.
+--    Pixel:EdgesOf(obj)          the record, or nil
+--    Pixel:SetEdgeColor(obj, r, g, b, a)
+--    Pixel:ShowEdges(obj, shown)
+--    Pixel:Fill(obj, layer, sub) create or return the fill texture
+--    Pixel:FillOf(obj)           the fill texture, or nil
+--    Pixel:ResnapAll()           every hairline, after a scale change
 --------------------------------------------------------------------------------
-local borders = setmetatable({}, { __mode = "k" })  -- frame -> true
+local borders = setmetatable({}, { __mode = "k" })  -- object -> border record
+local fills = setmetatable({}, { __mode = "k" })    -- object -> fill texture
 
 --- Snap against the frame the strips actually LIVE on, which is not always
 --- the frame the border belongs to. See the decoupled case below.
-local function Snap4(frame, border)
-    local px = Pixel:One(border.host or frame) * (border.size or 1)
+local function Snap4(obj, border)
+    local px = Pixel:One(border.host or obj) * (border.size or 1)
     local e = border.edges
     e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
 end
@@ -267,23 +256,25 @@ end
 --- StatusBar: a bar's fill texture draws on the ARTWORK layer, above the
 --- BORDER layer, so a border drawn on the bar itself is underneath its own
 --- fill.
-function Pixel:CreateBorder(frame, size, r, g, b, a, decouple)
-    local border = frame.evBorder
+function Pixel:Edges(obj, opts)
+    opts = opts or {}
+    local border = borders[obj]
     if not border then
-        local host = frame
+        local host = obj
+        local decouple = opts.decouple
         if decouple then
-            local c = CreateFrame("Frame", nil, frame)
-            c:SetAllPoints(frame)
-            c:SetFrameLevel((frame:GetFrameLevel() or 0) + 1)
+            local c = CreateFrame("Frame", nil, obj)
+            c:SetAllPoints(obj)
+            c:SetFrameLevel((obj:GetFrameLevel() or 0) + 1)
             if c.SetIgnoreParentScale then
                 c:SetIgnoreParentScale(true)
                 c:SetScale(1)
             end
             host = c
         end
-        border = { edges = {}, host = (host ~= frame) and host or nil }
+        border = { edges = {}, host = (host ~= obj) and host or nil }
         for i = 1, 4 do
-            local t = host:CreateTexture(nil, decouple and "OVERLAY" or "BORDER", nil, 7)
+            local t = host:CreateTexture(nil, opts.layer or (decouple and "OVERLAY" or "BORDER"), nil, opts.sub or 7)
             -- Snapping stays OFF, deliberately. Its job here is to stop a
             -- one-pixel strip rounding to zero width; with the container
             -- decoupled the geometry is already exact.
@@ -295,19 +286,57 @@ function Pixel:CreateBorder(frame, size, r, g, b, a, decouple)
         e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT")
         e[3]:SetPoint("TOPLEFT");    e[3]:SetPoint("BOTTOMLEFT")
         e[4]:SetPoint("TOPRIGHT");   e[4]:SetPoint("BOTTOMRIGHT")
-        frame.evBorder = border
-        borders[frame] = true
+        borders[obj] = border
     end
-    border.size = size or 1
-    for i = 1, 4 do border.edges[i]:SetColorTexture(r or 0, g or 0, b or 0, a or 1) end
-    Snap4(frame, border)
+    if opts.size then border.size = opts.size end
+    Snap4(obj, border)
+    return border.edges, border
+end
+
+function Pixel:EdgesOf(obj) return borders[obj] end
+
+function Pixel:SetEdgeColor(obj, r, g, b, a)
+    local border = borders[obj]
+    if not border then return end
+    for _, e in ipairs(border.edges) do e:SetColorTexture(r or 0, g or 0, b or 0, a or 1) end
+end
+
+function Pixel:ShowEdges(obj, shown)
+    local border = borders[obj]
+    if not border then return end
+    for _, e in ipairs(border.edges) do e:SetShown(shown and true or false) end
+end
+
+--- A border `size` physical pixels thick in one colour: Edges plus a colour.
+function Pixel:CreateBorder(frame, size, r, g, b, a, decouple)
+    local _, border = self:Edges(frame, { size = size or 1, decouple = decouple })
+    self:SetEdgeColor(frame, r, g, b, a)
     return border
 end
 
-function Pixel:ResnapBorders()
-    for frame in pairs(borders) do
-        if frame.evBorder then Snap4(frame, frame.evBorder) end
+function Pixel:ResnapAll()
+    for obj, border in pairs(borders) do Snap4(obj, border) end
+end
+Pixel.ResnapBorders = Pixel.ResnapAll
+
+--- The flat texture behind an object's own drawing, created once.
+function Pixel:Fill(obj, layer, sub)
+    local t = fills[obj]
+    if not t then
+        t = obj:CreateTexture(nil, layer or "BACKGROUND", nil, sub or -7)
+        t:SetAllPoints(obj)
+        NoSnap(t)
+        fills[obj] = t
     end
+    return t
+end
+
+function Pixel:FillOf(obj) return fills[obj] end
+
+function Pixel:CreateBackdrop(frame, r, g, b, a)
+    local bg = self:Fill(frame, "BACKGROUND", -8)
+    bg:SetColorTexture(r or 0.05, g or 0.05, b or 0.06, a or 0.85)
+    return bg
 end
 
 --------------------------------------------------------------------------------
@@ -333,7 +362,7 @@ function Pixel:TargetScale()
 end
 
 local function Changed()
-    Pixel:ResnapBorders()
+    Pixel:ResnapAll()
     if EV.Movers and EV.dbReady then EV.Movers:ApplyAll() end
     EV:SendMessage("EV_PIXEL_CHANGED")
 end

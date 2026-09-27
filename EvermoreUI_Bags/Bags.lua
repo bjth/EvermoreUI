@@ -277,22 +277,18 @@ local function Holder(view, bag)
     return h
 end
 
+local skinned = setmetatable({}, { __mode = "k" })   -- item button -> its icon
+
+--- The suite's icon style (EV.Icons, General > Icons) on a slot: its crop and
+--- edge, and the slot's well behind it for an empty one.
 local function Skin(b)
-    if b.evSkinned then return end
-    b.evSkinned = true
+    if skinned[b] then return end
     local nt = b.GetNormalTexture and b:GetNormalTexture()
     if nt then nt:SetAlpha(0) end
     local icon = b.icon or b.Icon
-    if icon then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
-    local well = b:CreateTexture(nil, "BACKGROUND", nil, -8)
-    well:SetAllPoints()
-    well:SetColorTexture(T.RGBA("surfaceSunk", 0.9))
-    b.evWell = well
-    local edge = CreateFrame("Frame", nil, b)
-    edge:SetAllPoints()
-    edge:EnableMouse(false)
-    T.TokenBorder(edge, "border")
-    b.evEdge = edge
+    if not icon then return end
+    EV.Icons:Style(icon, { host = b, fit = true, well = T.LOOK.slot.rest.fill })
+    skinned[b] = icon
 end
 
 local function Button(view, bag, slot)
@@ -324,11 +320,14 @@ local function Paint(b, i)
     b:SetMatchesSearch(not (i and i.filtered))
     -- Quality edge on our border (Blizzard's IconBorder stays for its own art).
     local q = i and i.quality
-    if q and q > 1 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
-        local c = ITEM_QUALITY_COLORS[q]
-        T.SetBorderColor(b.evEdge, c.r, c.g, c.b, 1)
-    else
-        T.SetBorderToken(b.evEdge, "border")
+    local icon = skinned[b]
+    if icon then
+        if q and q > 1 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
+            local c = ITEM_QUALITY_COLORS[q]
+            EV.Icons:SetState(icon, c.r, c.g, c.b, 1)   -- content colour
+        else
+            EV.Icons:SetState(icon, nil)
+        end
     end
 end
 
@@ -761,9 +760,8 @@ bankView = NewView("bank", {
         if ok and made then
             buy = made
             buy:SetSize(96, 22)
-            buy.bg = T.Fill(buy, "BACKGROUND", "surface2")
-            buy.bg:SetAllPoints()
-            T.TokenBorder(buy, "accent")
+            buy.bg = EV.UI.Surface(buy, "control")
+            EV.UI.SurfaceEdge(buy.bg, "accent")
             buy.label = T.Text(buy, "small", "text", true)
             buy.label:SetPoint("CENTER")
             buy.label:SetText(L["Buy a tab"])

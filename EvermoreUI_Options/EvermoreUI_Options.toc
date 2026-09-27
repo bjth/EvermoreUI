@@ -16,6 +16,7 @@ Page.lua
 Window.lua
 EditMode.lua
 Designer.lua
+Install.lua
 
 # Pages, in sidebar order within each group
 Pages\General.lua
@@ -36,6 +37,7 @@ Pages\Objectives.lua
 Pages\DataBars.lua
 Pages\MicroMenu.lua
 Pages\Bags.lua
+Pages\Characters.lua
 Pages\Group.lua
 Pages\Chat.lua
 Pages\Tooltips.lua

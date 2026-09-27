@@ -51,6 +51,7 @@ local function Pip(row, i)
     local p = row.pips[i]
     if p then return p end
     p = CreateFrame("StatusBar", nil, row)
+    EV.Pixel:Bar(p)
     p:SetStatusBarTexture(WHITE)
     p:SetMinMaxValues(i - 1, i)
     p:SetValue(0)

@@ -479,7 +479,7 @@ local function SampleRow(holder, on, size, n, grow, dispel)
                 t.back = t:CreateTexture(nil, "BACKGROUND")
                 t.back:SetAllPoints()
                 t.icon = t:CreateTexture(nil, "ARTWORK")
-                t.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                t.icon:SetTexCoord(EV.Icons:Coords())
                 holder.samples[i] = t
             end
             local one = EV.Pixel:One(holder)

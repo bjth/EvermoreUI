@@ -96,8 +96,6 @@ local function Build()
     f:SetFrameLevel(2)
     f:SetSize(200, 200)
     f:EnableMouse(false)
-    f.bg = T.Fill(f, "BACKGROUND", "surfaceSunk", 1, -8)
-    f.bg:SetAllPoints()
 
     -- The Minimap sits in the well; the overlay (text, badges, buttons)
     -- sits above both the map and the wheel layer.
@@ -111,13 +109,9 @@ local function Build()
     f.edge = CreateFrame("Frame", nil, f)
     f.edge:SetAllPoints()
     f.edge:EnableMouse(false)
-    T.TokenBorder(f.edge, "border")
-
-    f.Paint = function()
-        f.bg:SetColorTexture(T.RGBA("surfaceSunk"))
-        T.SetBorderToken(f.edge, "border")
-    end
-    T.Watch(f)
+    -- The map sits in a well: T.LOOK.inset, its border on the edge frame
+    -- above the map.
+    f.bg = EV.UI.Surface(f, "inset", 1, { edgeOn = f.edge })
     frame = f
     ns.frame = f
     return f
@@ -127,17 +121,10 @@ end
 --- 1px border, readable on any terrain.
 function ns.Plate(parent, alpha)
     local p = CreateFrame("Frame", nil, parent)
-    p.bg = T.Fill(p, "BACKGROUND", "surface1", alpha or 0.9)
-    p.bg:SetAllPoints()
     p.edge = CreateFrame("Frame", nil, p)
     p.edge:SetAllPoints()
     p.edge:EnableMouse(false)
-    T.TokenBorder(p.edge, "border")
-    p.Paint = function()
-        p.bg:SetColorTexture(T.RGBA("surface1", alpha or 0.9))
-        T.SetBorderToken(p.edge, "border")
-    end
-    T.Watch(p)
+    p.bg = EV.UI.Surface(p, "raised", alpha or 0.9, { edgeOn = p.edge, sub = 0 })
     return p
 end
 

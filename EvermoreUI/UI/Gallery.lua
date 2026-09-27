@@ -116,6 +116,48 @@ local function Build()
     local t3 = U.Label(p, L["Heading colour"], "title", "small", true)
     t3:SetPoint("TOPLEFT", t2, "BOTTOMLEFT", 0, -6)
 
+    -- Ours beside Blizzard's own templates as the skins paint them: the two
+    -- resolve through the same Look (Core/Looks.lua), so at rest, on hover,
+    -- pressed, focused and disabled each pair must be indistinguishable.
+    local skins = EV._ModuleNS and EV._ModuleNS["EvermoreUI_Skins"]
+    local S = skins and skins.S
+    if S and S.Walk then
+        Section(L["Ours and Blizzard's, skinned"])
+        local function Blizzard(template, kind, width, height)
+            local ok, f = pcall(CreateFrame, kind or "Button", nil, c, template)
+            if not ok or not f then return nil end
+            if width then f:SetSize(width, height or U.HEIGHT) end
+            S.Walk(f, 0)
+            return f
+        end
+        local function Pair(label, ours, theirs, h)
+            local row = Row(label, h)
+            ours:SetPoint("LEFT", row, "LEFT")
+            if theirs then
+                theirs:ClearAllPoints()
+                theirs:SetPoint("LEFT", ours, "RIGHT", 24, 0)
+            end
+            return theirs
+        end
+        local b = Blizzard("UIPanelButtonTemplate", "Button", 110, 22)
+        if b then b:SetText(L["Blizzard's"]) end
+        Pair(L["Button"], U.Button(c, L["Ours"], 110), b)
+        local bd = Blizzard("UIPanelButtonTemplate", "Button", 110, 22)
+        if bd then bd:SetText(L["Disabled"]); bd:Disable() end
+        local od = U.Button(c, L["Disabled"], 110)
+        od:SetDisabled(true)
+        Pair(L["Button, disabled"], od, bd)
+        local ck = Blizzard("UICheckButtonTemplate", "CheckButton", 32, 32)
+        if ck then ck:SetChecked(true) end
+        Pair(L["Check box"], U.Checkbox(c, nil, function() return state.check end, function(v) state.check = v end), ck, 32)
+        local ib = Blizzard("InputBoxTemplate", "EditBox", 180, 22)
+        if ib then ib:SetAutoFocus(false) end
+        Pair(L["Input"], U.Input(c, 180, L["Ours"], function() end), ib)
+        local dd = Blizzard("WowStyle1DropdownTemplate", "DropdownButton", 180, 26)
+        if dd and dd.SetDefaultText then dd:SetDefaultText(L["Blizzard's"]) end
+        Pair(L["Dropdown"], U.Dropdown(c, 180, { { value = 1, text = L["Ours"] } }, function() return 1 end, function() end), dd)
+    end
+
     scroll:SetContentHeight(y + 10)
     return w
 end
@@ -134,6 +176,8 @@ EV:RegisterSlash("theme", function(rest)
         for _, mode in ipairs({ "standard", "high" }) do
             local fails = T.Audit(mode)
             EV:Print(mode, #fails == 0 and "|cff55ff55" .. L["all contrast checks pass"] .. "|r" or table.concat(fails, "; "))
+            local looks = T.AuditLooks and T.AuditLooks(mode) or {}
+            EV:Print(mode, #looks == 0 and "|cff55ff55" .. L["every control look passes"] .. "|r" or table.concat(looks, "; "))
         end
     else
         EV:Print(L["Contrast:"], T.mode, " (/evui theme standard | high | audit)")

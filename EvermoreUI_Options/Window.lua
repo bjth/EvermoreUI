@@ -89,6 +89,7 @@ end
 --------------------------------------------------------------------------------
 --  Nav + tabs state
 --------------------------------------------------------------------------------
+local navState, navOut = {}, {}
 local function PaintNav()
     for key, b in pairs(navButtons) do
         local def = pages[key]
@@ -104,9 +105,12 @@ local function PaintNav()
         else
             b.glow:SetColorTexture(ar, ag, ab, 0.08)
         end
-        b.hl:SetColorTexture(T.RGBA("surface2", 0.5))
-        local token = (selected or b:IsMouseOver()) and "text" or (enabled and "textMuted" or "textDisabled")
-        b.text:SetTextColor(T.RGBA(token))
+        navState.on, navState.hover, navState.disabled = selected, b:IsMouseOver(), not enabled and not selected
+        local r = T.Resolve(T.LOOK.listItem, navState, navOut)
+        navState.on, navState.disabled = false, false
+        navState.hover = true
+        b.hl:SetColorTexture(T.C4(T.Resolve(T.LOOK.listItem, navState).fill))
+        b.text:SetTextColor(T.C4(r.text))
         if b.dot then
             if enabled then b.dot:SetColorTexture(T.RGBA("accent", selected and 1 or 0.7))
             else b.dot:SetColorTexture(T.RGBA("textDisabled", 0.5)) end
@@ -261,8 +265,7 @@ local function BuildSidebar()
     sb:SetWidth(T.SIDEBAR_W)
     -- Theme surfaces: the sidebar is the sunk side of the window, with a
     -- divider line where it meets the content.
-    local sbg = T.Fill(sb, "BACKGROUND", "surfaceSunk", 0.6)
-    sbg:SetAllPoints()
+    U.Surface(sb, "inset", 0.6, { edge = false })
     local edge = T.Fill(sb, "BORDER", "divider")
     edge:SetWidth(1)
     edge:SetPoint("TOPRIGHT"); edge:SetPoint("BOTTOMRIGHT")
@@ -276,7 +279,6 @@ local function BuildSidebar()
     ver:SetText(("v%s  -  %s"):format(EV.version, tostring(c.version or "")))
     local groupLabels = {}
     T.OnTheme(function()
-        sbg:SetColorTexture(T.RGBA("surfaceSunk", 0.6))
         edge:SetColorTexture(T.RGBA("divider"))
         local r, g, b = T.RGBA("accent")
         brand:SetTextColor(T.RGBA("text"))
@@ -363,7 +365,7 @@ local function BuildSidebar()
                     b.glow:SetAllPoints()
                     b.bar = T.Fill(b, "ARTWORK", "accent")
                     b.bar:SetPoint("TOPLEFT"); b.bar:SetPoint("BOTTOMLEFT"); b.bar:SetWidth(3)
-                    b.hl = T.Fill(b, "HIGHLIGHT", "surface2", 0.5)
+                    b.hl = T.Solid(b, "HIGHLIGHT", 0, 0, 0, 0)   -- coloured by PaintNav (T.LOOK.listItem)
                     b.hl:SetAllPoints()
                     b.text = T.Text(b, 15, "textMuted")
                     b.text:SetPoint("LEFT", 26, 0)
@@ -430,18 +432,20 @@ local function BuildHeader()
     local close = CreateFrame("Button", nil, h)
     close:SetSize(30, 30)
     close:SetPoint("TOPRIGHT", -14, -14)
-    -- Our close glyph, like every other EvermoreUI window: muted, red on hover.
-    local hbg = T.Fill(close, "BACKGROUND", "surface2")
-    hbg:SetAllPoints(); hbg:Hide()
+    -- Our close glyph, like every other close button: T.LOOK.close.
+    local hbg = T.Solid(close, "BACKGROUND", 0, 0, 0, 0)
+    hbg:SetAllPoints()
     local x = U.Glyph(close, "close", 14)
     x:SetPoint("CENTER")
-    local function Idle() hbg:Hide(); x:SetVertexColor(T.RGBA("textMuted")) end
-    close:SetScript("OnEnter", function()
-        hbg:SetColorTexture(T.RGBA("surface2")); hbg:Show()
-        x:SetVertexColor(T.RGBA("danger"))
-    end)
-    close:SetScript("OnLeave", Idle)
-    T.OnTheme(Idle)
+    local closeState = {}
+    local function PaintClose()
+        local r = T.Resolve(T.LOOK.close, closeState)
+        hbg:SetColorTexture(T.C4(r.fill))
+        x:SetVertexColor(T.C4(r.glyph))
+    end
+    close:SetScript("OnEnter", function() closeState.hover = true; PaintClose() end)
+    close:SetScript("OnLeave", function() closeState.hover = false; PaintClose() end)
+    T.OnTheme(PaintClose)
     T.OnTheme(function()
         header.title:SetTextColor(T.RGBA("text"))
         header.desc:SetTextColor(T.RGBA("textMuted"))
@@ -521,13 +525,10 @@ local function BuildWindow()
     T.Shadow(window, 12)
     -- Our window: base surface, theme border, and a faint accent wash
     -- across the top.
-    local base = T.Fill(window, "BACKGROUND", "surface0", 0.97)
-    base:SetAllPoints()
+    U.Surface(window, "window", 0.97)
     local wash = T.Fill(window, "BACKGROUND", "accent", 0, 1)
     wash:SetPoint("TOPLEFT"); wash:SetPoint("TOPRIGHT"); wash:SetHeight(220)
-    T.TokenBorder(window, "border")
     T.OnTheme(function()
-        base:SetColorTexture(T.RGBA("surface0", 0.97))
         if wash.SetGradient and CreateColor then
             local r, g, b = T.RGBA("accent")
             wash:SetColorTexture(1, 1, 1, 1)
@@ -535,7 +536,6 @@ local function BuildWindow()
         else
             wash:Hide()
         end
-        T.SetBorderToken(window, "border")
     end)
 
     content = CreateFrame("Frame", nil, window)

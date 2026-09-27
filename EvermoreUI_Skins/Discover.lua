@@ -22,9 +22,21 @@ if not S then return end
 
 local seen = setmetatable({}, { __mode = "k" })
 
+--- Our own windows sit in UISpecialFrames too, so that Escape closes them,
+--- and the sweep found them there. They are drawn by our widgets through the
+--- Looks already, so walking them is at best wasted and at worst wrong: the
+--- dark-text lift took a primary button's label (onAccent, dark on copper)
+--- for parchment text, painted it white and pinned it with SetFixedColor,
+--- until a hover repainted it. Everything of ours is named EvermoreUI*.
+--- The widget gallery walks its Blizzard samples itself, with S.Walk.
+local function Mine(frame)
+    local ok, name = pcall(frame.GetName, frame)
+    return ok and type(name) == "string" and name:find("^EvermoreUI") ~= nil
+end
+
 local function Take(frame)
     if type(frame) == "string" then frame = _G[frame] end
-    if not S.Alive(frame) or seen[frame] or S.ours[frame] then return end
+    if not S.Alive(frame) or seen[frame] or S.ours[frame] or Mine(frame) then return end
     seen[frame] = true
     S.Adopt(frame)
     -- Scroll boxes recycle rows; follow them so new rows are dressed.

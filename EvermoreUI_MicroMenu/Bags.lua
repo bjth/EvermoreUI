@@ -72,7 +72,7 @@ local function States(b)
     if nt then nt:SetAlpha(0) end
     local pt = b:GetPushedTexture()
     if pt then
-        pt:SetColorTexture(T.RGBA("surfaceSunk", 0.5))
+        pt:SetColorTexture(T.C4(T.Resolve(T.LOOK.slot, { pressed = true }).fill))
         pt:ClearAllPoints(); pt:SetAllPoints(icon)
     end
     local hl = b:GetHighlightTexture()
@@ -88,7 +88,9 @@ local function States(b)
         sh:ClearAllPoints(); sh:SetAllPoints(icon)
     end
     if b.IconBorder then b.IconBorder:SetAlpha(0) end
-    T.SetBorderToken(s.edge, IsOpen(b) and "accent" or "border")
+    s.state = s.state or {}
+    s.state.on = IsOpen(b)
+    EV.UI.SurfaceState(s.well, s.state)
 end
 
 local function Texts(b)
@@ -113,19 +115,17 @@ local function Dress(b)
     local icon = b.icon or b.Icon
     if icon then
         if b.SquareMask and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, b.SquareMask) end
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        icon:SetTexCoord(EV.Icons:Coords())
         icon:ClearAllPoints()
         icon:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
         icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
     end
-    s.well = T.Fill(b, "BACKGROUND", "surfaceSunk", 0.9, -8)
-    s.well:SetAllPoints(b)
     local edge = CreateFrame("Frame", nil, b)
     edge:SetAllPoints(b)
     edge:SetFrameLevel(b:GetFrameLevel() + 2)
     edge:EnableMouse(false)
-    T.TokenBorder(edge, "border")
     s.edge = edge
+    s.well = EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
     -- Blizzard fits these to its 45px art; fit them to our icon.
     for _, k in ipairs({ "searchOverlay", "ItemContextOverlay", "IconOverlay", "IconOverlay2" }) do
         local t = b[k]
@@ -142,10 +142,7 @@ local function Dress(b)
         hooksecurefunc(sh, "Hide", Open)
         hooksecurefunc(sh, "SetShown", Open)
     end
-    s.Paint = function()
-        s.well:SetColorTexture(T.RGBA("surfaceSunk", 0.9))
-        States(b); Texts(b)
-    end
+    s.Paint = function() States(b); Texts(b) end
     T.Watch(s)
     States(b)
     Texts(b)
@@ -172,6 +169,7 @@ local function SetExpanded(on)
     M.db.collapsed = not on
 end
 
+local toggleState = {}
 local function PaintToggle()
     if not toggle then return end
     -- Points the way the bags will go on the next click: out along the bar
@@ -179,8 +177,13 @@ local function PaintToggle()
     local grow = ns.Grow(M.db, "left", "up")
     local back = ({ left = "right", right = "left", up = "down", down = "up" })[grow]
     toggle.chevron:Point(Expanded() and back or grow)
-    toggle.chevron:SetColorLines(T.RGBA(toggle.hot and "text" or "textMuted"))
-    toggle.bg:SetColorTexture(T.RGBA("surface3", toggle.hot and 0.6 or 0))
+    toggleState.hover = toggle.hot
+    local r = T.Resolve(T.LOOK.buttonGhost, toggleState)
+    toggle.chevron:SetColorLines(T.C4(r.glyph))
+    -- It sits over the bar's own buttons, so its hover is a veil (60%) of a
+    -- ghost button's rather than a solid block.
+    local c1, c2, c3, c4 = T.C4(r.fill)
+    toggle.bg:SetColorTexture(c1, c2, c3, c4 * 0.6)
 end
 
 local Layout

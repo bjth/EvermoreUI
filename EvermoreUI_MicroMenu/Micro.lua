@@ -75,18 +75,12 @@ local function Paint(b)
     end
     local open = b:GetButtonState() == "PUSHED"
     local hot = s.hover and b:IsEnabled()
-    local token = open and "accent" or (hot and "text" or "textMuted")
-    s.glyph:SetVertexColor(T.RGBA(token))
+    local r = T.Resolve(T.LOOK.buttonGhost, { on = open, hover = hot })
+    s.glyph:SetVertexColor(T.C4(r.glyph))
     s.glyph:SetDesaturated(s.fallback and not open or false)
-    if open then
-        s.cell:SetColorTexture(T.RGBA("surface2"))
-    elseif hot then
-        s.cell:SetColorTexture(T.RGBA("surface3"))
-    else
-        s.cell:SetColorTexture(T.RGBA("surface2", 0))
-    end
+    s.cell:SetColorTexture(T.C4(r.fill))
     s.bar:SetShown(open)
-    s.bar:SetColorTexture(T.RGBA("accent"))
+    if r.bar then s.bar:SetColorTexture(T.C4(r.bar)) end
     if b.FlashBorder then b.FlashBorder:SetColorTexture(T.RGBA("accent", 0.35)) end
 end
 

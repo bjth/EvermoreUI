@@ -366,11 +366,16 @@ local function InitButton(b, w, h, fontSize)
     -- ns.SnapOff covers the font strings on the carrier below as well.
     ns.SnapOff(edge)
     ns.SnapOff(icon)
-    icon:SetPoint("TOPLEFT", b, "TOPLEFT", one, -one)
-    icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -one, one)
+    -- The suite's icon style (General > Icons) sets the edge's width and the
+    -- crop. Read once: these buttons are built once, so a change to either
+    -- reaches the plates after a reload.
+    local style = EV.Icons.Settings()
+    local px = math.max(0, math.floor(style.border or 1))
+    icon:SetPoint("TOPLEFT", b, "TOPLEFT", one * px, -one * px)
+    icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -one * px, one * px)
     -- A wide icon has to be cropped harder on the vertical to stay square in
     -- appearance, otherwise the art squashes. Trim to the ratio we are drawing.
-    local inset = 0.08
+    local inset = (style.zoom or 8) / 100
     local dw, dh = max(w - 2, 1), max(h - 2, 1)
     local vInset = (dh < dw) and (0.5 - (0.5 - inset) * (dh / dw)) or inset
     icon:SetTexCoord(inset, 1 - inset, vInset, 1 - vInset)
@@ -378,8 +383,8 @@ local function InitButton(b, w, h, fontSize)
     -- CooldownFrameTemplate supplies the swipe art; a bare Cooldown draws no
     -- swipe at all, which would cost us the dot timer this module exists for.
     local cd = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
-    cd:SetPoint("TOPLEFT", b, "TOPLEFT", one, -one)
-    cd:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -one, one)
+    cd:SetPoint("TOPLEFT", icon, "TOPLEFT")
+    cd:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT")
     cd:SetHideCountdownNumbers(true)
     cd:SetDrawEdge(false)
     cd:SetSwipeColor(0, 0, 0, 0.6)
@@ -736,7 +741,7 @@ PreviewRows = function(f, cfg)
                     t.icon = t:CreateTexture(nil, "ARTWORK")
                     t.icon:SetPoint("TOPLEFT", 1, -1)
                     t.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-                    t.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                    t.icon:SetTexCoord(EV.Icons:Coords())
                     h.icons[i] = t
                 end
                 t:ClearAllPoints()

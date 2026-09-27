@@ -41,9 +41,7 @@ local function Build()
     frame:SetToplevel(true)
     frame:EnableMouse(true)
     frame:Hide()
-    frame.bg = T.Fill(frame, "BACKGROUND", "surface0", 0.97)
-    frame.bg:SetAllPoints()
-    T.TokenBorder(frame, "border")
+    frame.bg = EV.UI.Surface(frame, "window", 0.97)
     if T.Shadow then T.Shadow(frame, 12) end
 
     frame.title = T.Text(frame, "title", "title", true)
@@ -61,6 +59,7 @@ local function Build()
     frame.no:SetPoint("BOTTOMLEFT", frame, "BOTTOM", 4, 14)
 
     frame.timer = CreateFrame("StatusBar", nil, frame)
+    EV.Pixel:Bar(frame.timer)
     frame.timer:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
     frame.timer:SetStatusBarColor(T.RGBA("accent", 0.9))
     frame.timer:SetPoint("BOTTOMLEFT", 1, 1)

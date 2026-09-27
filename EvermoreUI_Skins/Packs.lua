@@ -139,53 +139,15 @@ function Kit:Art(obj, ...)
     return self
 end
 
---- Our flat surface behind an object's own drawing.
+--- Our flat surface behind an object's own drawing, and a hairline round
+--- it: the Painter's own, so a part and a pack on one object share them.
 function Kit:Fill(obj, token, alpha, sub)
-    if not (Alive(obj) and obj.CreateTexture) then return self end
-    local d = S.D(obj)
-    if not d.packFill then
-        d.packFill = S.Ours(obj:CreateTexture(nil, "BACKGROUND", nil, sub or -7))
-        d.packFill:SetAllPoints(obj)
-    end
-    d.packFillToken, d.packFillAlpha = token, alpha
-    local function Paint(self2) self2:SetColorTexture(T.RGBA(d.packFillToken, d.packFillAlpha)) end
-    Paint(d.packFill)
-    T.Watch(d.packFill)
-    d.packFill.Paint = Paint
+    if Alive(obj) then S.PainterFor(obj):Fill(token, alpha, sub) end
     return self
 end
 
---- One physical pixel of border on four textures of our own.
 function Kit:Border(obj, token, alpha)
-    if not (Alive(obj) and obj.CreateTexture) then return self end
-    local d = S.D(obj)
-    if not d.packEdges then
-        local e = {}
-        for i = 1, 4 do
-            e[i] = S.Ours(obj:CreateTexture(nil, "BORDER", nil, 7))
-            -- See the note in Painter:Border: a hairline that is not exempt
-            -- from texel snapping is not reliably a hairline.
-            if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e[i]) end
-        end
-        e[1]:SetPoint("TOPLEFT");    e[1]:SetPoint("TOPRIGHT")
-        e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT")
-        e[3]:SetPoint("TOPLEFT");    e[3]:SetPoint("BOTTOMLEFT")
-        e[4]:SetPoint("TOPRIGHT");   e[4]:SetPoint("BOTTOMRIGHT")
-        d.packEdges = e
-    end
-    do
-        local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(obj)) or 1
-        local e = d.packEdges
-        e[1]:SetHeight(px); e[2]:SetHeight(px)
-        e[3]:SetWidth(px);  e[4]:SetWidth(px)
-    end
-    d.packEdgeToken, d.packEdgeAlpha = token or "border", alpha
-    local function Paint()
-        for _, t in ipairs(d.packEdges) do t:SetColorTexture(T.RGBA(d.packEdgeToken, d.packEdgeAlpha)) end
-    end
-    Paint()
-    T.Watch(d.packEdges[1])
-    d.packEdges[1].Paint = Paint
+    if Alive(obj) then S.PainterFor(obj):Border(token, alpha) end
     return self
 end
 
@@ -219,8 +181,7 @@ function Kit:Label(fs, token, bold)
         local d = S.D(fs)
         d.token = token or "text"
         fs:SetTextColor(T.RGBA(d.token))
-        T.Watch(fs)
-        fs.Paint = function(self2) self2:SetTextColor(T.RGBA(S.D(self2).token)) end
+        T.Watch(fs, S.RepaintText)
     end
     return self
 end
@@ -240,20 +201,67 @@ function Kit:NoFill(obj)
     local d = S.D(obj)
     d.wantsFill = false
     if d.fill and d.fill.SetAlpha then d.fill:SetAlpha(0) end
-    if d.packFill and d.packFill.SetAlpha then d.packFill:SetAlpha(0) end
     return self
 end
 
-function Kit:Hook(obj, script, fn)
-    if Alive(obj) and obj.HookScript then obj:HookScript(script, fn) end
+--- Hooks, once. A pack runs again on every OnShow, so a hook placed from
+--- apply would pile up one copy per opening. These go on once per object,
+--- script (or method) and key; the key defaults to the pack's name, so two
+--- packs can each hook the same thing, and a pack that really wants two
+--- hooks on one script passes a key for the second. The first closure is
+--- the one kept: read what you need from the object inside it, not from
+--- locals captured on one particular run.
+local hooked = setmetatable({}, { __mode = "k" })
+
+local function FirstTime(k, obj, what, key)
+    local set = hooked[obj]
+    if not set then set = {}; hooked[obj] = set end
+    local id = what .. "\0" .. tostring(key or (k.pack and k.pack.frames and k.pack.frames[1]) or "kit")
+    if set[id] then return false end
+    set[id] = true
+    return true
+end
+
+function Kit:Hook(obj, script, fn, key)
+    if Alive(obj) and obj.HookScript and FirstTime(self, obj, "script:" .. script, key) then
+        obj:HookScript(script, fn)
+    end
     return self
 end
 
-function Kit:After(obj, method, fn)
-    if Alive(obj) and type(obj[method]) == "function" then
+function Kit:After(obj, method, fn, key)
+    if Alive(obj) and type(obj[method]) == "function" and FirstTime(self, obj, "method:" .. method, key) then
         pcall(hooksecurefunc, obj, method, fn)
     end
     return self
+end
+
+--- Run fn(obj) the first time only, for anything else a re-run must not
+--- repeat (making a texture of our own, say). The same keying as Hook.
+function Kit:Once(obj, key, fn)
+    if Alive(obj) and FirstTime(self, obj, "once:" .. tostring(key), key) then fn(obj) end
+    return self
+end
+
+--- A frame or region by path: "Name.Key.Key" from the globals,
+--- ".Key.Key" from `base` (the pack's window when not given). A table is
+--- handed straight back. nil when any step is missing.
+function Kit:Find(path, base)
+    if type(path) == "table" then return path end
+    if type(path) ~= "string" or path == "" then return nil end
+    local obj
+    if path:sub(1, 1) == "." then
+        obj = base or self.frame
+        path = path:sub(2)
+    else
+        local first, rest = path:match("^([^%.]+)%.?(.*)$")
+        obj, path = _G[first], rest
+    end
+    for part in path:gmatch("[^%.]+") do
+        if type(obj) ~= "table" then return nil end
+        obj = obj[part]
+    end
+    return obj
 end
 
 --------------------------------------------------------------------------------
@@ -341,15 +349,21 @@ function Kit:Nudge(obj, dx, dy)
     return self
 end
 
---- Set a size, remembering the original.
+--- Set a size, remembering the original. A nil side is left as it is NOW,
+--- not put back to Blizzard's original: a button Blizzard sizes to its text
+--- (SetTextToFit, the professions Create buttons) was being shrunk back to
+--- its XML width on every re-run and re-widened by Blizzard a moment later,
+--- a visible jump on every opening.
 function Kit:Size(obj, w, h)
     if not Alive(obj) or not obj.SetSize then return self end
     if Locked(obj) then
         Later(function() self:Size(obj, w, h) end)
         return self
     end
-    local origin = Remember(obj)
-    obj:SetSize(w or origin.w or obj:GetWidth(), h or origin.h or obj:GetHeight())
+    Remember(obj)
+    if w and h then obj:SetSize(w, h)
+    elseif w then obj:SetWidth(w)
+    elseif h then obj:SetHeight(h) end
     return self
 end
 
@@ -430,6 +444,81 @@ function S.ApplyPack(frame)
         geterrorhandler()(("EvermoreUI Skins pack (%s): %s"):format(name, tostring(err)))
     end
     return pack
+end
+
+--------------------------------------------------------------------------------
+--  Described packs
+--
+--  Most packs are the same few moves: take the window's own art sheet down,
+--  hide a handful of loose pieces, panel a pane or two, keep the generic
+--  background off something drawn over content, walk a pane Blizzard builds
+--  late. S.Window says those as data and leaves `apply` for the rest:
+--
+--      S.Window{
+--          name   = "InspectFrame",
+--          addon  = "Blizzard_InspectUI",
+--          art    = { "Interface\\PaperDollInfoFrame\\UI-Character-..." },
+--          mute   = { ".TopTileStreaks", "InspectFrameBtnCornerLeft" },
+--          panels = { [".ListPane"] = "surfaceSunk" },
+--          noFill = { ".BorderFrame" },
+--          dress  = { ".ScrollContainer" },
+--          apply  = function(f, k) ... end,
+--      }
+--
+--  Paths are Kit:Find's: ".Key" from the window, "Name.Key" from the globals.
+--  A path that finds nothing is skipped, not an error: windows differ between
+--  clients, and a pack must not throw on one that lacks a piece.
+--
+--    art     file textures faded wherever they hang under the window (Kit:Art)
+--    mute    a texture is hidden; a frame has its own textures faded, its
+--            children and text left alone
+--    panels  path -> surface token: faded, filled and bordered (Kit:Panel)
+--    noFill  the generic background kept off (Kit:NoFill)
+--    dress   walked again, for panes that exist only after the first sweep
+--    apply   anything else, run last, with the window and the Kit
+--
+--  Unknown fields are an error at load, because a misspelt one would
+--  otherwise do nothing, silently, which is the failure this library keeps
+--  having.
+--------------------------------------------------------------------------------
+local WINDOW_FIELDS = { name = true, addon = true, art = true, mute = true, panels = true,
+                        noFill = true, dress = true, apply = true }
+
+function S.Window(def)
+    assert(type(def) == "table" and def.name, "S.Window needs a name")
+    for field in pairs(def) do
+        assert(WINDOW_FIELDS[field], ("S.Window %s: unknown field '%s'"):format(tostring(def.name), tostring(field)))
+    end
+    local function Each(list, fn, k, f)
+        for _, path in ipairs(list or {}) do
+            local obj = k:Find(path, f)
+            if obj ~= nil then fn(obj) end
+        end
+    end
+    return S.Pack{
+        name  = def.name,
+        addon = def.addon,
+        described = def,
+        apply = function(f, k)
+            if def.art and #def.art > 0 then k:Art(f, unpack(def.art)) end
+            Each(def.mute, function(obj)
+                if obj.GetObjectType and obj:GetObjectType() == "Texture" then S.Mute(obj) else k:Fade(obj) end
+            end, k, f)
+            Each(def.noFill, function(obj) k:NoFill(obj) end, k, f)
+            if def.panels then
+                -- In a fixed order, so two runs paint alike.
+                local paths = {}
+                for path in pairs(def.panels) do paths[#paths + 1] = path end
+                table.sort(paths)
+                for _, path in ipairs(paths) do
+                    local obj = k:Find(path, f)
+                    if obj ~= nil then k:Panel(obj, def.panels[path]) end
+                end
+            end
+            Each(def.dress, function(obj) k:Dress(obj) end, k, f)
+            if def.apply then def.apply(f, k) end
+        end,
+    }
 end
 
 --- A kit not tied to a registered pack, for the dev commands.

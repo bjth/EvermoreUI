@@ -83,24 +83,19 @@ end
 local function InitButton(b, cfg, spec)
     local size = cfg.size
     b:SetSize(size, size)
-    local one = EV.Pixel:One(b)
-
-    -- A sunk backing doubles as a 1px border around the icon.
-    local back = b:CreateTexture(nil, "BACKGROUND")
-    back:SetAllPoints()
-    back:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 1))
-
+    -- The suite's icon style (EV.Icons): its crop, its edge, a sunk well.
     local icon = b:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("TOPLEFT", one, -one)
-    icon:SetPoint("BOTTOMRIGHT", -one, one)
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    EV.Icons:Style(icon, { host = b, fit = true, well = "surfaceSunk" })
     Try(b, "SetIcon", icon)
 
     -- Debuff border tinted by dispel type (the engine colours it).
     if spec.dispel then
+        -- The tint fills the button under the icon, so what shows of it is
+        -- the ring the icon style leaves; our own edge stands aside for it.
         local tint = b:CreateTexture(nil, "BACKGROUND", nil, 1)
         tint:SetAllPoints()
         tint:SetColorTexture(1, 1, 1, 1)
+        EV.Icons:SetState(icon, { 0, 0, 0, 0 })
         local E = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle
         if not Try(b, "AddDispelTypeTexture", tint, { style = E and E.PreserveAsset, showWhenHarmful = true, showWhenHelpful = false }) then
             local EB = Enum and Enum.CustomAuraButtonBorderStyle

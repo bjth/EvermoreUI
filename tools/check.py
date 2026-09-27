@@ -5,6 +5,15 @@
     is a silent hole in game)
   * every .lua compiles under Lua 5.1, if luac5.1 or luac is on the PATH
   * EvermoreUI/Core/Changelog.lua is what CHANGELOG.md generates
+  * the palette and every control Look pass their contrast audit, if lua5.1
+    is on the PATH (tools/looks/audit.lua)
+  * the skins walk keeps to its budget and the pack layer's hooks go on once,
+    if lua5.1 is on the PATH (tools/skins/walk_test.lua)
+  * no module paints chrome from raw surface or border tokens
+    (tools/lint_tokens.py)
+  * every skins part still matches something in the surveyed client and the
+    counts quoted over it are current, if lupa or lua5.1 is available
+    (tools/survey/coverage.lua)
 """
 import os
 import shutil
@@ -69,9 +78,71 @@ def check_changelog():
         failures.append("EvermoreUI/Core/Changelog.lua is out of date: run python tools/changelog/build.py")
 
 
+def check_looks():
+    lua = shutil.which("lua5.1")
+    if not lua:
+        print("lua5.1 not found, skipping the looks audit")
+        return
+    r = subprocess.run([lua, os.path.join("tools", "looks", "audit.lua")], cwd=ROOT,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        failures.append("looks audit:\n" + (r.stdout + r.stderr).strip())
+
+
+def check_skins_walk():
+    lua = shutil.which("lua5.1")
+    if not lua:
+        print("lua5.1 not found, skipping the skins walk test")
+        return
+    r = subprocess.run([lua, os.path.join("tools", "skins", "walk_test.lua")], cwd=ROOT,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        failures.append("skins walk test:\n" + (r.stdout + r.stderr).strip())
+
+
+def check_tokens():
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import lint_tokens  # noqa: E402
+    for hit in lint_tokens.hits():
+        failures.append("raw chrome token (use a Look): " + hit)
+
+
+def check_coverage():
+    """Every part still matches something in the surveyed client, and the
+    counts quoted over each part in Parts.lua are still the client's."""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "survey"))
+    import json
+    import survey  # noqa: E402
+    from evsurvey import luarun  # noqa: E402
+    r = luarun.runner()
+    if not r:
+        print("no Lua 5.1, skipping the skins coverage check")
+        return
+    path = os.path.join(ROOT, "tools", "survey", "manifests", "camelot.json")
+    if not os.path.exists(path):
+        print("no survey manifest, skipping the skins coverage check")
+        return
+    with open(path, encoding="utf-8") as fh:
+        m = json.load(fh)
+    cov = survey.coverage(m, ROOT)
+    if cov["lua_error"]:
+        failures.append("skins coverage: coverage.lua failed: " + cov["lua_error"])
+        return
+    for name in cov["dead"]:
+        failures.append("skins coverage: part %s matches nothing in this client" % name)
+    for h in cov["headers"]:
+        failures.append("skins coverage: Parts.lua header out of date: " + h)
+    for e in (cov["measured"] or {}).get("errors", []):
+        failures.append("skins coverage: fingerprint threw: " + e)
+
+
 check_tocs()
 check_lua()
 check_changelog()
+check_looks()
+check_skins_walk()
+check_tokens()
+check_coverage()
 for f in failures:
     print("FAIL", f)
 print("%d problem%s" % (len(failures), "" if len(failures) == 1 else "s"))

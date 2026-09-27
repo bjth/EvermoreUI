@@ -76,12 +76,15 @@ local function Usable(tt)
 end
 ns.Usable = Usable
 
-local BORDER_DEFAULT = EV.Theme.C.border
+-- Tooltips and menus are raised surfaces, like our own panels and menus:
+-- T.LOOK.raised, read at paint time so they follow the theme.
+local raisedOut = {}
+local function Raised() return EV.Theme.Resolve(EV.Theme.LOOK.raised, nil, raisedOut) end
 
 local function PaintBorder(tt)
     local d = state[tt]
     if not (d and d.edge) then return end
-    local c = (M.db.qualityBorder and d.quality) or BORDER_DEFAULT
+    local c = (M.db.qualityBorder and d.quality) or Raised().edge
     EV.Pixel:CreateBorder(d.edge, 1, c[1], c[2], c[3], c[4] or 1)
 end
 
@@ -106,7 +109,7 @@ local function Skin(tt)
         d.bg, d.edge = fill, edge
     end
     if tt.NineSlice then tt.NineSlice:SetAlpha(0) end
-    local bg = EV.Theme.C.surface1 -- raised: tooltips and menus, like our own
+    local bg = Raised().fill
     d.bg:SetColorTexture(bg[1], bg[2], bg[3], M.db.bgAlpha)
     d.bg:Show()
     local ok, lvl = pcall(tt.GetFrameLevel, tt)
@@ -244,10 +247,11 @@ function ns.SkinHeader(tt)
     for _, r in ipairs({ h:GetRegions() }) do
         if r.IsObjectType and r:IsObjectType("Texture") and not d.ours[r] then r:SetAlpha(on and 0 or 1) end
     end
-    local bg = EV.Theme.C.surface1 -- raised: tooltips and menus, like our own
+    local r = Raised()
+    local bg = r.fill
     d.bg:SetColorTexture(bg[1], bg[2], bg[3], M.db.bgAlpha)
     d.bg:SetShown(on)
-    local border = EV.Pixel:CreateBorder(d.edge, 1, unpack(EV.Theme.C.border))
+    local border = EV.Pixel:CreateBorder(d.edge, 1, EV.Theme.C4(r.edge))
     border.edges[2]:Hide() -- bottom: the tooltip's own top border closes the tab
     d.edge:SetShown(on)
     local label = h.Label or h.Text
@@ -357,7 +361,7 @@ local function StyleBar()
     if not d.bg then
         d.bg = bar:CreateTexture(nil, "BACKGROUND")
         d.bg:SetAllPoints()
-        d.bg:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 0.8))
+        d.bg:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 0.8))   -- content colour: the track under the health
     end
     local one = EV.Pixel:One(GameTooltip)
     bar:ClearAllPoints()
@@ -376,7 +380,8 @@ local function SyncAuraTooltip()
     local inb = _G.AuraContainerInbound
     if not inb then return end
     if M.db.skin and inb.SetTooltipBackdrop and CreateColor then
-        local bg, bd = EV.Theme.C.surface1, EV.Theme.C.border
+        local r = Raised()
+        local bg, bd = r.fill, r.edge
         pcall(inb.SetTooltipBackdrop, {
             backdropInfo = {
                 bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -403,7 +408,7 @@ local menuOwned = setmetatable({}, { __mode = "k" })
 
 local function SkinMenu(frame)
     if not (M.db.menus and frame) or (frame.IsForbidden and frame:IsForbidden()) then return end
-    local bg = EV.Theme.C.surface1 -- raised: tooltips and menus, like our own
+    local bg = Raised().fill
     local one = EV.Pixel:One(frame)
     for _, r in ipairs({ frame:GetRegions() }) do
         if r.IsObjectType and r:IsObjectType("Texture") and not menuOwned[r] then
@@ -424,7 +429,7 @@ local function SkinMenu(frame)
     end
     local ok, lvl = pcall(frame.GetFrameLevel, frame)
     if ok and lvl then d.edge:SetFrameLevel(lvl + 4) end
-    EV.Pixel:CreateBorder(d.edge, 1, unpack(EV.Theme.C.border))
+    EV.Pixel:CreateBorder(d.edge, 1, EV.Theme.C4(Raised().edge))
     d.edge:Show()
 end
 
@@ -459,24 +464,27 @@ local function Glyph(tex, name, size, token)
     tex:SetTexture(UI_MEDIA .. name .. ".png")
     tex:SetTexCoord(0, 1, 0, 1)
     if size then tex:SetSize(size, size) end
-    tex:SetVertexColor(TH.RGBA(token))
+    if type(token) == "table" then tex:SetVertexColor(TH.C4(token)) else tex:SetVertexColor(TH.RGBA(token)) end
 end
 
 local function StyleSelection(frame, radio)
     local t1, t2 = frame.leftTexture1, frame.leftTexture2
     if not t1 then return end
     local selected = t2 ~= nil
+    -- The same Looks as our own radios and check boxes.
     if radio then
-        Glyph(t1, selected and "circle" or "ring", 14, selected and "accent" or "borderStrong")
+        local r = TH.Resolve(TH.LOOK.radio, { on = selected })
+        Glyph(t1, selected and "circle" or "ring", TH.LOOK.radio.ring - 2, r.ring)
         if t2 then
-            Glyph(t2, "circle", 6, "onAccent")
+            Glyph(t2, "circle", TH.LOOK.radio.dot, TH.Resolve(TH.LOOK.radio, { on = true }).dot)
             t2:ClearAllPoints()
             t2:SetPoint("CENTER", t1, "CENTER")
         end
     else
-        Glyph(t1, selected and "boxfill" or "box", 14, selected and "accent" or "borderStrong")
+        local r = TH.Resolve(TH.LOOK.checkbox, { on = selected })
+        Glyph(t1, selected and "boxfill" or "box", TH.LOOK.checkbox.box - 2, selected and r.fill or r.edge)
         if t2 then
-            Glyph(t2, "check", 12, "onAccent")
+            Glyph(t2, "check", TH.LOOK.checkbox.tick, TH.Resolve(TH.LOOK.checkbox, { on = true }).glyph)
             t2:ClearAllPoints()
             t2:SetPoint("CENTER", t1, "CENTER")
         end
@@ -503,7 +511,7 @@ local function StyleMenuRows()
         local h = frame and frame.highlight
         if h and h.SetColorTexture then
             h:SetBlendMode("BLEND")
-            h:SetColorTexture(TH.RGBA("surface3", 1))
+            h:SetColorTexture(TH.C4(TH.Resolve(TH.LOOK.menu, { hover = true }).row))
         end
     end)
     -- A divider row holds just the one texture: a 1px line in the theme's
@@ -591,6 +599,7 @@ function M:OnEnable()
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnItem)
     end
     if ns.EnablePrice then ns.EnablePrice() end
+    if ns.EnableCounts then ns.EnableCounts() end
 
     -- The bar is re-shown by Blizzard per unit; keep it hidden when it's off.
     if GameTooltipStatusBar then

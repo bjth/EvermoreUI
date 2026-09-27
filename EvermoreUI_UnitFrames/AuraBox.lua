@@ -37,19 +37,17 @@ end
 
 local function InitButton(b, spec)
     b:SetSize(spec.size, spec.size)
-    local one = EV.Pixel:One(b)
-    local back = b:CreateTexture(nil, "BACKGROUND")
-    back:SetAllPoints()
-    back:SetColorTexture(0, 0, 0, 1)
+    -- The suite's icon style (EV.Icons): its crop and edge, a sunk well.
     local icon = b:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("TOPLEFT", one, -one)
-    icon:SetPoint("BOTTOMRIGHT", -one, one)
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    EV.Icons:Style(icon, { host = b, fit = true, well = "surfaceSunk" })
     Try(b, "SetIcon", icon)
     if spec.dispel then
+        -- The tint fills the button under the icon: what shows of it is the
+        -- ring the style leaves, so our own edge stands aside.
         local tint = b:CreateTexture(nil, "BACKGROUND", nil, 1)
         tint:SetAllPoints()
         tint:SetColorTexture(1, 1, 1, 1)
+        EV.Icons:SetState(icon, { 0, 0, 0, 0 })
         local E = Enum and Enum.CustomAuraButtonDispelTypeTextureStyle
         if not Try(b, "AddDispelTypeTexture", tint, { style = E and E.PreserveAsset, showWhenHarmful = true, showWhenHelpful = false }) then
             tint:Hide()

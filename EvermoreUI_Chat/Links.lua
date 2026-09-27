@@ -64,15 +64,17 @@ local popup
 
 -- A read-only text well in our field style.
 local function Well(frame)
+    -- An input box's rest look (T.LOOK.input): it reads as a field.
     local T = EV.Theme
-    local bg = T.Fill(frame, "BACKGROUND", "surfaceSunk", 1)
-    bg:SetAllPoints()
-    T.TokenBorder(frame, "borderStrong")
-    function frame:Paint()
-        bg:SetColorTexture(T.RGBA("surfaceSunk", 1))
-        T.SetBorderToken(frame, "borderStrong")
+    local bg = EV.Pixel:Fill(frame, "BACKGROUND", -8)
+    T.TokenBorder(frame)
+    local function Paint()
+        local r = T.Resolve(T.LOOK.input)
+        bg:SetColorTexture(T.C4(r.fill))
+        T.SetEdge(frame, r.edge)
     end
-    T.Watch(frame)
+    Paint()
+    T.Watch(bg, Paint)
 end
 
 --- Our standard window (EvermoreUI/UI/Containers.lua) with a single-line

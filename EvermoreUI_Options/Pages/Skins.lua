@@ -52,6 +52,29 @@ EV.Options:RegisterPage{
                  end }, nil)
         p:Note(L["Point at a window and type /evui skin this to see what was recognised in it, and what art is still loose."], 0.6)
 
+        p:Section(L["Damage meter"])
+        p:Dual({ type = "toggle", text = L["Skin the damage meter"], disabled = Off,
+                 tooltip = L["Forever's built-in damage meter in our style: title bar, surface, flat bars and our font. Its own settings (class colours, bar height, text size, opacity) keep working. Turning this off needs a reload."],
+                 get = function() return M.db.damageMeter end,
+                 set = function(v)
+                     M.db.damageMeter = v
+                     if v then if ns.RefreshDamageMeter then ns.RefreshDamageMeter() end else Reload() end
+                 end },
+               { type = "dropdown", text = L["Bar texture"], width = 150,
+                 disabled = function() return Off() or not M.db.damageMeter end,
+                 values = function()
+                     local list = { { value = "", text = L["Same as the suite"] } }
+                     for _, name in ipairs(EV.Media:List("statusbar")) do list[#list + 1] = { value = name, text = name } end
+                     return list
+                 end,
+                 get = function() return M.db.dmTexture end,
+                 set = function(v) M.db.dmTexture = v; if ns.RefreshDamageMeter then ns.RefreshDamageMeter() end end })
+        p:Dual({ type = "toggle", text = L["Outline the bar text"],
+                 disabled = function() return Off() or not M.db.damageMeter end,
+                 tooltip = L["An outline instead of a shadow, for bars in bright class colours."],
+                 get = function() return M.db.dmOutline end,
+                 set = function(v) M.db.dmOutline = v; if ns.RefreshDamageMeter then ns.RefreshDamageMeter() end end }, nil)
+
         p:Section(L["Parts"])
         p:Note(L["Each part is one of Blizzard's templates. Switching one off affects every window that uses it."], 0.6)
         local list = (ns and ns.S and ns.S.parts) or {}

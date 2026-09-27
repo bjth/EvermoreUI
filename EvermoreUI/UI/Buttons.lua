@@ -14,46 +14,21 @@ local T = EV.Theme
 local U = EV.UI
 
 local STYLE_ALIAS = { accent = "primary" }
+local STYLES = { secondary = "button", primary = "buttonPrimary", ghost = "buttonGhost", danger = "buttonDanger" }
+
+local function LookFor(style) return T.LOOK[STYLES[style] or "button"] end
 
 local function PaintButton(b)
-    local style = b._style
-    local hover, pressed = b._hover, b._pressed
-    local fill, label = b._fill, b.label
-    local edges = b.evBorder and b.evBorder.edges
-    local function edgeShown(on) if edges then for _, e in ipairs(edges) do e:SetShown(on) end end end
-    local tr, tg, tb = T.RGBA("text")
-    if style == "primary" then
-        edgeShown(false)
-        local r, g, bl = T.RGBA("accent")
-        local k = pressed and 0.8 or hover and 1.12 or 1
-        fill:SetColorTexture(math.min(r * k, 1), math.min(g * k, 1), math.min(bl * k, 1), 1)
-        label:SetTextColor(T.RGBA("onAccent"))
-        T.TextShadow(label, false)
-    elseif style == "ghost" then
-        edgeShown(false)
-        if pressed then fill:SetColorTexture(T.RGBA("surfaceSunk"))
-        elseif hover then fill:SetColorTexture(T.RGBA("surface3"))
-        else fill:SetColorTexture(0, 0, 0, 0) end
-        if hover or pressed then label:SetTextColor(tr, tg, tb) else label:SetTextColor(T.RGBA("textMuted")) end
-        T.TextShadow(label)
-    elseif style == "danger" then
-        edgeShown(true)
-        local r, g, bl = T.RGBA("danger")
-        fill:SetColorTexture(r, g, bl, pressed and 0.3 or hover and 0.2 or 0.08)
-        T.SetBorderColor(b, r, g, bl, hover and 1 or 0.75)
-        label:SetTextColor(math.min(r + 0.15, 1), math.min(g + 0.4, 1), math.min(bl + 0.4, 1))
-        T.TextShadow(label)
-    else
-        edgeShown(true)
-        U.PaintBox(b, fill)
-        if hover or pressed then label:SetTextColor(tr, tg, tb) else label:SetTextColor(T.Mix("textMuted", "text", 0.55)) end
-        T.TextShadow(label)
-    end
+    local look = LookFor(b._style)
+    b._look = look
+    local r = U.PaintBox(b, b._fill, look)
+    b.label:SetTextColor(T.C4(r.text))
+    T.TextShadow(b.label, look.shadow ~= false)
     -- Press nudges the content down a pixel.
-    local dy = pressed and -1 or 0
+    local dy = b._pressed and -1 or 0
     b._content:ClearAllPoints()
     b._content:SetPoint("CENTER", b, "CENTER", 0, dy)
-    if b.icon then b.icon:SetVertexColor(label:GetTextColor()) end
+    if b.icon then b.icon:SetVertexColor(b.label:GetTextColor()) end
 end
 
 local function Layout(b)
@@ -70,7 +45,7 @@ end
 
 function U.Button(parent, text, width, onClick, style)
     local b = CreateFrame("Button", nil, parent)
-    b:SetSize(width or 150, U.HEIGHT + 2)
+    b:SetSize(width or 150, T.LOOK.button.height)
     b._fill = T.Fill(b, "BACKGROUND", "surface2")
     b._fill:SetAllPoints()
     T.TokenBorder(b, "borderStrong")
@@ -84,6 +59,8 @@ function U.Button(parent, text, width, onClick, style)
     b.Paint = PaintButton
     function b:SetStyle(s)
         self._style = STYLE_ALIAS[s] or s or "secondary"
+        self._look = LookFor(self._style)
+        if self._disabled ~= nil then self:SetDisabled(self._disabled) end
         self:Paint()
     end
     function b:SetText(s) label:SetText(s or ""); Layout(self) end
@@ -136,7 +113,8 @@ end
 --------------------------------------------------------------------------------
 --  IconButton: a square button showing an icon or one of our glyphs.
 --  opts: { size = 24, glyph = "close" | texture = path/fileID | atlas = name,
---          style = "ghost" | "secondary", tooltip = "...", toggle = bool }
+--          style = "ghost" | "secondary", look = a Look (overrides style),
+--          tooltip = "...", toggle = bool }
 --  With toggle, b:SetSelected(bool) marks it active (accent icon + bar).
 --------------------------------------------------------------------------------
 function U.IconButton(parent, opts, onClick)
@@ -158,12 +136,12 @@ function U.IconButton(parent, opts, onClick)
     elseif opts.texture then
         icon:SetTexture(opts.texture)
         if type(opts.texture) == "number" or tostring(opts.texture):lower():find("icons") then
-            icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) -- trim the icon border
+            icon:SetTexCoord(EV.Icons:Coords()) -- trim the icon border
         end
     end
     b.icon = icon
     b._tint = opts.glyph ~= nil or opts.tint
-    b._style = opts.style or "ghost"
+    b._look = opts.look or LookFor(opts.style or "ghost")
     local bar = T.Fill(b, "OVERLAY", "accent")
     bar:SetPoint("BOTTOMLEFT"); bar:SetPoint("BOTTOMRIGHT"); bar:SetHeight(2)
     bar:Hide()
@@ -171,25 +149,21 @@ function U.IconButton(parent, opts, onClick)
     U.Init(b)
 
     function b:Paint()
-        local edges = self.evBorder.edges
-        local ghost = self._style == "ghost"
-        for _, e in ipairs(edges) do e:SetShown(not ghost or self._hover) end
-        if ghost then
-            local token = self._pressed and "surfaceSunk" or (self._hover and "surface3")
-            if token then self._fill:SetColorTexture(T.RGBA(token)) else self._fill:SetColorTexture(0, 0, 0, 0) end
-            if self._hover then T.SetBorderColor(self, T.RGBA("border")) end
-        else
-            U.PaintBox(self, self._fill)
-        end
+        local r = U.PaintBox(self, self._fill, self._look)
         if self._tint then
-            if self._selected then icon:SetVertexColor(T.RGBA("accent"))
-            elseif self._hover then icon:SetVertexColor(T.RGBA("text"))
-            else icon:SetVertexColor(T.RGBA("textMuted")) end
+            if r.glyph then icon:SetVertexColor(T.C4(r.glyph)) end
+        elseif self._disabled then
+            -- A picture can't take the Look's disabled glyph colour, so it
+            -- greys and dims the way a faded control would.
+            icon:SetDesaturated(true)
+            icon:SetVertexColor(1, 1, 1, 0.45)
         else
             icon:SetDesaturated(opts.toggle and not self._selected and not self._hover or false)
             icon:SetVertexColor(1, 1, 1, (self._selected or self._hover or not opts.toggle) and 1 or 0.7)
         end
-        bar:SetShown(self._selected and true or false)
+        local showBar = self._selected and T.Visible(r.bar)
+        bar:SetShown(showBar and true or false)
+        if showBar then bar:SetColorTexture(T.C4(r.bar)) end
         icon:ClearAllPoints()
         icon:SetPoint("CENTER", 0, self._pressed and -1 or 0)
     end
@@ -206,7 +180,8 @@ end
 
 --- Close button in the house style (used by our windows).
 function U.CloseButton(parent, size, onClick)
-    local b = U.IconButton(parent, { glyph = "close", size = size or 22, iconSize = math.floor((size or 22) * 0.5), tooltip = CLOSE })
+    local b = U.IconButton(parent, { glyph = "close", size = size or 22, iconSize = math.floor((size or 22) * 0.5),
+                                     tooltip = CLOSE, look = T.LOOK.close })
     b:SetScript("OnClick", function(self) if onClick then onClick(self) else parent:Hide() end end)
     return b
 end

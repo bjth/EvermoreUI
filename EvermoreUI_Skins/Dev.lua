@@ -54,8 +54,85 @@ local function Audit(frame)
     return claimed, loose, textures
 end
 
+--------------------------------------------------------------------------------
+--  /evui skin profile: what the walk costs. Each window's walk reports when it
+--  finishes (how long in all, over how many slices, the longest slice, how
+--  many objects it looked at and how many a part dressed), and the scroll
+--  box row passes are summed once a second. Toggles.
+--------------------------------------------------------------------------------
+local function NameOf(obj)
+    local ok, n = pcall(function() return obj:GetName() end)
+    return ok and type(n) == "string" and n or tostring(obj)
+end
+
+function S.ReportWalk(w)
+    Say(("walk |cffe3b464%s|r: %.1fms over %d slice(s), longest %.1fms; %d looked at, %d dressed%s"):format(
+        NameOf(w.root), w.ms, w.slices, w.worst, w.nodes, w.dressed, w.again and ", going again" or ""))
+    Say(("   parts %.1fms, decoration %.1fms, text %.1fms"):format(w.tParts or 0, w.tArt or 0, w.tText or 0))
+end
+
+local rowTicker
+local function Profile()
+    S.profiling = not S.profiling
+    if rowTicker then rowTicker:Cancel(); rowTicker = nil end
+    if S.profiling then
+        S.rowCost.passes, S.rowCost.ms = 0, 0
+        rowTicker = C_Timer.NewTicker(1, function()
+            local c = S.rowCost
+            if c.passes > 0 then
+                Say(("rows: %d dressed, %.1fms"):format(c.passes, c.ms))
+                c.passes, c.ms = 0, 0
+            end
+        end)
+        Say(("skin profile |cff93b75con|r (budget %gms a frame). Open a window."):format(S.WALK_BUDGET_MS))
+    else
+        Say("skin profile |cffc0704aoff|r.")
+    end
+end
+
+--------------------------------------------------------------------------------
+--  /evui skin find <text>: the frames on screen showing that text, by path.
+--  For a window with no name you know (a notice, a pane inside a pane), so it
+--  can be dumped with /evui skin <path> or given a pack.
+--------------------------------------------------------------------------------
+local function PathOf(obj, depth)
+    local name = obj.GetName and obj:GetName()
+    if type(name) == "string" then return name end
+    local parent = obj.GetParent and obj:GetParent()
+    if not parent or (depth or 0) > 8 then return "?" end
+    for k, v in pairs(parent) do
+        if v == obj and type(k) == "string" then return PathOf(parent, (depth or 0) + 1) .. "." .. k end
+    end
+    return PathOf(parent, (depth or 0) + 1) .. ".?"
+end
+
+local function Find(text)
+    local want, found = text:lower(), 0
+    local f = EnumerateFrames and EnumerateFrames()
+    while f and found < 12 do
+        if not (f.IsForbidden and f:IsForbidden()) and f.IsVisible and f:IsVisible() then
+            for _, r in ipairs(S.Regions(f)) do
+                local ok, str = pcall(function() return r.GetText and r:GetText() end)
+                if ok and type(str) == "string" and not (issecretvalue and issecretvalue(str))
+                   and str:lower():find(want, 1, true) then
+                    found = found + 1
+                    local part = S.claimed[f]
+                    Say(('%s: "%s"%s'):format(PathOf(f), str:sub(1, 40), part and ("  (" .. part .. ")") or ""))
+                    break
+                end
+            end
+        end
+        f = EnumerateFrames(f)
+    end
+    if found == 0 then Say("Nothing on screen shows " .. text .. ".") end
+end
+
 EV:RegisterSlash("skin", function(rest)
     rest = (rest or ""):lower()
+
+    if rest == "profile" then Profile(); return end
+    local text = rest:match("^find%s+(.+)$")
+    if text then Find(text); return end
 
     if rest == "" or rest == "parts" then
         Say(("%d parts registered:"):format(#S.parts))
@@ -67,7 +144,7 @@ EV:RegisterSlash("skin", function(rest)
         for n in pairs(S.packs or {}) do pnames[#pnames + 1] = n end
         table.sort(pnames)
         Say(("%d window packs: %s"):format(#pnames, #pnames > 0 and table.concat(pnames, ", ") or "none"))
-        Say("Point at a window and use |cffe3b464/evui skin this|r.")
+        Say("Point at a window and use |cffe3b464/evui skin this|r. Also |cffe3b464skin find <text>|r, |cffe3b464skin profile|r.")
         local broke = false
         for name, n in pairs(S.errors) do
             Say(("   |cffc0704apart %s threw %d time(s)|r"):format(name, n)); broke = true

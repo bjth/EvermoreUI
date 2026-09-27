@@ -93,7 +93,7 @@ function ns.HostOf(cf)
 end
 
 local function StylePanel(p)
-    local db, bg = M.db, ns.BG
+    local db, bg = M.db, ns.Window().fill
     p.bg:SetColorTexture(bg[1], bg[2], bg[3], db.bgAlpha)
     p.div:ClearAllPoints()
     p.div:SetHeight(Px(1))
@@ -178,7 +178,7 @@ local function PlaceBorder()
     else
         border:SetPoint("BOTTOMRIGHT", dock, "BOTTOMRIGHT")
     end
-    EV.Pixel:CreateBorder(border, 1, unpack(ns.BORDER))
+    EV.Pixel:CreateBorder(border, 1, EV.Theme.C4(ns.Window().edge))
     border:SetShown(db.border and not ns.hidden)
 end
 ns.PlaceBorder = PlaceBorder
@@ -497,7 +497,8 @@ local function SkinCombatLogBar()
     local bg = bar:CreateTexture(nil, "BACKGROUND")
     CFD(bg).ours = true
     bg:SetAllPoints()
-    bg:SetColorTexture(ns.BG[1], ns.BG[2], ns.BG[3], 0.9)
+    local c = ns.Window().fill
+    bg:SetColorTexture(c[1], c[2], c[3], 0.9)
     local div = bar:CreateTexture(nil, "OVERLAY", nil, 7)
     CFD(div).ours = true
     div:SetHeight(Px(1))

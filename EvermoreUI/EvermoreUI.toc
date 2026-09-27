@@ -33,6 +33,8 @@ Core\DB.lua
 Core\Pixel.lua
 Core\Media.lua
 Core\Theme.lua
+Core\Looks.lua
+Core\Icons.lua
 Core\Palette.lua
 Core\FontObjects.xml
 Core\Fonts.lua
@@ -67,3 +69,4 @@ UI\Prompt.lua
 UI\Gallery.lua
 Core\Changelog.lua
 Core\WhatsNew.lua
+Core\Install.lua

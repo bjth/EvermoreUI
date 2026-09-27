@@ -34,7 +34,7 @@ local function States(b)
     end
     local pt = b.GetPushedTexture and b:GetPushedTexture()
     if pt then
-        pt:SetColorTexture(EV.Theme.RGBA("surfaceSunk", 0.5))
+        pt:SetColorTexture(EV.Theme.C4(EV.Theme.Resolve(EV.Theme.LOOK.slot, { pressed = true }).fill))
         pt:ClearAllPoints(); pt:SetAllPoints(icon)
     end
     local ct = b.GetCheckedTexture and b:GetCheckedTexture()
@@ -264,7 +264,8 @@ local function Equipped(b)
         on = ok and eq == true
     end
     if b.Border then b.Border:SetAlpha(0) end
-    T.SetBorderToken(s.edge, on and "success" or "border")
+    local icon = Icon(b)
+    if icon then EV.Icons:SetState(icon, on and T.LOOK.slotEquipped.rest.edge or nil) end
 end
 
 --------------------------------------------------------------------------------
@@ -347,22 +348,17 @@ function ns.SkinButton(b)
     if not s then
         s = {}
         skinned[b] = s
+        -- The suite's icon style (EV.Icons, General > Icons): its crop, its
+        -- edge, and the slot's well behind the icon for an empty slot.
         if icon then
             if b.IconMask and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, b.IconMask) end
-            icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            icon:ClearAllPoints()
-            icon:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
-            icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
+            EV.Icons:Style(icon, { host = b, fit = true, well = T.LOOK.slot.rest.fill })
         end
-        -- Our well behind the icon (shows on empty slots).
-        s.well = T.Fill(b, "BACKGROUND", "surfaceSunk", 0.9, -8)
-        s.well:SetAllPoints(b)
-        -- Border on our own child frame, above the icon.
+        -- A frame over the icon and its swipe, for the rank text.
         local edge = CreateFrame("Frame", nil, b)
         edge:SetAllPoints(b)
         edge:SetFrameLevel(b:GetFrameLevel() + 2)
         edge:EnableMouse(false)
-        T.TokenBorder(edge, "border")
         s.edge = edge
         -- Cooldowns fill the icon exactly.
         for _, k in ipairs({ "cooldown", "chargeCooldown", "lossOfControlCooldown" }) do
@@ -390,7 +386,6 @@ function ns.SkinButton(b)
             hooksecurefunc(b, "Update", function(btn) Equipped(btn); Rank(btn) end)
         end
         function s.Paint()
-            s.well:SetColorTexture(T.RGBA("surfaceSunk", 0.9))
             States(b)
             Equipped(b)
         end

@@ -220,6 +220,7 @@ ns.Widget{
 
     Build = function(f)
         local bar = CreateFrame("StatusBar", nil, f)
+        EV.Pixel:Bar(bar)
         bar:Hide()
         bar:SetMinMaxValues(0, 1)
         bar.bg = bar:CreateTexture(nil, "BACKGROUND")
@@ -241,7 +242,7 @@ ns.Widget{
         local one = EV.Pixel:One(f)
         bar.icon:SetPoint("TOPLEFT", bar.iconFrame, "TOPLEFT", one, -one)
         bar.icon:SetPoint("BOTTOMRIGHT", bar.iconFrame, "BOTTOMRIGHT", -one, one)
-        bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        bar.icon:SetTexCoord(EV.Icons:Coords())
         -- Spell name below left, remaining time below right, cast target on
         -- the bar itself at the right. All three ride an overlay so the bar
         -- fill can never cover them.
@@ -293,7 +294,7 @@ ns.Widget{
         local tex = EV.Media:Fetch("statusbar", cfg.texture)
         bar:SetStatusBarTexture(tex)
         bar.bg:SetTexture(tex)
-        bar.bg:SetVertexColor(T.RGBA("surfaceSunk", 0.9))
+        bar.bg:SetVertexColor(T.RGBA("surfaceSunk", 0.9))   -- content colour: the track under the cast
 
         -- Left of the PLATE, top aligned with it, as tall as the health bar
         -- and the cast bar together. In the reference it measures 59px square

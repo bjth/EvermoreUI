@@ -62,8 +62,9 @@ local function Line(i)
     f = CreateFrame("Frame", nil, scroll.content)
     f:SetHeight(24)
     f:EnableMouse(true)
-    f.bg = T.Fill(f, "BACKGROUND", "surfaceSunk", (i % 2 == 1) and 0.25 or 0.5)
+    f.bg = T.Solid(f, "BACKGROUND", 0, 0, 0, 0)
     f.bg:SetAllPoints()
+    EV.UI.PaintRow(f.bg, i)
     f.cells = {}
     local x = 8
     for c, col in ipairs(COLS) do

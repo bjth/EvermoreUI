@@ -105,11 +105,12 @@ function ns.DB() return M.db end
 --------------------------------------------------------------------------------
 --  Colours and sizes
 --------------------------------------------------------------------------------
--- Theme tokens (EvermoreUI/Core/Theme.lua). These are the live token
--- tables, updated in place when the theme changes.
-ns.BG      = EV.Theme.C.surface0
+-- The chat panel is a window: its fill and edge are T.LOOK.window's, read at
+-- paint time so they follow the theme. The divider is the live token table,
+-- updated in place when the theme changes.
 ns.DIVIDER = EV.Theme.C.divider
-ns.BORDER  = EV.Theme.C.border
+local windowOut = {}
+function ns.Window() return EV.Theme.Resolve(EV.Theme.LOOK.window, nil, windowOut) end
 
 --- n physical pixels in UIParent units.
 function ns.Px(n) return EV.Pixel:One(UIParent) * n end

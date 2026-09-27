@@ -7,17 +7,24 @@ ExportInterfaceFiles code) and, for the configured game type:
   1. builds a manifest of everything the client loads
      (tools/survey/manifests/<gameType>.json, previous kept as .prev.json)
   2. diffs it against the last run
-  3. MEASURES template coverage: it runs the fingerprints from
-     EvermoreUI_Skins/Parts.lua against every template in the manifest and
-     reports which part claims each one, which parts match nothing, and
-     which templates nothing claims. That last list is the to-do list.
+  3. MEASURES template coverage: it loads EvermoreUI_Skins/Parts.lua itself
+     (coverage.lua, through lupa or a lua5.1) and runs its fingerprints
+     against every template in the manifest, reporting which part claims
+     each one, which parts match nothing, and which templates nothing
+     claims. That last list is the to-do list. Without a Lua it falls back
+     to the Python copy of the fingerprints in evsurvey/fingerprint.py.
   4. writes tools/survey/report.md
 
   python tools/survey/survey.py [--export PATH] [--game camelot] [--family mainline]
   python tools/survey/survey.py --detect          (list game types in the export)
   python tools/survey/survey.py --check           (no writes)
+  python tools/survey/survey.py --shapes FILE     (also write the shapes
+                                                   coverage.lua reads, to run
+                                                   it by hand)
 
-Settings default from tools/survey/config.json. Standard library only.
+Settings default from tools/survey/config.json. Standard library only;
+lupa (pip install lupa) or a lua5.1 on the PATH is optional and makes the
+coverage measurement use the real Parts.lua.
 
 This tool does NOT generate any Lua. It used to write
 EvermoreUI_Skins/Data/Generated.lua and a simulator's mocks; both that
@@ -34,7 +41,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from evsurvey import fingerprint, manifest, tocs  # noqa: E402
+from evsurvey import fingerprint, luarun, manifest, tocs  # noqa: E402
 
 # Templates that carry no art of their own: pure layout, behaviour or data
 # mixins. They inherit heavily and would otherwise dominate the uncovered
@@ -154,20 +161,102 @@ def diff_manifests(old, new):
     return lines
 
 
+# The header over each part quotes what it covers, from the survey that was
+# current when it was written: "UIPanelButtonTemplate, 284 inherits" (that
+# template has 284 inherit sites and this part claims it) or "19 templates"
+# (this part claims 19). Quoted numbers go stale on a client patch, so the
+# survey checks every one it can read. A header is a comment line that opens
+# with the part's number: "--  4. Panel button ...", "-- 12. Window: ...".
+HEADER_RE = re.compile(r"^--\s*\d+[a-z]?\.\s+(.+)$")
+HEADER_TEMPLATE_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]+), (\d+) inherits")
+HEADER_COUNT_RE = re.compile(r"\b(\d+) templates\b")
+
+
+def read_headers(addons):
+    """[(part, kind, name, number)] quoted in the headers over each part."""
+    path = os.path.join(addons, "EvermoreUI_Skins", "Parts.lua")
+    if not os.path.exists(path):
+        return []
+    out, pending = [], []
+    with open(path, encoding="utf-8", errors="ignore") as fh:
+        for line in fh:
+            h = HEADER_RE.match(line.rstrip())
+            if h:
+                rest = h.group(1)
+                for t in HEADER_TEMPLATE_RE.finditer(rest):
+                    pending.append(("template", t.group(1), int(t.group(2))))
+                for c in HEADER_COUNT_RE.finditer(rest):
+                    pending.append(("count", None, int(c.group(1))))
+                continue
+            n = PART_RE.match(line)
+            if n and pending:
+                out += [(n.group(1),) + q for q in pending]
+                pending = []
+    return out
+
+
+def check_headers(addons, claimed, counts):
+    """What the headers quote against what was measured. Mismatches only."""
+    per_part = collections.Counter(claimed.values())
+    bad = []
+    for part, kind, name, n in read_headers(addons):
+        if kind == "template":
+            if counts.get(name, 0) != n:
+                bad.append("%s: header says %s has %d inherits, the manifest has %d"
+                           % (part, name, n, counts.get(name, 0)))
+            if claimed.get(name) != part:
+                bad.append("%s: header names %s, which is claimed by %s"
+                           % (part, name, claimed.get(name) or "nothing"))
+        elif per_part.get(part, 0) != n:
+            bad.append("%s: header says %d templates, it claims %d"
+                       % (part, n, per_part.get(part, 0)))
+    return bad
+
+
 def coverage(m, addons, top=60):
     """Measured, not claimed: run the part fingerprints over every template."""
     counts = inherit_counts(m)
     parts = read_parts(addons)
     roles = read_font_roles(addons)
     shapes, claimed, hits, dead, shadowed = fingerprint.classify(m, counts)
+    mirror = dict(claimed)
 
-    # Templates a part claims at runtime but the matcher cannot see. Counted
-    # as covered, and named in the report so the claim stays visible.
-    unmodelled = fingerprint.unmodelled()
-    runtime = {}
-    for name, _reason, tmpls in unmodelled:
-        for t in tmpls:
-            runtime[t] = name
+    # The real thing, if there is a Lua to run it with. A runner that fails is
+    # reported, never swallowed: a silent fallback would be trusted.
+    measured, lua_error = None, None
+    try:
+        measured = luarun.run(m, counts, addons)
+    except Exception as exc:  # noqa: BLE001
+        lua_error = str(exc)
+
+    if measured:
+        source = "Parts.lua itself, run by coverage.lua (%s)" % luarun.describe(luarun.runner())
+        claimed, hits = measured["claimed"], measured["hits"]
+        # Runtime-only claims are rows with a part and no fingerprint hit.
+        runtime = {t: p for t, p in claimed.items() if t not in hits}
+        claimed = {t: p for t, p in claimed.items() if t in hits}
+        unmodelled = [(n, why, sorted(t for t, p in runtime.items() if p == n))
+                      for n, why in measured["runtime"].items()]
+        inside = collections.Counter(p for _t, _k, p, _c in measured["inside"])
+        dead = [n for n in measured["parts"]
+                if n not in measured["runtime"] and n not in set(claimed.values())
+                and not inside.get(n) and not measured["objects"].get(n)]
+        shadowed = {t: h for t, h in hits.items() if len(h) > 1}
+        mirror_drift = sorted(t for t in set(claimed) | set(mirror)
+                              if claimed.get(t) != mirror.get(t))
+    else:
+        source = "the Python copy in evsurvey/fingerprint.py: %s" % (
+            ("coverage.lua failed: " + lua_error) if lua_error
+            else luarun.describe(None))
+        # Templates a part claims at runtime but the matcher cannot see.
+        # Counted as covered, and named in the report so the claim stays
+        # visible.
+        unmodelled = fingerprint.unmodelled()
+        runtime = {}
+        for name, _reason, tmpls in unmodelled:
+            for t in tmpls:
+                runtime[t] = name
+        mirror_drift = []
 
     rows, gaps = [], []
     for name, n in counts.most_common(top):
@@ -189,8 +278,12 @@ def coverage(m, addons, top=60):
     modelled = [p["name"] for p in fingerprint.PARTS]
     drift_missing = [n for n in parts if n not in modelled]
     drift_extra = [n for n in modelled if n not in parts]
+    headers = check_headers(addons, dict(claimed, **runtime), counts)
     return dict(rows=rows, gaps=gaps, dead=dead, shadowed=shadowed, claimed=claimed,
-                unmodelled=unmodelled,
+                unmodelled=unmodelled, runtime=runtime, measured=measured,
+                source=source, lua_error=lua_error, mirror_drift=mirror_drift,
+                mirror=mirror,
+                headers=headers,
                 counts=counts, parts=parts, shapes=shapes,
                 unfingerprinted=unfingerprinted,
                 drift_missing=drift_missing, drift_extra=drift_extra)
@@ -231,6 +324,8 @@ def main():
                     help="how many of the most-inherited templates to report")
     ap.add_argument("--detect", action="store_true")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--shapes", metavar="FILE",
+                    help="also write the template shapes coverage.lua reads")
     args = ap.parse_args()
 
     if not args.export or not os.path.isdir(args.export):
@@ -277,19 +372,44 @@ def main():
               % (target.game, target.family, m["meta"]["sourceHash"], m["meta"]["generated"]),
               "", "## Changes since last survey", ""] + ["    " + l for l in changes]
 
+    measured = cov["measured"]
     report += ["", "## What each part claims", "",
                "Measured by running each fingerprint in `Parts.lua` against all %d"
                % len(m["templates"]),
-               "templates in this client. A part matching nothing is a bug in its",
-               "fingerprint, not a gap in Blizzard's UI.", "",
-               "| part | templates | inherit sites |", "| --- | ---: | ---: |"]
-    for pdef in fingerprint.PARTS:
-        n = pdef["name"]
-        sites = sum(counts.get(t, 0) for t, c in claimed.items() if c == n)
-        flag = " **MATCHES NOTHING**" if not by_part.get(n) else ""
-        report.append("| `%s`%s | %d | %d |" % (n, flag, by_part.get(n, 0), sites))
-    report.append("| **total** | %d | %d |"
-                  % (len(claimed), sum(counts.get(t, 0) for t in claimed)))
+               "templates in this client, with %s." % cov["source"],
+               "A part matching nothing is a bug in its fingerprint, not a gap in",
+               "Blizzard's UI.", ""]
+    names = measured["parts"] if measured else [p["name"] for p in fingerprint.PARTS]
+    dead = set(cov["dead"])
+    if measured:
+        inside = collections.Counter(p for _t, _k, p, _c in measured["inside"])
+        inside_sites = collections.Counter()
+        for _t, _k, p, c in measured["inside"]:
+            inside_sites[p] += c
+        report += ["`templates` is the template's own root. `inside` is frames a template",
+                   "declares within itself (the coin boxes in a money frame), which the",
+                   "walk dresses too. `objects` counts every frame in Blizzard's named",
+                   "windows, the instances a player actually sees.", "",
+                   "| part | templates | inherit sites | inside | inside sites | objects |",
+                   "| --- | ---: | ---: | ---: | ---: | ---: |"]
+        tot = [0, 0, 0, 0, 0]
+        for n in names:
+            sites = sum(counts.get(t, 0) for t, c in claimed.items() if c == n)
+            row = [by_part.get(n, 0), sites, inside.get(n, 0), inside_sites.get(n, 0),
+                   measured["objects"].get(n, 0)]
+            tot = [a + b for a, b in zip(tot, row)]
+            flag = " **MATCHES NOTHING**" if n in dead else ""
+            report.append("| `%s`%s | %d | %d | %d | %d | %d |" % ((n, flag) + tuple(row)))
+        report.append("| **total** | %d | %d | %d | %d | %d of %d |"
+                      % tuple(tot + [measured["objects_total"]]))
+    else:
+        report += ["| part | templates | inherit sites |", "| --- | ---: | ---: |"]
+        for n in names:
+            sites = sum(counts.get(t, 0) for t, c in claimed.items() if c == n)
+            flag = " **MATCHES NOTHING**" if n in dead else ""
+            report.append("| `%s`%s | %d | %d |" % (n, flag, by_part.get(n, 0), sites))
+        report.append("| **total** | %d | %d |"
+                      % (len(claimed), sum(counts.get(t, 0) for t in claimed)))
 
     if cov["unfingerprinted"]:
         report += ["", "### PARTS WITH NO FINGERPRINT (these break the addon at load)", "",
@@ -303,6 +423,20 @@ def main():
                    for n, r, t in cov["unmodelled"]]
     if cov["dead"]:
         report += ["", "### Parts that match nothing", ""] + ["- `%s`" % d for d in cov["dead"]]
+    if measured and measured["errors"]:
+        report += ["", "### Fingerprints that threw", ""] + ["- " + e for e in measured["errors"][:40]]
+    if cov["headers"]:
+        report += ["", "### Parts.lua headers out of date", "",
+                   "The counts quoted over each part no longer match this client.", ""]
+        report += ["- " + h for h in cov["headers"]]
+    if cov["mirror_drift"]:
+        report += ["", "### fingerprint.py disagrees with Parts.lua", "",
+                   "The Python copy is only the fallback for a machine with no Lua, but",
+                   "it should give the same answer. It does not on:", ""]
+        report += ["- `%s`: Parts.lua %s, fingerprint.py %s"
+                   % (t, cov["claimed"].get(t) or "nothing",
+                      cov["mirror"].get(t) or "nothing")
+                   for t in cov["mirror_drift"][:40]]
     if cov["drift_missing"] or cov["drift_extra"]:
         report += ["", "### fingerprint.py is out of step with Parts.lua", ""]
         report += ["- registered in Parts.lua, not modelled here: %s" % ", ".join(cov["drift_missing"])] if cov["drift_missing"] else []
@@ -328,14 +462,25 @@ def main():
 
     print("\n".join(changes[:30]))
     print()
+    print("Measured with %s." % cov["source"])
     print("%d parts claim %d templates across %d inherit sites."
-          % (len(fingerprint.PARTS), len(claimed), sum(counts.get(t, 0) for t in claimed)))
+          % (len(names), len(claimed), sum(counts.get(t, 0) for t in claimed)))
+    if measured:
+        print("  and %d of the %d frame objects in Blizzard's named windows."
+              % (sum(measured["objects"].values()), measured["objects_total"]))
+        for e in measured["errors"][:10]:
+            print("  THREW      %s" % e)
     for n in cov["unfingerprinted"]:
         print("  NO FINGERPRINT  %s -- this ABORTS Parts.lua at load" % n)
     for d in cov["dead"]:
         print("  DEAD PART  %s matches nothing in this client" % d)
     for n, r, _t in cov["unmodelled"]:
         print("  UNMODELLED %s -- %s; verify in game" % (n, r))
+    for h in cov["headers"]:
+        print("  HEADER     %s" % h)
+    if cov["mirror_drift"]:
+        print("  MIRROR     fingerprint.py disagrees with Parts.lua on %d templates (see report)"
+              % len(cov["mirror_drift"]))
     for n in cov["drift_missing"]:
         print("  DRIFT      Parts.lua registers %r, fingerprint.py does not model it" % n)
     for n in cov["drift_extra"]:
@@ -343,6 +488,11 @@ def main():
     print("  %d of the top %d templates unclaimed:" % (len(gaps), args.top))
     for n, c in gaps[:15]:
         print("    %-44s %d" % (n, c))
+
+    if args.shapes:
+        luarun.write_shapes(args.shapes, m, counts)
+        print("Wrote shapes to %s: lua5.1 tools/survey/coverage.lua %s [summary|all]"
+              % (args.shapes, args.shapes))
 
     if args.check:
         return 0

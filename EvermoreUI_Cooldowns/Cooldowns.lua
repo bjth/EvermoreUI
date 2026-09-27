@@ -121,6 +121,7 @@ local OVERLAY_ATLAS = "UI-HUD-CoolDownManager-IconOverlay"
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 
 local state = setmetatable({}, { __mode = "k" })   -- item frame -> our notes
+ns.state = state
 local hookedViewer = setmetatable({}, { __mode = "k" })
 local holders = {}                                  -- bar key -> our frame
 local busy = {}                                     -- bar key -> laying out now
@@ -322,19 +323,22 @@ local function Skin(f, def)
         for _, r in ipairs({ cd:GetRegions() }) do Flatten(r) end
         if cd.SetSwipeTexture then pcall(cd.SetSwipeTexture, cd, WHITE) end
     end
-    if f.Icon and f.Icon.SetTexCoord then f.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    if f.Icon and f.Icon.SetTexCoord then f.Icon:SetTexCoord(EV.Icons:Coords()) end
 
     local edge = CreateFrame("Frame", nil, f)
     edge:SetAllPoints(f)
     edge:EnableMouse(false)
     edge:SetFrameLevel(f:GetFrameLevel() + 3)
-    T.TokenBorder(edge, "border")
+    -- Its colour and thickness are the Icon look setting (Look.lua).
+    T.TokenBorder(edge)
     s.edge = edge
 
     if def.buff then
         f:HookScript("OnShow", function() Relayout(def) end)
         f:HookScript("OnHide", function() Relayout(def) end)
     end
+    -- Border, crop, swipe and the glows (Look.lua).
+    if ns.LookItem then pcall(ns.LookItem, f, s) end
     return s
 end
 
@@ -517,7 +521,10 @@ local function EndTimer(f, s)
     end
     s.ends = nil
     Under(f, s, 1)
-    if s.edge then T.SetBorderToken(s.edge, "border") end
+    if s.edge then
+        if ns.LookColour then T.SetBorderColor(s.edge, ns.LookColour(select(2, ns.IconLook())))
+        else T.SetEdge(s.edge, T.Resolve(T.LOOK.slot).edge) end
+    end
 end
 
 local function Overlay(f, s)
@@ -763,6 +770,7 @@ function M:OnEnable()
         EV:Print(L["Switched on the game's Cooldown Manager, which the Cooldowns bars are built on."])
     end
 
+    if ns.EnableLook then ns.EnableLook() end
     inCombat = InCombatLockdown() and true or false
     if C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer") then
         Attach()
@@ -818,4 +826,5 @@ end
 function M:Refresh()
     for _, s in pairs(state) do s.fontSize = nil end
     self:LayoutAll()
+    if ns.LookAll then ns.LookAll() end
 end

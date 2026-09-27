@@ -13,13 +13,13 @@ if EV_BLOCKED then return end
 --    ctrl.onChanged(ctrl)     set by the owner; fired after a user change
 --    ctrl:SetTooltip(title, body)
 --
---  Visual states (never colour alone):
---    rest     surface2 fill, borderStrong edge (>= 3:1 against the panel)
---    hover    surface3 fill, brighter edge
---    pressed  sunk fill, content nudged down 1px
---    focus    accent edge (inputs, open dropdowns)
---    selected accent bar or fill
---    disabled 45% opacity
+--  What each state looks like is not decided here: every control resolves
+--  its colours through its Look (Core/Looks.lua, T.Resolve), the same recipe
+--  the skins paint Blizzard's templates with. A control keeps its state in
+--  _hover, _pressed, _focus, _selected, _disabled and passes itself as the
+--  state. Pressed also nudges content down 1px; that is movement, not colour.
+--  A control whose Look paints a full disabled state sets _look, and is not
+--  faded; any other control fades to 45% when disabled.
 --------------------------------------------------------------------------------
 local EV = EvermoreUI
 local T = EV.Theme
@@ -46,7 +46,8 @@ function Control:SetDisabled(off)
     off = off and true or false
     self._disabled = off
     if self._blocker then self._blocker:SetShown(off) end
-    self:SetAlpha(off and 0.45 or 1)
+    -- A control with a Look paints its own disabled state.
+    self:SetAlpha((off and not self._look) and 0.45 or 1)
     if off then self._hover, self._pressed = false, false end
     if self.Paint then self:Paint() end
 end
@@ -106,29 +107,107 @@ end
 --------------------------------------------------------------------------------
 --  Surfaces shared by several controls
 --------------------------------------------------------------------------------
---- The standard control box: fill + 1px edge. Returns fill texture; the
---- edge is the frame's pixel border.
-function U.Box(frame, token)
-    local fill = T.Fill(frame, "BACKGROUND", token or "surface2")
+--- The standard control box: fill + 1px edge, in the rest state of a Look
+--- (the plain control box by default). Returns the fill texture; the edge
+--- is the frame's pixel border.
+function U.Box(frame, look)
+    if type(look) == "string" then look = T.LOOK[look] end
+    local r = T.Resolve(look or T.LOOK.control)
+    local fill = T.Solid(frame, "BACKGROUND", T.C4(r.fill))
     fill:SetAllPoints()
     T.TokenBorder(frame, "borderStrong")
+    T.SetEdge(frame, r.edge)
     return fill
 end
 
---- Paint a control box for its state.
-function U.PaintBox(ctrl, fill, opts)
+--- Paint a control box for its state, through its Look. `state` defaults to
+--- the control itself. Returns the resolved colours (text, glyph and the
+--- rest), valid until the next resolve.
+function U.PaintBox(ctrl, fill, look, state)
+    local r = T.Resolve(look or T.LOOK.button, state or ctrl)
+    fill:SetColorTexture(T.C4(r.fill))
+    T.SetEdge(ctrl, r.edge)
+    return r
+end
+
+--- A surface of ours in a surface Look (window, raised, inset, control):
+--- its fill and its border, kept in step with the theme. For module frames
+--- that are panels rather than controls, so they don't compose one from raw
+--- tokens. alpha overrides the fill's.
+---
+--- opts: edgeOn = the frame the border goes on (default the frame itself),
+---       edge = false for no border, sub = the fill's sublevel (default -8).
+--- The alpha can be a function, read on every repaint, for a setting.
+---
+--- Returns the fill and its Paint. Anything that changes what the surface
+--- shows afterwards goes through U.SurfaceState or U.SurfaceEdge, never by
+--- colouring the border directly: the theme repaint would put the Look's
+--- rest edge straight back over it.
+local surfaces = setmetatable({}, { __mode = "k" })   -- fill -> its record
+function U.Surface(frame, look, alpha, opts)
+    if type(look) == "string" then look = T.LOOK[look] end
     opts = opts or {}
-    local token = opts.rest or "surface2"
-    if ctrl._pressed then token = "surfaceSunk"
-    elseif ctrl._hover or opts.hot then token = opts.hover or "surface3" end
-    fill:SetColorTexture(T.RGBA(token))
-    if opts.focus then
-        T.SetBorderToken(ctrl, "accent")
-    elseif ctrl._hover then
-        T.SetBorderColor(ctrl, T.Mix("borderStrong", "text", 0.35))
-    else
-        T.SetBorderToken(ctrl, "borderStrong")
+    local fill = EV.Pixel:Fill(frame, "BACKGROUND", opts.sub or -8)
+    local edgeOn = opts.edge ~= false and (opts.edgeOn or frame) or nil
+    if edgeOn then T.TokenBorder(edgeOn, "border") end
+    local rec = { look = look or T.LOOK.raised, alpha = alpha, edgeOn = edgeOn, c = {} }
+    local function Paint()
+        local r = T.Resolve(rec.look, rec.state)
+        local c1, c2, c3, c4 = T.C4(r.fill)
+        local a = rec.alpha
+        if type(a) == "function" then a = a() end
+        fill:SetColorTexture(c1, c2, c3, a or c4)
+        -- Colour only: a module that hides the border (a setting) keeps it hidden.
+        if rec.edgeOn then
+            local e = r.edge
+            if rec.edge then e = T.SpecRGBA(rec.edge, rec.c) end
+            if rec.rgba then e = rec.rgba end
+            if e then EV.Pixel:SetEdgeColor(rec.edgeOn, T.C4(e)) end
+        end
     end
+    rec.Paint = Paint
+    surfaces[fill] = rec
+    Paint()
+    T.Watch(fill, Paint)
+    return fill, Paint
+end
+
+--- Show a surface in another state of its Look (on, hover...), or in another
+--- Look altogether. `state` is kept and read on every repaint, so a caller
+--- can reuse one table and set its fields.
+function U.SurfaceState(fill, state, look)
+    local rec = surfaces[fill]
+    if not rec then return end
+    rec.state = state
+    if look then rec.look = type(look) == "string" and T.LOOK[look] or look end
+    rec.Paint()
+end
+
+--- Override a surface's edge colour. Either a colour spec (a token, or a
+--- Look's table form), which follows the theme, or r, g, b, a for a content
+--- colour that doesn't (an item's quality). nil hands the edge back to the
+--- Look.
+function U.SurfaceEdge(fill, spec, g, b, a)
+    local rec = surfaces[fill]
+    if not rec then return end
+    if type(spec) == "number" then
+        rec.edge = nil
+        rec.rgba = rec.rgba or {}
+        rec.rgba[1], rec.rgba[2], rec.rgba[3], rec.rgba[4] = spec, g, b, a or 1
+    else
+        rec.rgba, rec.edge = nil, spec
+    end
+    rec.Paint()
+end
+
+--- Paint a striped row's background (T.LOOK.row) for its position.
+local rowState = {}
+function U.PaintRow(tex, index, hover)
+    local st = rowState
+    st.on, st.hover = index % 2 == 0, hover
+    local r = T.Resolve(T.LOOK.row, st)
+    tex:SetColorTexture(T.C4(r.fill))
+    return r
 end
 
 --- A texture from our own media (circle, ring, check, search, close).

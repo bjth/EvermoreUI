@@ -21,6 +21,8 @@ local U = EV.UI
 local max, min = math.max, math.min
 
 local ITEM_H, MAX_VISIBLE, SEARCH_OVER = 26, 12, 14
+local MENU, DROP = T.LOOK.menu, T.LOOK.dropdown
+local rowState, rowOut = {}, {}
 
 local Menu
 
@@ -129,10 +131,13 @@ local function BuildMenu()
             it.value = e.value
             it.pickable = not (e.header or e.separator or e.disabled)
             it.sep:SetShown(e.separator and true or false)
-            it.sep:SetColorTexture(T.RGBA("divider"))
             local selected = it.pickable and e.value == self.current
+            rowState.on, rowState.disabled, rowState.hover = selected, e.disabled, true
+            local r = T.Resolve(MENU, rowState, rowOut)
+            it.sep:SetColorTexture(T.C4(r.divider))
             it.mark:SetShown(selected)
-            it.hl:SetColorTexture(T.RGBA("surface3"))
+            if r.mark then it.mark:SetColorTexture(T.C4(r.mark)) end
+            it.hl:SetColorTexture(T.C4(r.row))
             it.icon:SetShown(e.icon ~= nil)
             if e.icon then it.icon:SetTexture(e.icon) end
             it.text:ClearAllPoints()
@@ -141,12 +146,10 @@ local function BuildMenu()
             it.text:SetText(e.header or e.text or "")
             if e.header then
                 it.text:SetFont(T.FontBoldPath(), T.SIZE.small, "")
-                it.text:SetTextColor(T.RGBA("title"))
+                it.text:SetTextColor(T.C4(r.header))
             else
                 it.text:SetFont(T.FontPath(), T.SIZE.body, "")
-                if e.disabled then it.text:SetTextColor(T.RGBA("textDisabled"))
-                elseif selected then it.text:SetTextColor(T.RGBA("accent"))
-                else it.text:SetTextColor(T.RGBA("text")) end
+                it.text:SetTextColor(T.C4(r.text))
             end
             it:Show()
         end
@@ -154,8 +157,9 @@ local function BuildMenu()
     end
 
     function m:Paint()
-        self._bg:SetColorTexture(T.RGBA("surface1"))
-        T.SetBorderToken(self, "border")
+        local r = T.Resolve(MENU)
+        self._bg:SetColorTexture(T.C4(r.fill))
+        T.SetEdge(self, r.edge)
         if self:IsShown() then self:Layout() end
     end
     T.Watch(m)
@@ -207,17 +211,18 @@ function U.Dropdown(parent, width, values, get, set)
     icon:Hide()
     local label = T.Font(b, T.SIZE.body, false, 1)
     label:SetPoint("RIGHT", -28, 0)
-    local chev = T.Chevron(b, 5, 1)
+    local chev = T.Chevron(b, DROP.chevron, 1)
     chev:SetPoint("RIGHT", -10, 0)
     U.Init(b)
+    b._look = DROP
 
     local function List() return type(values) == "function" and values() or values end
 
     function b:Paint()
-        local open = Menu and Menu.owner == self and Menu:IsShown()
-        U.PaintBox(self, fill, { focus = open, hot = open })
-        label:SetTextColor(T.RGBA((self._hover or open) and "text" or "text"))
-        chev:SetColorLines(T.RGBA((self._hover or open) and "text" or "textMuted"))
+        self._open = Menu and Menu.owner == self and Menu:IsShown() or false
+        local r = U.PaintBox(self, fill, DROP)
+        label:SetTextColor(T.C4(r.text))
+        chev:SetColorLines(T.C4(r.glyph))
     end
 
     function b:Refresh()
