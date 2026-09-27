@@ -310,6 +310,9 @@ S.ORNATE = {
     "ui%-character%-info%-stat%-stonebg", "ui%-character%-info%-scrollline",
     "ui%-character%-info%-itemlevel%-bounce", "ui%-character%-info%-stattab",
     "common%-insideframe", "common%-framedivider", "common%-sidetab",
+    -- The settings panel's inner frame, its page divider and its expandable
+    -- section bars (the settingsExpand part draws those).
+    "options_innerframe", "options_horizontaldivider", "options_listexpand",
 }
 
 --------------------------------------------------------------------------------
@@ -1521,6 +1524,106 @@ R{
         p:States(LOOK.slot, { on = function() return sel:IsShown() end })
         local d = S.D(t)
         p:After("SetChecked", function() if d.Repaint then d.Repaint() end end)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9l. Settings category  SettingsCategoryListButtonTemplate: a row in the
+--     settings panel's category list. Blizzard shows its Texture as
+--     Options_List_Active when selected, Options_List_Hover under the mouse,
+--     and hides it otherwise, resetting the label's font object each time
+--     (SettingsCategoryListButtonMixin:UpdateStateInternal); the +/- is the
+--     Toggle, re-textured in SetExpanded. Ours: the listItem Look read from
+--     that state, top-level categories bold in body text and the rest muted,
+--     and our chevron for the toggle. Both re-applied after Blizzard's.
+--------------------------------------------------------------------------------
+R{
+    name = "settingsCategory",
+    type = "Button",
+    keys = { "Toggle", "Texture", "Label" },
+    paint = function(b, p)
+        S.Mute(b.Texture)
+        p:Fill("surface2", 0)
+        local d = S.D(b)
+        local t, cd = b.Toggle, S.D(b.Toggle)
+        if S.Alive(t) and not cd.chev then
+            cd.chev = S.Ours(T.Chevron(t, 4))
+            cd.chev:SetPoint("CENTER")
+        end
+        local function Category()
+            local ok, c = pcall(function() return b:GetElementData().data.category end)
+            return ok and c or nil
+        end
+        local function Sync()
+            local tex = b.Texture
+            local shown = tex:IsShown()
+            local atlas = shown and tex:GetAtlas() or ""
+            atlas = type(atlas) == "string" and atlas or ""
+            d.on = shown and atlas:find("Active", 1, true) ~= nil
+            d.hover = shown and atlas:find("Hover", 1, true) ~= nil
+            local r = T.Resolve(LOOK.listItem, d)
+            if d.fill and r.fill then d.fill:SetColorTexture(T.C4(r.fill)) end
+            local cat = Category()
+            local top = cat and cat.HasParentCategory and not cat:HasParentCategory()
+            if r.text then
+                if top and not d.on and not d.hover then b.Label:SetTextColor(S.Colour("text"))
+                else b.Label:SetTextColor(T.C4(r.text)) end
+            end
+            if cd.chev then
+                S.Blank(t)
+                local ok, open = pcall(function() return cat and cat:IsExpanded() end)
+                cd.chev:Point(ok and open and "down" or "right")
+                cd.chev:SetColorLines(S.Colour("textMuted"))
+            end
+        end
+        p:After("UpdateStateInternal", Sync)
+        p:After("SetExpanded", Sync)
+        S.Own(Sync, b, b.Label)
+        Sync()
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9m. Settings header    SettingsCategoryListHeaderTemplate: the banner over
+--     a group of categories (Options_CategoryHeader_<n>, set in Init, so the
+--     survey cannot see it: coverage lists it as runtime-matched). Ours: the
+--     label in gold on the panel, our divider under it.
+--------------------------------------------------------------------------------
+R{
+    name = "settingsHeader",
+    keys = { "Background", "Label" },
+    test = function(f) return S.ArtIs(f.Background, "options_categoryheader") end,
+    paint = function(f, p)
+        S.Mute(f.Background)
+        p:Label(f.Label, "title", true)
+        local d = S.D(f)
+        if not d.rule and f.CreateTexture then
+            d.rule = S.Ours(f:CreateTexture(nil, "BORDER"))
+            d.rule:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 14, 2)
+            d.rule:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -6, 2)
+            d.rule:SetHeight(1)
+            local function Paint() d.rule:SetColorTexture(S.Colour("divider")) end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9n. Settings section   the button of SettingsExpandableSectionTemplate: a
+--     three-piece Options_ListExpand bar. Ours: a flat bar, our edge, its
+--     title in gold.
+--------------------------------------------------------------------------------
+R{
+    name = "settingsExpand",
+    type = "Button",
+    keys = { "Left", "Right", "Text" },
+    art  = { Left = "options_listexpand_left" },
+    paint = function(b, p)
+        p:Fade()
+        p:Fill("surface2")
+        p:Border("border")
+        p:Label(b.Text, "title", true)
     end,
 }
 

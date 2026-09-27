@@ -47,6 +47,10 @@ local RUNTIME = {
                               "CamelotBankItemButtonTemplate", "GuildBankItemButtonTemplate",
                               "EquipmentFlyoutButtonTemplate", "OpenMailAttachment",
                               "ProfessionsButtonTemplate", "ProfessionsGearSlotTemplate" } },
+    -- The header's banner atlas is chosen in Init (Options_CategoryHeader_<n>),
+    -- so the template carries no atlas for the survey to read.
+    settingsHeader = { why = "its banner atlas is set in Init, not declared in the template",
+                       claims = { "SettingsCategoryListHeaderTemplate" } },
 }
 
 local function Main(shapesPath, root, mode, emit)
