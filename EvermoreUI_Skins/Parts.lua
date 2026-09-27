@@ -25,6 +25,40 @@ local S, T = ns.S, EV.Theme
 if not S then return end
 
 local R = S.Register
+-- What every control looks like is in EvermoreUI/Core/Looks.lua, shared with
+-- our own widgets. Parts read their geometry and colours from there.
+local LOOK = T.LOOK
+
+--- A scroll arrow (or any small chevron that lights on hover), through
+--- T.LOOK.scrollStep. `step` is the button it lives on, for the hover hooks;
+--- nil for a chevron that is only ever at rest.
+function S.StepperLook(step, sd)
+    if not sd.chev then return end
+    local st = sd
+    local function Paint() sd.chev:SetColorLines(T.C4(T.Resolve(LOOK.scrollStep, st).glyph)) end
+    Paint()
+    T.Watch(sd.chev, Paint)
+    if step and step.HookScript then
+        step:HookScript("OnEnter", function() st.hover = true; Paint() end)
+        step:HookScript("OnLeave", function() st.hover = false; Paint() end)
+    end
+end
+
+--- A scroll thumb through T.LOOK.scrollbar: `tex` is what we colour,
+--- `hoverOn` the frame whose mouse-over and press count (the thumb itself on
+--- a modern bar, the whole Slider on a legacy one).
+function S.ThumbLook(hoverOn, tex)
+    local st = {}
+    local function Paint() tex:SetColorTexture(T.C4(T.Resolve(LOOK.scrollbar, st).thumb)) end
+    Paint()
+    T.Watch(tex, Paint)
+    if hoverOn and hoverOn.HookScript then
+        hoverOn:HookScript("OnEnter", function() st.hover = true; Paint() end)
+        hoverOn:HookScript("OnLeave", function() st.hover = false; Paint() end)
+        hoverOn:HookScript("OnMouseDown", function() st.dragging = true; Paint() end)
+        hoverOn:HookScript("OnMouseUp", function() st.dragging = false; Paint() end)
+    end
+end
 
 --- The separator between two crumbs.
 ---
@@ -98,12 +132,9 @@ local function Separator(b)
     local d = S.D(b)
     if d.sep or not T.Chevron then return d.sep end
     if not b.CreateTexture then return nil end
-    d.sep = S.Ours(T.Chevron(b, 4))
+    d.sep = S.Ours(T.Chevron(b, LOOK.scrollStep.chevron))
     d.sep:Point("right")
-    local function Paint(self) self:SetColorLines(T.RGBA("textMuted")) end
-    Paint(d.sep)
-    T.Watch(d.sep)
-    d.sep.Paint = Paint
+    S.StepperLook(nil, { chev = d.sep })
     return d.sep
 end
 
@@ -340,14 +371,15 @@ R{
     paint = function(sl, p)
         p:Fade()
         p:FadeSlice()
-        p:Fill("surfaceSunk")
-        p:Border("border")
+        local groove = LOOK.slider.groove
+        p:Fill(groove.fill)
+        p:Border(groove.edge)
         local thumb = sl.GetThumbTexture and select(2, pcall(sl.GetThumbTexture, sl))
         if thumb and thumb.SetColorTexture then
             if thumb.SetAtlas then pcall(thumb.SetAtlas, thumb, nil) end
-            thumb:SetColorTexture(T.RGBA("accent"))
-            S.D(thumb).token = "accent"
-            T.Watch(thumb, function(t) t:SetColorTexture(T.RGBA("accent")) end)
+            local function Paint(t) t:SetColorTexture(T.C4(T.Resolve(LOOK.slider).thumb)) end
+            Paint(thumb)
+            T.Watch(thumb, Paint)
         end
     end,
 }
@@ -365,12 +397,9 @@ R{
     paint = function(b, p)
         p:Fade()
         S.Blank(b)
-        p:Fill("surface2", 0)
-        p:Glyph("close", 10, "textMuted")
-        p:States{ hover = "danger", pressed = "danger" }
-        local d = S.D(b)
-        p:Hook("OnEnter", function() if d.glyph then d.glyph:SetVertexColor(T.RGBA("onAccent")) end end)
-        p:Hook("OnLeave", function() if d.glyph then d.glyph:SetVertexColor(T.RGBA("textMuted")) end end)
+        p:Fill("surface2")
+        p:Glyph("close", LOOK.close.glyphSize, "textMuted")
+        p:States(LOOK.close)
     end,
 }
 
@@ -399,7 +428,7 @@ R{
     paint = function(b, p)
         p:Fade()
         S.Blank(b)
-        p:Fill("surface2", 0)
+        p:Fill("surface2")
         -- Our own maximise/minimise glyphs, which have been sitting unused
         -- in Media since they were drawn. This used to build the icon out of
         -- two chevron.png textures rotated onto a diagonal, which is
@@ -413,14 +442,7 @@ R{
             d.icon:SetSize(10, 10)
         end
         d.icon:SetTexture(S.MEDIA .. (shrink and "minimise" or "maximise") .. ".png")
-        local function Tint(token) d.icon:SetVertexColor(T.RGBA(token)) end
-        d.Tint = Tint
-        Tint("textMuted")
-        T.Watch(d.icon)
-        d.icon.Paint = function() Tint("textMuted") end
-        p:States{ hover = "surface3", pressed = "surfaceSunk" }
-        p:Hook("OnEnter", function() Tint("text") end)
-        p:Hook("OnLeave", function() Tint("textMuted") end)
+        p:States(LOOK.buttonGhost, { glyph = d.icon })
     end,
 }
 
@@ -482,13 +504,17 @@ R{
                     if oke then on = not enabled end
                 end
             end
-            if d.fill then d.fill:SetColorTexture(T.RGBA(on and "surface2" or "surface1")) end
-            if tab.Text then
-                tab.Text:SetTextColor(T.RGBA(off and "textDisabled" or (on and "title" or "textMuted")))
-            end
+            d.on, d.disabled = on and true or false, off and true or false
+            local r = T.Resolve(LOOK.tab, d)
+            if d.fill then d.fill:SetColorTexture(T.C4(r.fill)) end
+            if r.edge then T.SetEdge(tab, r.edge) end
+            if tab.Text then tab.Text:SetTextColor(T.C4(r.text)) end
         end
         d.Sync = Sync
         S.HookPanelTabs()
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
+        if d.fill then T.Watch(d.fill, Sync) end
         p:Hook("OnShow", function() Seat(); Sync() end)
         p:Hook("OnClick", function() C_Timer.After(0, function() Seat(); Sync() end) end)
         Seat()
@@ -509,7 +535,7 @@ R{
         p:Fill("surface2")
         p:Border("borderStrong")
         p:Label(b.Text)
-        p:States{ hover = "surface3", pressed = "surfaceSunk", disabled = "surface1" }
+        p:States(LOOK.button, { label = b.Text })
     end,
 }
 
@@ -526,7 +552,7 @@ R{
         p:Fill("surface2")
         p:Border("borderStrong")
         p:Label(b.Text)
-        p:States{ hover = "surface3", pressed = "surfaceSunk", disabled = "surface1" }
+        p:States(LOOK.button, { label = b.Text })
     end,
 }
 
@@ -550,8 +576,12 @@ R{
         -- Same reasoning as checkButton: the rect is the hit area. A radio
         -- ring is drawn at the check box's size so a column of mixed
         -- controls lines up.
-        local RING = 16
+        local RL = LOOK.radio
+        local RING = RL.ring
         if not d.ring then
+            d.ringFill = S.Ours(b:CreateTexture(nil, "BORDER"))
+            d.ringFill:SetTexture(T.MEDIA .. "circle.png")
+            d.ringFill:SetPoint("CENTER")
             d.ring = S.Ours(b:CreateTexture(nil, "ARTWORK"))
             d.ring:SetTexture(T.MEDIA .. "ring.png")
             d.ring:SetPoint("CENTER")
@@ -563,19 +593,26 @@ R{
                                     math.floor(S.Num(b:GetHeight()) or RING))
         if side < 8 then side = 8 end
         d.ring:SetSize(side, side)
-        d.dot:SetSize(math.max(math.floor(side * 0.42), 3), math.max(math.floor(side * 0.42), 3))
+        d.ringFill:SetSize(side - 2, side - 2)
+        local dot = math.max(math.floor(side * RL.dot / RL.ring + 0.5), 3)
+        d.dot:SetSize(dot, dot)
         local function Sync()
             local on = type(b.GetChecked) == "function" and select(2, pcall(b.GetChecked, b)) or false
-            d.ring:SetVertexColor(T.RGBA(on and "accent" or "borderStrong"))
-            d.dot:SetVertexColor(T.RGBA("accent"))
-            d.dot:SetShown(on and true or false)
+            d.on = on and true or false
+            local r = T.Resolve(RL, d)
+            d.ring:SetVertexColor(T.C4(r.ring))
+            d.ringFill:SetVertexColor(T.C4(r.fill))
+            if r.dot then d.dot:SetVertexColor(T.C4(r.dot)) end
+            d.dot:SetShown(d.on)
         end
         d.Sync = Sync
         p:After("SetChecked", Sync)
         p:Hook("OnClick", Sync)
         p:Hook("OnShow", Sync)
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
         p:Label(b.Text)
-        T.Watch(d.ring); d.ring.Paint = Sync
+        T.Watch(d.ring, Sync)
         Sync()
     end,
 }
@@ -613,7 +650,8 @@ R{
         S.Blank(b)
         p:Fade()
         local d = S.D(b)
-        local BOX = 16
+        local CL = LOOK.checkbox
+        local BOX = CL.box
         if not d.boxFrame then
             -- A frame rather than a bare texture, so the border has corners
             -- to anchor to that are the box's and not the button's.
@@ -630,20 +668,25 @@ R{
                                    math.floor(S.Num(b:GetHeight()) or BOX))
         if side < 8 then side = 8 end
         d.boxFrame:SetSize(side, side)
-        d.tick:SetSize(side - 4, side - 4)
+        d.tick:SetSize(side - (CL.box - CL.tick), side - (CL.box - CL.tick))
+        p:Border("borderStrong", nil, d.boxFrame)
         local function Sync()
             local on = type(b.GetChecked) == "function" and select(2, pcall(b.GetChecked, b)) or false
-            d.box:SetColorTexture(T.RGBA(on and "accent" or "surfaceSunk"))
-            d.tick:SetVertexColor(T.RGBA("onAccent"))
-            d.tick:SetShown(on and true or false)
+            d.on = on and true or false
+            local r = T.Resolve(CL, d)
+            d.box:SetColorTexture(T.C4(r.fill))
+            T.SetEdge(d.boxFrame, r.edge)
+            if r.glyph then d.tick:SetVertexColor(T.C4(r.glyph)) end
+            d.tick:SetShown(d.on)
         end
         d.Sync = Sync
         p:After("SetChecked", Sync)
         p:Hook("OnClick", Sync)
         p:Hook("OnShow", Sync)
-        p:Border("borderStrong", nil, d.boxFrame)
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
         p:Label(b.Text)
-        T.Watch(d.box); d.box.Paint = Sync
+        T.Watch(d.box, Sync)
         Sync()
     end,
 }
@@ -665,14 +708,18 @@ R{
         if not d.chev and T.Chevron then
             -- T.Chevron hands back a frame holding two rotated lines, so
             -- it is pointed with its own Point(), not SetRotation.
-            d.chev = S.Ours(T.Chevron(dd, 5))
+            d.chev = S.Ours(T.Chevron(dd, LOOK.dropdown.chevron))
             d.chev:SetPoint("RIGHT", dd, "RIGHT", -6, 0)
             d.chev:Point("down")
-            d.chev:SetColorLines(T.RGBA("textMuted"))
-            T.Watch(d.chev)
-            d.chev.Paint = function(self) self:SetColorLines(T.RGBA("textMuted")) end
         end
-        p:States{ hover = "surface3", disabled = "surface1" }
+        -- Open is Blizzard's own state (DropdownButtonMixin:IsMenuOpen), and
+        -- it tells us when it changes through OnMenuOpened / OnMenuClosed.
+        p:States(LOOK.dropdown, {
+            label = dd.Text, chev = d.chev,
+            on = function() return type(dd.IsMenuOpen) == "function" and dd:IsMenuOpen() end,
+        })
+        p:After("OnMenuOpened", function() if d.Repaint then d.Repaint() end end)
+        p:After("OnMenuClosed", function() if d.Repaint then d.Repaint() end end)
     end,
 }
 
@@ -696,7 +743,7 @@ R{
 --     can only move a region of this control, to this control, on the edge
 --     Blizzard already used. See the note on it in Core.lua.
 --------------------------------------------------------------------------------
-local SEARCH_PAD   = 6    -- clear space inside our border
+local SEARCH_PAD   = LOOK.input.pad   -- clear space inside our border
 local SEARCH_ICON  = 10   -- Blizzard's icon size
 local SEARCH_GAP   = 5    -- icon to text
 local SEARCH_TEXT  = SEARCH_PAD + SEARCH_ICON + SEARCH_GAP   -- 21
@@ -711,11 +758,15 @@ R{
         p:Fill("surfaceSunk")
         p:Border("borderStrong")
         p:Label(nil, false)
-        e:SetTextColor(T.RGBA("text"))
+        -- The glass follows the Look like ours: the edge's colour while
+        -- focused, the glyph's otherwise.
+        local glass = e.searchIcon
+        p:States(LOOK.input, { label = e, after = function(r)
+            if glass then glass:SetVertexColor(T.C4(S.D(e).focus and r.edge or r.glyph)) end
+        end })
 
         -- The magnifying glass is content, not chrome: recolour, never hide.
         if e.searchIcon then
-            e.searchIcon:SetVertexColor(T.RGBA("textMuted"))
             S.D(e.searchIcon).muted = nil
             e.searchIcon:SetAlpha(1)
             p:Reseat(e.searchIcon, { { "LEFT", SEARCH_PAD, 0 } })
@@ -726,7 +777,7 @@ R{
         if e.clearButton then
             local icon = e.clearButton.Icon
             if icon then
-                icon:SetVertexColor(T.RGBA("textMuted"))
+                icon:SetVertexColor(T.C4(T.Resolve(LOOK.input).glyph))
                 S.D(icon).muted = nil
                 icon:SetAlpha(1)
             end
@@ -736,7 +787,7 @@ R{
         -- The placeholder is a two-point FontString, so both corners move or
         -- it loses its width.
         if e.Instructions then
-            p:Label(e.Instructions, "textDisabled")
+            p:Label(e.Instructions, LOOK.input.rest.placeholder)
             p:Reseat(e.Instructions, { { "TOPLEFT", SEARCH_TEXT, 0 },
                                        { "BOTTOMRIGHT", -SEARCH_RIGHT, 0 } })
         end
@@ -797,7 +848,7 @@ R{
         end
         p:Fill("surfaceSunk")
         p:Border("borderStrong")
-        e:SetTextColor(T.RGBA("text"))
+        p:States(LOOK.input, { label = e })
 
         local function Keep(r)
             if type(r) ~= "table" or not r.SetAlpha then return end
@@ -842,8 +893,8 @@ R{
         end
         p:Fill("surfaceSunk")
         p:Border("borderStrong")
-        e:SetTextColor(T.RGBA("text"))
-        if e.Instructions then p:Label(e.Instructions, "textDisabled") end
+        p:States(LOOK.input, { label = e })
+        if e.Instructions then p:Label(e.Instructions, LOOK.input.rest.placeholder) end
         -- Same reasoning as the search box, without an icon to clear: their
         -- art was 5px outside the rect, ours is on it, so text that looked
         -- inset now sits on the line. TextPad only ever raises an inset, so a
@@ -879,17 +930,10 @@ R{
                 if type(step.Texture) == "table" then S.Mute(step.Texture) end
                 local sd = S.D(step)
                 if not sd.chev and T.Chevron and step.CreateTexture then
-                    sd.chev = S.Ours(T.Chevron(step, 4))
+                    sd.chev = S.Ours(T.Chevron(step, LOOK.scrollStep.chevron))
                     sd.chev:SetPoint("CENTER")
                     sd.chev:Point(k == "Back" and "up" or "down")
-                    local function Paint(self) self:SetColorLines(T.RGBA("textMuted")) end
-                    Paint(sd.chev)
-                    T.Watch(sd.chev)
-                    sd.chev.Paint = Paint
-                    if step.HookScript then
-                        step:HookScript("OnEnter", function() sd.chev:SetColorLines(T.RGBA("text")) end)
-                        step:HookScript("OnLeave", function() sd.chev:SetColorLines(T.RGBA("textMuted")) end)
-                    end
+                    S.StepperLook(step, sd)
                 end
             end
         end
@@ -902,9 +946,9 @@ R{
             d.trackFill:SetAllPoints(track)
         end
         if d.trackFill then
-            d.trackFill:SetColorTexture(T.RGBA("surfaceSunk"))
-            T.Watch(d.trackFill)
-            d.trackFill.Paint = function(self) self:SetColorTexture(T.RGBA("surfaceSunk")) end
+            local function Paint(t) t:SetColorTexture(T.C4(T.Resolve(LOOK.scrollbar).track)) end
+            Paint(d.trackFill)
+            T.Watch(d.trackFill, Paint)
         end
         local thumb = track.Thumb
         if thumb then
@@ -914,16 +958,9 @@ R{
                 td.fill = S.Ours(thumb:CreateTexture(nil, "ARTWORK"))
                 td.fill:SetAllPoints(thumb)
             end
-            if td.fill then
-                td.fill:SetColorTexture(T.RGBA("surface3"))
-                T.Watch(td.fill)
-                td.fill.Paint = function(self) self:SetColorTexture(T.RGBA("surface3")) end
-            end
-            -- The thumb is redrawn from its own texture keys on hover.
-            if thumb.HookScript then
-                thumb:HookScript("OnEnter", function() if td.fill then td.fill:SetColorTexture(T.RGBA("accent")) end end)
-                thumb:HookScript("OnLeave", function() if td.fill then td.fill:SetColorTexture(T.RGBA("surface3")) end end)
-            end
+            -- The thumb is redrawn from its own texture keys on hover; ours
+            -- follows it through the scroll bar Look.
+            if td.fill then S.ThumbLook(thumb, td.fill) end
         end
     end,
 }
@@ -947,8 +984,7 @@ R{
         p:FadeKeys("InsetBorderBottomLeft", "InsetBorderBottomRight",
                    "InsetBorderBottom", "InsetBorderLeft", "InsetBorderRight")
         if type(bar.overlay) == "table" then p:Fade(bar.overlay) end
-        p:Fill("surface1")
-        p:Border("border")
+        p:Surface("raised")
         S.HookNavBar()
         S.NavSeparators(bar)
     end,
@@ -999,9 +1035,9 @@ R{
         local shadow = S.Sub(b, "Left")
         if shadow then S.Mute(shadow) end
 
-        p:Fill("surface1", 0)
+        p:Fill("surface1")
         p:Label(b.text, "textMuted")
-        p:States{ hover = "surface3", pressed = "surfaceSunk" }
+        p:States(LOOK.buttonGhost, { label = b.text })
 
         -- No separator is drawn here. It belongs between two crumbs, so
         -- S.NavSeparators lays them out across the strip instead; see the
@@ -1022,10 +1058,7 @@ R{
             cd.chev = S.Ours(T.Chevron(arrowOn, 4))
             cd.chev:SetPoint("CENTER")
             cd.chev:Point("down")
-            local function Paint(self) self:SetColorLines(T.RGBA("textMuted")) end
-            Paint(cd.chev)
-            T.Watch(cd.chev)
-            cd.chev.Paint = Paint
+            S.StepperLook(nil, cd)
         end
     end,
 }
@@ -1052,7 +1085,13 @@ R{
         p:FadeSlice()
         p:FadeKeys("Top", "Middle", "Bottom", "Background", "BG", "Border",
                    "trackBG", "ScrollUpBorder", "ScrollDownBorder")
-        p:Fill("surfaceSunk")
+        p:Fill("surface2")
+        local track = S.D(bar).fill
+        if track then
+            local function Paint(t) t:SetColorTexture(T.C4(T.Resolve(LOOK.scrollbar).track)) end
+            Paint(track)
+            T.Watch(track, Paint)
+        end
 
         -- The steppers keep working and keep their hit area; only the gold
         -- arrow art goes, replaced by one of our chevrons.
@@ -1064,17 +1103,10 @@ R{
                 p:Fade(step)
                 local sd = S.D(step)
                 if not sd.chev and T.Chevron then
-                    sd.chev = S.Ours(T.Chevron(step, 4))
+                    sd.chev = S.Ours(T.Chevron(step, LOOK.scrollStep.chevron))
                     sd.chev:SetPoint("CENTER")
                     sd.chev:Point(dir)
-                    local function Paint(self) self:SetColorLines(T.RGBA("textMuted")) end
-                    Paint(sd.chev)
-                    T.Watch(sd.chev)
-                    sd.chev.Paint = Paint
-                    if step.HookScript then
-                        step:HookScript("OnEnter", function() sd.chev:SetColorLines(T.RGBA("text")) end)
-                        step:HookScript("OnLeave", function() sd.chev:SetColorLines(T.RGBA("textMuted")) end)
-                    end
+                    S.StepperLook(step, sd)
                 end
             end
         end
@@ -1088,13 +1120,8 @@ R{
         end
         if thumb and thumb.SetColorTexture then
             if thumb.SetAtlas then pcall(thumb.SetAtlas, thumb, nil) end
-            thumb:SetColorTexture(T.RGBA("surface3"))
-            local function Paint(self) self:SetColorTexture(T.RGBA("surface3")) end
-            T.Watch(thumb, Paint)
-            if bar.HookScript then
-                bar:HookScript("OnEnter", function() thumb:SetColorTexture(T.RGBA("accent")) end)
-                bar:HookScript("OnLeave", function() thumb:SetColorTexture(T.RGBA("surface3")) end)
-            end
+            -- A Slider's hover is the whole bar's.
+            S.ThumbLook(bar, thumb)
         end
     end,
 }
@@ -1120,8 +1147,7 @@ R{
     paint = function(f, p)
         p:Fade()
         p:FadeSlice()
-        p:Fill("surfaceSunk")
-        p:Border("border")
+        p:Surface("inset")
     end,
 }
 
@@ -1136,8 +1162,7 @@ R{
     paint = function(f, p)
         p:Fade()
         p:FadeSlice()
-        p:Fill("surface1")
-        p:Border("border")
+        p:Surface("raised")
     end,
 }
 
@@ -1202,10 +1227,11 @@ local function PaintWindow(f, p)
     p:FadeSlice()
     p:FadeKeys("Bg", "TopTileStreaks", "PortraitContainer", "portrait", "Center")
     if type(f.PortraitContainer) == "table" then p:Fade(f.PortraitContainer) end
-    p:Fill("surface0", nil, nil, FillTarget(f))
-    p:Border("border")
+    local W = LOOK.window.rest
+    p:Fill(W.fill, nil, nil, FillTarget(f))
+    p:Border(W.edge)
     local title = (type(f.TitleContainer) == "table" and f.TitleContainer.TitleText) or f.TitleText
-    if title then p:Label(title, "title") end
+    if title then p:Label(title, W.title) end
     if type(f.TitleContainer) == "table" then p:Fade(f.TitleContainer) end
 end
 
@@ -1247,7 +1273,6 @@ R{
         p:Fade()
         p:FadeSlice()
         p:FadeKeys("Bg", "Background", "Center")
-        p:Fill("surface1", nil, nil, FillTarget(f))
-        p:Border("border")
+        p:Surface("raised", nil, nil, FillTarget(f))
     end,
 }

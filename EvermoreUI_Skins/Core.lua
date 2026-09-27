@@ -306,32 +306,74 @@ function Painter:Glyph(name, size, token)
     return self
 end
 
---- Repaint the fill on hover, press and disable. The tokens are ours, the
---- states are Blizzard's own scripts.
-function Painter:States(map)
+--- Repaint through a Look on hover, press, focus and disable, from
+--- Blizzard's own scripts. The same Look, and the same T.Resolve, that our
+--- widget of that kind is drawn with, so the two cannot drift.
+---
+--- What it paints: the fill (Painter:Fill), the edge (Painter:Border, on
+--- `opts.edgesOn` when the border lives on a box inside the button), the
+--- label (`opts.label`, a font string or an edit box), the glyph
+--- (Painter:Glyph, or `opts.glyph`) and a chevron (`opts.chev`). An edit box
+--- also follows its focus. `opts.on` returns whether the control is on
+--- (checked, selected, open).
+---
+--- State lives in S.D(obj) as hover / pressed / focus / disabled / on, the
+--- names T.Resolve reads.
+function Painter:States(look, opts)
     local obj, d = self.obj, S.D(self.obj)
-    if d.states then d.stateMap = map; return self end
-    d.states, d.stateMap = true, map
+    d.look, d.stateOpts = look, opts or d.stateOpts or {}
+    if d.states then d.Repaint(); return self end
+    d.states = true
+    local out = {}
     local function Repaint()
-        local m = d.stateMap or {}
-        local token = d.fillToken
-        if obj.IsEnabled and not obj:IsEnabled() then token = m.disabled or token
-        elseif d.pressed then token = m.pressed or token
-        elseif d.hovered then token = m.hover or token end
-        if d.fill then d.fill:SetColorTexture(T.RGBA(token, d.fillAlpha)) end
+        local o = d.stateOpts
+        local okE, enabled = true, true
+        if obj.IsEnabled then okE, enabled = pcall(obj.IsEnabled, obj) end
+        d.disabled = okE and enabled == false or false
+        if o.on then
+            local okO, on = pcall(o.on)
+            d.on = okO and on and true or false
+        end
+        local r = T.Resolve(d.look, d, out)
+        -- The Look's own alpha: a transparent rest ("none") that fills on
+        -- hover is a Look, not a Fill with alpha 0.
+        if d.fill and r.fill then d.fill:SetColorTexture(T.C4(r.fill)) end
+        local edgesOn = o.edgesOn or obj
+        if r.edge and EV.Pixel:EdgesOf(edgesOn) then T.SetEdge(edgesOn, r.edge) end
+        if o.label and r.text and o.label.SetTextColor then o.label:SetTextColor(T.C4(r.text)) end
+        local glyph = o.glyph or d.glyph
+        if glyph and r.glyph then glyph:SetVertexColor(T.C4(r.glyph)) end
+        if o.chev and r.glyph then o.chev:SetColorLines(T.C4(r.glyph)) end
+        if o.after then o.after(r) end
     end
     d.Repaint = Repaint
     if obj.HookScript then
-        obj:HookScript("OnEnter", function() d.hovered = true; Repaint() end)
-        obj:HookScript("OnLeave", function() d.hovered = false; Repaint() end)
+        obj:HookScript("OnEnter", function() d.hover = true; Repaint() end)
+        obj:HookScript("OnLeave", function() d.hover = false; d.pressed = false; Repaint() end)
         obj:HookScript("OnMouseDown", function() d.pressed = true; Repaint() end)
         obj:HookScript("OnMouseUp", function() d.pressed = false; Repaint() end)
         obj:HookScript("OnShow", Repaint)
+        if obj.GetObjectType and obj:GetObjectType() == "EditBox" then
+            obj:HookScript("OnEditFocusGained", function() d.focus = true; Repaint() end)
+            obj:HookScript("OnEditFocusLost", function() d.focus = false; Repaint() end)
+        end
     end
     for _, m in ipairs({ "Enable", "Disable", "SetEnabled" }) do
         if type(obj[m]) == "function" then pcall(hooksecurefunc, obj, m, Repaint) end
     end
+    -- The theme repaints through the same path.
+    if d.fill then T.Watch(d.fill, Repaint) else T.Watch(obj, Repaint) end
     Repaint()
+    return self
+end
+
+--- A surface Look (window, raised, inset, control) in one: fill and border
+--- in its rest colours. `on` as for Fill.
+function Painter:Surface(look, alpha, sub, on)
+    if type(look) == "string" then look = T.LOOK[look] end
+    local r = look and look.rest or T.LOOK.raised.rest
+    self:Fill(r.fill or "surface1", alpha, sub, on)
+    if r.edge and r.edge ~= "none" then self:Border(r.edge) end
     return self
 end
 
