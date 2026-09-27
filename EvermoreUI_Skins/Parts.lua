@@ -426,9 +426,12 @@ R{
         p:Fill("surfaceSunk")
         p:Border("borderStrong")
         -- The pop-up's field is user-scaled (UserScaledFrameTemplate) and
-        -- centred, so its edges land on part pixels, and an unsnapped
-        -- one-pixel line there can round away: the right edge did. These are
-        -- still, so the renderer's snapping is only a gain.
+        -- centred, so its edges land on part pixels. Unsnapped, a one-pixel
+        -- line there rounded away (the right edge); snapped, a line that is a
+        -- hair under one pixel (the scale's float error) can round to nothing
+        -- (then the left). Snapped, and a thousandth over a pixel: both ends
+        -- round, and a width of at least one pixel always keeps one.
+        EV.Pixel:Edges(e, { size = 1.001 })
         local rec = EV.Pixel:EdgesOf(e)
         for _, t in ipairs(rec and rec.edges or {}) do
             EV.Pixel.KeepSnap(t, true)
