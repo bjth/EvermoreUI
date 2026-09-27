@@ -562,6 +562,75 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  1d. Page button        the spellbook-style previous and next page arrows
+--     PagingControlsPrev/NextPageButtonTemplate (Blizzard_PagedContent: the
+--     spellbook, collections, housing) and every older window that reuses the
+--     same art on a bare Button (mail, merchant, the pet stable). A 32x32
+--     button whose Normal/Pushed/Disabled textures are the gold
+--     UI-SpellbookIcon-PrevPage / -NextPage files, with UI-Common-MouseHilight
+--     over them. Only the file says what it is, so that is the print.
+--
+--     Ours is the button Look in a box of LOOK.pager.box, centred in
+--     Blizzard's 32px hit area (the paging layout frames measure the button,
+--     so the button keeps its size), with our chevron. Disabled at the first
+--     and last page comes from Blizzard's own SetEnabled.
+--------------------------------------------------------------------------------
+local PAGE_FILES = {
+    prev = "Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up",
+    next = "Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up",
+}
+
+local function PageDir(b)
+    local ok, n = pcall(b.GetNormalTexture, b)
+    if not (ok and n) then return nil end
+    if S.ArtIsFile(n, PAGE_FILES.prev) then return "left" end
+    if S.ArtIsFile(n, PAGE_FILES.next) then return "right" end
+    return nil
+end
+
+R{
+    name = "pageButton",
+    type = "Button",
+    test = function(b)
+        -- The character window's pane toggle wears the same art, swapped in
+        -- Lua as the pane folds (CharacterFrame.lua, SetRightPaneCollapsed);
+        -- its pack draws it, pointing whichever way the pane will go.
+        local cf = _G.CharacterFrame
+        if cf and b == rawget(cf, "RightPaneToggleButton") then return false end
+        return type(b.GetNormalTexture) == "function" and PageDir(b) ~= nil
+    end,
+    paint = function(b, p)
+        local dir = PageDir(b)
+        local PL = LOOK.pager
+        S.Blank(b)
+        p:Fade()
+        -- A label some windows hang on the button ("Prev"/"Next" on the mail
+        -- inbox) is a loose FontString, not the button's own: the chevron says it.
+        for _, r in ipairs(S.Regions(b)) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" and not S.ours[r] then r:SetAlpha(0) end
+        end
+        local d = S.D(b)
+        if not d.box then
+            d.box = S.Ours(CreateFrame("Frame", nil, b))
+            d.box:SetPoint("CENTER")
+            d.box:EnableMouse(false)
+            d.chev = S.Ours(T.Chevron(d.box, PL.chevron))
+            d.chev:SetPoint("CENTER")
+        end
+        local side = math.min(PL.box, math.floor(S.Num(b:GetWidth()) or PL.box),
+                                      math.floor(S.Num(b:GetHeight()) or PL.box))
+        d.box:SetSize(side, side)
+        d.chev:Point(dir or "right")
+        p:Fill(LOOK.button.rest.fill, nil, nil, d.box)
+        p:Border(LOOK.button.rest.edge, nil, d.box)
+        local boxFill = S.D(d.box).fill
+        p:States(LOOK.button, { edgesOn = d.box, chev = d.chev, after = function(r)
+            if boxFill and r.fill then boxFill:SetColorTexture(T.C4(r.fill)) end
+        end })
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  2. Bottom tab          PanelTabButtonTemplate, 19 inherits
 --     keys: Left/Middle/Right + LeftActive/MiddleActive/RightActive
 --------------------------------------------------------------------------------
@@ -1409,15 +1478,46 @@ R{
 
 --------------------------------------------------------------------------------
 --  9h. Spellbook item     SpellBookItemTemplate: one spell in the spellbook
---     Blizzard picks its art per spell (SpellBookItemMixin:UpdateArtSet: a
---     square set for actives, a circle set for passives) and re-applies the
---     border atlas and icon mask on every page, and the items are pooled, so
---     one frame is active on this page and passive on the next. So ours is
---     applied after every UpdateArtSet: an active spell gets S.IconWell, its
---     mask taken off so the crop is square; a passive keeps Blizzard's round
---     mask and gets a thin ring of ours instead of the frame. The same
---     square-and-round split as the kit.
+--     (Blizzard_PlayerSpells/SpellBook/Blizzard_SpellBookItem.xml).
+--
+--     A 40px icon button at the item's LEFT with its text 50px in, and nothing
+--     behind either but a soft Backplate glow. On our flat surface that is an
+--     icon floating next to a line of text. Ours is the kit's tile: a card of
+--     our own round the whole item (8px of margin to the icon's left, the
+--     grid's own 10-15px gaps between cards), lighter under the mouse, dimmed
+--     for a spell not learned yet, and a step quieter for a passive.
+--
+--     Blizzard picks the icon art per spell (UpdateArtSet: square for actives,
+--     round for passives) and the frames are pooled, so one frame is active on
+--     this page and passive on the next. So ours is re-applied after every
+--     UpdateVisuals: an active spell gets S.IconWell with the mask off so the
+--     crop is square; a passive keeps Blizzard's round mask and gets our ring.
+--
+--     Two looping animations are taken out at the source, their textures
+--     cleared (the atlases are only ever set in XML, so it stays cleared):
+--       ActionBarHighlight  spellbook-item-unassigned-glow, pulsing forever on
+--                           every spell that is on none of your bars
+--       BorderSheen         talents-sheen-node, a sweep across every icon
+--     The first carries information, so it becomes a static copper mark in
+--     the card's corner, shown from the same actionBarStatus Blizzard reads.
 --------------------------------------------------------------------------------
+local TILE_PAD  = 8     -- card edge to the icon, on the left
+local TILE_TEXT = 6     -- text to the card's right edge
+local TILE_MARK = 5     -- the "not on your bars" mark
+
+local function Passive(item)
+    local ok, v = pcall(function() return item.spellBookItemInfo and item.spellBookItemInfo.isPassive end)
+    return ok and v == true
+end
+
+local function MissingFromBars(item)
+    local ok, v = pcall(function()
+        return item.actionBarStatus ~= nil and ActionButtonUtil and ActionButtonUtil.ActionBarActionStatus
+            and item.actionBarStatus == ActionButtonUtil.ActionBarActionStatus.MissingFromAllBars
+    end)
+    return ok and v and true or false
+end
+
 R{
     name = "spellItem",
     keys = { "Backplate", "TextContainer", "Button" },
@@ -1426,41 +1526,120 @@ R{
         local btn = item.Button
         local icon = S.Alive(btn) and btn.Icon
         if not (icon and icon.SetTexCoord) then return end
-        local d = S.D(btn)
+        local d, bd = S.D(item), S.D(btn)
         local well = S.IconWell(icon)
         if not well then return end
         S.PainterFor(btn):Border("borderStrong", nil, well)
-        if not d.ring then
-            d.ring = S.Ours(btn:CreateTexture(nil, "OVERLAY", nil, 6))
-            d.ring:SetTexture(T.MEDIA .. "ring.png")
-            d.ring:SetPoint("TOPLEFT", icon, "TOPLEFT", -2, 2)
-            d.ring:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 2, -2)
+
+        -- The two loops, cleared for good.
+        for _, key in ipairs({ "ActionBarHighlight", "BorderSheen" }) do
+            local t = btn[key]
+            if t and t.SetTexture then pcall(t.SetTexture, t, nil); t:SetAlpha(0) end
         end
+
+        if not d.tile then
+            d.tile = S.Ours(CreateFrame("Frame", nil, item))
+            d.tile:SetPoint("TOPLEFT", item, "TOPLEFT", -TILE_PAD, 0)
+            d.tile:SetPoint("BOTTOMRIGHT", item, "BOTTOMRIGHT", 0, 0)
+            d.tile:SetFrameLevel(item:GetFrameLevel())
+            d.tile:EnableMouse(false)
+            d.mark = S.Ours(d.tile:CreateTexture(nil, "ARTWORK"))
+            d.mark:SetSize(TILE_MARK, TILE_MARK)
+            d.mark:SetPoint("TOPRIGHT", d.tile, "TOPRIGHT", -4, -4)
+        end
+        if not bd.ring then
+            bd.ring = S.Ours(btn:CreateTexture(nil, "OVERLAY", nil, 6))
+            bd.ring:SetTexture(T.MEDIA .. "ring.png")
+            bd.ring:SetPoint("TOPLEFT", icon, "TOPLEFT", -2, 2)
+            bd.ring:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 2, -2)
+        end
+        p:Fill(LOOK.tile.rest.fill, nil, nil, d.tile)
+        p:Border("border", nil, d.tile)
+
+        -- Text: our face, body and muted; clear of the card's right edge.
+        p:Label(item.Name, "text")
+        p:Label(item.SubName, "textMuted")
+        p:Label(item.RequiredLevel, "textMuted")
+        if item.TextContainer then
+            p:Reseat(item.TextContainer, { { "LEFT", 50, -1 }, { "RIGHT", -TILE_TEXT, -1 } })
+        end
+
+        local tileFill = S.D(d.tile).fill
+        local function Sync()
+            local passive = Passive(item)
+            d.disabled = item.isUnlearned == true
+            local r = T.Resolve(passive and LOOK.tileQuiet or LOOK.tile, d)
+            if tileFill and r.fill then tileFill:SetColorTexture(T.C4(r.fill)) end
+            if r.edge then T.SetEdge(d.tile, r.edge) end
+            if r.mark then d.mark:SetColorTexture(T.C4(r.mark)) end
+            d.mark:SetShown(MissingFromBars(item) and not d.disabled)
+        end
+
         local function Apply()
             S.Mute(btn.Border)
             S.Mute(btn.BorderShadow)
             S.Mute(btn.IconHighlight)
-            local ok, passive = pcall(function() return item.spellBookItemInfo and item.spellBookItemInfo.isPassive end)
-            passive = ok and passive == true
-            if passive then
-                if d.unmasked and btn.IconMask then pcall(icon.AddMaskTexture, icon, btn.IconMask) end
-                d.unmasked = false
+            if Passive(item) then
+                if bd.unmasked and btn.IconMask then pcall(icon.AddMaskTexture, icon, btn.IconMask) end
+                bd.unmasked = false
                 icon:SetTexCoord(0, 1, 0, 1)
                 well:Hide()
-                d.ring:Show()
+                bd.ring:Show()
             else
-                if not d.unmasked and btn.IconMask then pcall(icon.RemoveMaskTexture, icon, btn.IconMask) end
-                d.unmasked = true
+                if not bd.unmasked and btn.IconMask then pcall(icon.RemoveMaskTexture, icon, btn.IconMask) end
+                bd.unmasked = true
                 local c = S.ICON_CROP
                 icon:SetTexCoord(c, 1 - c, c, 1 - c)
                 well:Show()
-                d.ring:Hide()
+                bd.ring:Hide()
             end
-            d.ring:SetVertexColor(S.Colour("borderStrong"))
+            bd.ring:SetVertexColor(S.Colour("borderStrong"))
+            Sync()
         end
         p:After("UpdateArtSet", Apply)
-        T.Watch(d.ring, Apply)
+        p:After("UpdateVisuals", Apply)
+        p:After("UpdateActionBarAnim", Sync)
+        -- Blizzard lights the Backplate on hover (hoverBackplateAlpha); the
+        -- card is the hover now, so it stays down.
+        p:After("OnIconEnter", function()
+            if item.Backplate then item.Backplate:SetAlpha(0) end
+            d.hover = true; Sync()
+        end)
+        p:After("OnIconLeave", function() d.hover = false; Sync() end)
+        S.Own(Sync, d.tile)
+        T.Watch(bd.ring, Apply)
         Apply()
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9h2. Spellbook header  SpellBookHeaderTemplate: the school's name over its
+--     spells. A parchment backplate and a gold scroll divider (both art),
+--     the name in SystemFont_Huge2. Ours: the name in our bold body colour
+--     and a plain rule under it, from the name's left edge to the frame's
+--     right, which the grid stretches to the column (autoExpandHeaders).
+--------------------------------------------------------------------------------
+R{
+    name = "spellHeader",
+    keys = { "Backplate", "Text", "Border" },
+    art  = { Backplate = "spellbook%-list%-backplate" },
+    paint = function(f, p)
+        S.Mute(f.Backplate)
+        S.Mute(f.Border)
+        p:Label(f.Text, "text", true)
+        local d = S.D(f)
+        if not d.rule then
+            d.rule = S.Ours(f:CreateTexture(nil, "BORDER"))
+            d.rule:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", -TILE_PAD, 6)
+            d.rule:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 6)
+            if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(d.rule) end
+            local function Paint()
+                d.rule:SetColorTexture(S.Colour("border"))
+                d.rule:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1)
+            end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
     end,
 }
 
@@ -1920,6 +2099,7 @@ S.FillTarget = FillTarget
 --  show, never assumed.
 --------------------------------------------------------------------------------
 local TITLE_BAND = 20
+S.TITLE_BAND = TITLE_BAND   -- packs lay bands under it
 
 local function ContainerOffsets(tc)
     local left, right = 58, 24

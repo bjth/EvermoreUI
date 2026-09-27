@@ -20,7 +20,9 @@ EvermoreUI.CHANGELOG = {
             } },
             { title = "Changed", items = {
                 "**One look for every control.** Our buttons, boxes, tabs, lists and scroll bars, and Blizzard's own once skinned, now come from the same recipe, so a skinned window's buttons match ours in every state. Close buttons turn red on hover, the selected tab and window titles are gold, a greyed-out control shows it in its own colours rather than fading, and icon wells on the action bars, bags and quest items are all the same.",
-                "**Big windows open smoothly.** Skinning a large window, like professions or the auction house, is spread over a few frames instead of done all at once, so it no longer stutters as it opens. Windows skinned in the background after you log in share the same small allowance each frame. Lists that rebuild themselves, after a sort or a filter, keep their look.",
+                "**Windows open without a stutter.** Skinning a window as it opens does far less work than it did, and a large one, like professions or the auction house, is spread over a few frames instead of done all at once. Windows skinned in the background after you log in share the same small allowance each frame. Lists that rebuild themselves, after a sort or a filter, keep their look.",
+                "**The spellbook, redone.** The school tabs, the search box and the filter button sit on a tool bar under the title, all the same height; each spell is a card, with passives a step quieter and spells not yet learned dimmed; the pager has a footer of its own with flat arrows. The pulsing glow and the sweep over every icon are gone: a spell on none of your bars has a small copper mark in its corner instead.",
+                "**Page arrows** in every window that uses the spellbook's (mail, the merchant, collections) are flat buttons with a chevron.",
             } },
             { title = "Fixes", items = {
                 "Parts of the options window and edit mode could stop following a contrast or colour change partway through a session, until a reload.",

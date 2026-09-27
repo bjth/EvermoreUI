@@ -94,6 +94,10 @@ L.close = {
     disabled = { glyph = "textDisabled" },
 }
 
+L.pager = {                                    -- previous / next page: the button Look, this size
+    box = 24, chevron = 5,
+}
+
 --------------------------------------------------------------------------------
 --  Choices
 --------------------------------------------------------------------------------
@@ -225,6 +229,16 @@ L.row = {                                      -- striped rows in a table or opt
     rest  = { fill = { "surfaceSunk", a = 0.25 }, highlight = "none" },
     on    = { fill = { "surfaceSunk", a = 0.5 } },   -- every other row
     hover = { highlight = { "surface2", a = 0.35 } },
+}
+L.tile = {                                     -- a card holding one thing: a spell, an ability
+    rest     = { fill = "surface1", edge = { "border", "surface1", 0.5 }, mark = "accent" },
+    hover    = { fill = "surface2", edge = "borderStrong" },
+    disabled = { fill = { "surface1", a = 0.45 }, edge = { "border", a = 0.45 } },   -- not learned yet
+}
+L.tileQuiet = {                                -- the same card for something passive: a step back
+    rest     = { fill = { "surface1", a = 0.55 }, edge = { "border", a = 0.55 }, mark = "accent" },
+    hover    = { fill = "surface2", edge = "borderStrong" },
+    disabled = { fill = { "surface1", a = 0.3 }, edge = { "border", a = 0.35 } },
 }
 L.listItem = {                                 -- a pickable line in a list or sidebar
     rest    = { fill = "none", text = "textMuted" },

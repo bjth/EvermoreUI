@@ -57,36 +57,6 @@ end
 --  Shared bits
 --------------------------------------------------------------------------------
 
---- Blizzard's paging arrows are plain Buttons with file art in their state
---- textures and no template, so no fingerprint reaches them and they stay
---- as raised gold icons on a flat panel. Swap the art for one of our
---- chevrons and leave the button exactly where it is.
-local function PageButton(k, btn, dir)
-    if not (btn and btn.CreateTexture) then return end
-    S.Blank(btn)
-    k:Fade(btn)
-    local d = S.D(btn)
-    if not d.chev and T.Chevron then
-        d.chev = S.Ours(T.Chevron(btn, 5))
-        d.chev:SetPoint("CENTER")
-        d.chev:Point(dir)
-        local function Paint(self) self:SetColorLines(T.RGBA("textMuted")) end
-        Paint(d.chev)
-        T.Watch(d.chev)
-        d.chev.Paint = Paint
-        k:Hook(btn, "OnEnter", function() d.chev:SetColorLines(T.RGBA("text")) end)
-        k:Hook(btn, "OnLeave", function() d.chev:SetColorLines(T.RGBA("textMuted")) end)
-    end
-    -- The label ("Prev"/"Next") is a loose FontString region rather than the
-    -- button's designated font string, so GetFontString() does not find it.
-    for _, r in ipairs(S.Regions(btn)) do
-        if r.GetObjectType and r:GetObjectType() == "FontString" and not S.ours[r] then
-            r:SetAlpha(0)
-        end
-    end
-end
-
-
 --- Blizzard's row separators are bare colour textures: no file, no atlas, so
 --- nothing generic can recognise one. On a row that is otherwise stripped the
 --- only texture left in that shape is the rule itself, so identify it that
@@ -109,6 +79,46 @@ local function Rule(row)
     end
 end
 
+--- A band of our own across a window: a strip in the rail colour with a
+--- hairline on one side (`rule` = "top" or "bottom"), under everything the
+--- window draws. The tool bars and footers packs lay out controls on, so that
+--- a row of tabs or a pager sits ON something rather than in space. Created
+--- once per host and key; `place` anchors it (it is only ever ours to move).
+local BAND_FILL = { "surfaceSunk", a = 0.5 }    -- between the window and a well: the kit's rail
+
+local function Band(host, key, rule, place)
+    local d = S.D(host)
+    d.bands = d.bands or {}
+    local b = d.bands[key]
+    if not b then
+        b = S.Ours(CreateFrame("Frame", nil, host))
+        b:EnableMouse(false)
+        b:SetFrameLevel(host:GetFrameLevel())
+        b.fill = S.Ours(b:CreateTexture(nil, "BACKGROUND", nil, -5))
+        b.fill:SetAllPoints(b)
+        b.rule = S.Ours(b:CreateTexture(nil, "BORDER", nil, -8))
+        if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(b.rule) end
+        if rule == "top" then
+            b.rule:SetPoint("BOTTOMLEFT", b, "TOPLEFT")
+            b.rule:SetPoint("BOTTOMRIGHT", b, "TOPRIGHT")
+        else
+            b.rule:SetPoint("TOPLEFT", b, "BOTTOMLEFT")
+            b.rule:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT")
+        end
+        local function Paint()
+            b.fill:SetColorTexture(S.Colour(BAND_FILL))
+            b.rule:SetColorTexture(S.Colour("border"))
+            b.rule:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(b)) or 1)
+        end
+        Paint()
+        T.Watch(b.fill, Paint)
+        d.bands[key] = b
+    end
+    b:ClearAllPoints()
+    place(b)
+    return b
+end
+
 --------------------------------------------------------------------------------
 --  MailFrame
 --
@@ -121,7 +131,8 @@ end
 --    * The stationery backgrounds on the send pane are set in Lua, so they
 --      carry no atlas and no file in the XML at all. Nothing but a pack can
 --      know they are there.
---    * PrevPageButton and NextPageButton are bare Buttons with file art.
+--    * PrevPageButton and NextPageButton carry the spellbook's page art, so
+--      the pageButton part has them.
 --    * The attachment slots are a grid of 16 buttons whose slot art is
 --      Blizzard's, and which we want as our own wells.
 --    * The seven inbox rows are the reason an empty mailbox looked like
@@ -146,8 +157,6 @@ P{
         local inbox = f.InboxFrame or InboxFrame
         if inbox then
             k:Art(inbox, "Interface\\MailFrame\\UI-MailFrameBG")
-            PageButton(k, _G.InboxPrevPageButton, "left")
-            PageButton(k, _G.InboxNextPageButton, "right")
         end
 
         -- Inbox rows. INBOXITEMS_TO_DISPLAY is 7; read it rather than assume.
@@ -443,34 +452,70 @@ P{
 --------------------------------------------------------------------------------
 --  PlayerSpellsFrame: the spellbook (Blizzard_PlayerSpells/Camelot/SpellBook).
 --
+--  Blizzard's geometry, from Blizzard_PlayerSpellsFrame.xml,
+--  Blizzard_SpellBookFrame.xml and Camelot's Blizzard_SpellBookTemplates.xml:
+--
+--    PlayerSpellsFrame     720 tall with the book open (spellBookHeight)
+--    SpellBookFrame        702 tall, BOTTOMLEFT y=4: its top is 14 below ours
+--    CategoryTabSystem     TOPLEFT x=70 y=-26 of the book
+--    SettingsDropdown      15x16 arrow, TOPRIGHT x=-30 y=-27
+--    SearchBox             300x30, RIGHT of the dropdown's LEFT x=-5 y=4
+--    PagedSpellsFrame      from y=-50 of the book to its bottom
+--      View1 / View2       680x590, TOPLEFT x=85 / TOPRIGHT x=-50, y=-45
+--      PagingControls      BOTTOMRIGHT x=-75 y=40, 32px arrows and a label
+--
+--  So the tabs, the search box and a 15px arrow sat at three different
+--  heights on the bare surface, with nothing behind them, and the pager
+--  floated in the bottom corner. Ours, in the kit's structure:
+--
+--    a tool bar      under the title bar down to where the spells start
+--                    (14 + 50 - the title band and its rule = 42px): the
+--                    school tabs on its left, the filter button (30px, our
+--                    button) and the search box (30px) on its right, all on
+--                    its centre line
+--    the page        the grid pulled up under the tool bar, and centred: the
+--                    same margin both sides, and a rule between the two
+--                    pages when the book is open wide
+--    a footer        40px along the bottom holding the pager on its right
+--
 --  The school tabs are TabSystem tabs in square mode
---  (Blizzard_SharedXML/Shared/TabSystem/TabSystemTemplates.lua): a 36x35 icon
---  centred on a button 44 wide (icon + 8) and 32 tall, masked by SquareMask
---  anchored 2px in from the top and right only. So the icon overhangs the
---  box panelTab draws on the button, and loses two pixels on two sides.
+--  (Blizzard_SharedXML/Shared/TabSystem/TabSystemTemplates.lua): a 36px icon
+--  centred on a 44x32 button. The button is left alone (a layout frame owns
+--  it); the box is a square of its height, centred, the icon inside it.
 --
---  The button itself is left alone: it is a child of a layout frame, and
---  resizing it would mean asking Blizzard's layout to run from our code.
---  Instead the box moves to a square of the button's own height, centred,
---  and the icon shrinks to sit inside it.
---
---  The page art (the parchment) can be hidden with a Skins setting, off by
---  default. With it hidden the window's own surface shows through, and the
---  spell names are lifted to our text colour on every page turn.
+--  The page art (the parchment) can be hidden with a Skins setting.
 --------------------------------------------------------------------------------
 local TAB_H = 32                 -- TabSystemButtonTemplate's height
 local TAB_ICON = TAB_H - 8       -- inside a 1px border with a 3px gap
+local TAB_W = 44                 -- the square-mode button: icon + 8
+
+local BOOK = {
+    top      = 14,               -- 720 - 702 - 4: the book's top below the window's
+    spells   = 50,               -- PagedSpellsFrame's y in the book
+    footer   = 40,
+    pad      = 12,               -- band edge to its first and last control
+    control  = 30,               -- the filter button and the search box
+    gap      = 6,                -- search box to filter button
+    viewW    = 680,              -- PagedSpellsView templates
+    viewTop  = 12,               -- tool bar to the first heading
+    pageW    = 806,              -- minimizedWidth: one page of the book
+}
+BOOK.bar = BOOK.top + BOOK.spells - (S.TITLE_BAND or 20) - 2
+-- Centre a view on its page, counting the spell cards' 8px overhang on the left.
+BOOK.viewX = math.floor((BOOK.pageW - BOOK.viewW + 8) / 2)
 
 local function IconTabState(tab)
     local d = S.D(tab)
     if not d.iconBox then return end
     local on = tab.isSelected
-    d.iconBox.fill:SetColorTexture(T.RGBA(on and "surface2" or "surfaceSunk"))
-    EV.Pixel:SetEdgeColor(d.iconBox, T.RGBA(on and "accent" or "border"))
+    local hover = tab.IsMouseOver and tab:IsMouseOver()
+    local r = T.Resolve(T.LOOK.slot, { on = on, hover = hover })
+    d.iconBox.fill:SetColorTexture(T.C4(r.fill))
+    T.SetEdge(d.iconBox, r.edge)
     if tab.Icon then
-        local hot = on or (tab.IsMouseOver and tab:IsMouseOver())
+        local hot = on or hover
         tab.Icon:SetDesaturated(not hot)
-        tab.Icon:SetAlpha(hot and 1 or 0.75)
+        tab.Icon:SetAlpha(hot and 1 or 0.7)
     end
 end
 
@@ -496,6 +541,10 @@ local function IconTab(k, tab)
         k:Hook(tab, "OnEnter", function() IconTabState(tab) end)
         k:Hook(tab, "OnLeave", function() IconTabState(tab) end)
     end
+    -- The selection glow Blizzard shows on the chosen square tab.
+    for _, key in ipairs({ "SquareBackground", "SquareBackgroundActive", "SquareBackgroundActiveGlow" }) do
+        if tab[key] then S.Mute(tab[key]) end
+    end
     k:Size(tab.Icon, TAB_ICON, TAB_ICON)
     tab.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- the icon's own baked edge
     if tab.IconMask then
@@ -507,41 +556,22 @@ end
 
 local PAGE_ART = { "BookBGLeft", "BookBGRight", "BookBGHalved", "BookCornerFlipbook", "Bookmark" }
 
--- Each spell has a Backplate (atlas spellbook-item-backplate) at 25% that
--- goes to 100% on hover (SpellBookItemMixin, defaultBackplateAlpha /
--- hoverBackplateAlpha). "backplate" is in S.ORNATE, so the walk mutes it to
--- 0, and OnIconLeave then put it back to Blizzard's 25% rather than our 0:
--- every spell you had hovered kept a smudge. It is a hover glow now: full on
--- hover (Blizzard's OnIconEnter), nothing at rest (our post-hook on leave).
--- Blizzard only ever changes its alpha, never its colour, so the tint is
--- ours: darkened into the stone while the parchment is hidden.
-local BACKPLATE_DARK = { 0.42, 0.36, 0.30 }
+local function HidingPages()
+    return S.module and S.module.db and S.module.db.hideSpellbookPages and true or false
+end
 
-local function LiftPage(paged, hide)
+--- Every frame on the page: walked (pooled frames come and go with the page),
+--- and any text still dark from the parchment lifted.
+local function DressPage(k, paged)
     if not (paged and paged.GetFrames) then return end
     local ok, frames = pcall(paged.GetFrames, paged)
     if not ok or type(frames) ~= "table" then return end
     for _, fr in ipairs(frames) do
+        k:Dress(fr)
         S.LiftText(fr)
         if fr.TextContainer then S.LiftText(fr.TextContainer) end
-        local bp = fr.Backplate
-        if bp and bp.SetVertexColor then
-            if hide then bp:SetVertexColor(BACKPLATE_DARK[1], BACKPLATE_DARK[2], BACKPLATE_DARK[3])
-            else bp:SetVertexColor(1, 1, 1) end
-            local d = S.D(fr)
-            if not d.backplateHooked and type(fr.OnIconLeave) == "function" then
-                d.backplateHooked = true
-                hooksecurefunc(fr, "OnIconLeave", function(self2)
-                    if self2.Backplate then self2.Backplate:SetAlpha(0) end
-                end)
-            end
-            -- Pooled frames can arrive carrying the last spell's leave alpha.
-            if not (fr.IsMouseOver and fr:IsMouseOver()) then bp:SetAlpha(0) end
-        end
+        if fr.Backplate then fr.Backplate:SetAlpha(0) end
     end
-end
-local function HidingPages()
-    return S.module and S.module.db and S.module.db.hideSpellbookPages and true or false
 end
 
 P{
@@ -551,21 +581,47 @@ P{
         local book = f.SpellBookFrame
         if not book then return end
 
+        -- The tool bar, the whole width of the window, under our title bar.
+        local bar = Band(book, "toolbar", "bottom", function(b)
+            local y = -((S.TITLE_BAND or 20) + 2)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, y)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, y)
+            b:SetHeight(BOOK.bar)
+        end)
+
         local tabs = book.CategoryTabSystem
         if tabs then
+            -- The first box sits `pad` in: the button is wider than its box.
+            k:Move(tabs, "LEFT", bar, "LEFT", BOOK.pad - (TAB_W - TAB_H) / 2, 0)
             if tabs.tabs then for _, tab in ipairs(tabs.tabs) do IconTab(k, tab) end end
-            local d = S.D(tabs)
-            if not d.iconTabsHooked then
-                d.iconTabsHooked = true
+            k:Once(tabs, "iconTabs", function()
                 -- Tabs are rebuilt from a pool whenever the spell list changes.
-                k:After(tabs, "AddTab", function(self2, _, _)
+                k:After(tabs, "AddTab", function(self2)
                     local t = self2.tabs and self2.tabs[#self2.tabs]
                     if t then IconTab(k, t) end
                 end)
-            end
+            end)
         end
 
-        local hide = S.module and S.module.db and S.module.db.hideSpellbookPages
+        -- The filter: Blizzard's 15x16 arrow becomes a button the height of
+        -- the search box, on the bar's right. iconDropdown drew it as a
+        -- ghost at its old size; it is the button Look at this one.
+        local dd = book.SettingsDropdown
+        if dd then
+            k:Size(dd, BOOK.control, BOOK.control)
+            k:Move(dd, "RIGHT", bar, "RIGHT", -BOOK.pad, 0)
+            local dp = S.PainterFor(dd)
+            if S.D(dd).states then dp:States(T.LOOK.button) end
+        end
+
+        local search = book.SearchBox
+        if search and dd then
+            k:Size(search, nil, BOOK.control)
+            k:Move(search, "RIGHT", dd, "LEFT", -BOOK.gap, 0)
+        end
+
+        -- The page art, by setting.
+        local hide = HidingPages()
         for _, key in ipairs(PAGE_ART) do
             local r = book[key]
             if r and r.SetAlpha then r:SetAlpha(hide and 0 or 1) end
@@ -573,12 +629,45 @@ P{
 
         local paged = book.PagedSpellsFrame
         if paged then
-            local d = S.D(paged)
-            if not d.liftHooked then
-                d.liftHooked = true
-                k:After(paged, "DisplayViewsForCurrentPage", function(self2) LiftPage(self2, HidingPages()) end)
+            local v1, v2 = paged.View1, paged.View2
+            if v1 then k:Move(v1, "TOPLEFT", paged, "TOPLEFT", BOOK.viewX, -BOOK.viewTop) end
+            if v2 then
+                k:Move(v2, "TOPRIGHT", paged, "TOPRIGHT", -(BOOK.viewX - 8), -BOOK.viewTop)
+                -- The gutter between the two pages, drawn on the right-hand
+                -- view so it is there exactly when that page is.
+                k:Once(v2, "gutter", function()
+                    local g = S.Ours(v2:CreateTexture(nil, "BACKGROUND"))
+                    if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(g) end
+                    -- View2's left edge is viewX past the middle of the book.
+                    local x = -BOOK.viewX
+                    g:SetPoint("TOPRIGHT", v2, "TOPLEFT", x, 0)
+                    g:SetPoint("BOTTOMRIGHT", v2, "BOTTOMLEFT", x, 0)
+                    local function Paint()
+                        g:SetColorTexture(S.Colour("border"))
+                        g:SetWidth((EV.Pixel and EV.Pixel.One and EV.Pixel:One(v2)) or 1)
+                    end
+                    Paint()
+                    T.Watch(g, Paint)
+                end)
             end
-            LiftPage(paged, hide)
+
+            local foot = Band(book, "footer", "top", function(b)
+                b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+                b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+                b:SetHeight(BOOK.footer)
+            end)
+            local pager = paged.PagingControls
+            if pager then
+                -- The arrow's box is inset in its 32px button.
+                local inset = (32 - T.LOOK.pager.box) / 2
+                k:Move(pager, "RIGHT", foot, "RIGHT", -(BOOK.pad - inset), 0)
+                if pager.PageText then k:Label(pager.PageText, "textMuted") end
+            end
+
+            k:Once(paged, "dressPages", function()
+                k:After(paged, "DisplayViewsForCurrentPage", function(self2) DressPage(k, self2) end)
+            end)
+            DressPage(k, paged)
         end
     end,
 }
