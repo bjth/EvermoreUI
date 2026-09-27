@@ -424,20 +424,18 @@ R{
         p:Fade()
         p:FadeSlice()
         p:Fill("surfaceSunk")
+        -- The pop-up's field is user-scaled (UserScaledFrameTemplate): its
+        -- scale is set after we have painted it, so a strip sized to one pixel
+        -- at the old scale comes out under a pixel at the new one and a side
+        -- rounds away (the right one first, the left one after). The strips go
+        -- on a container that ignores the field's scale, the nameplates' fix
+        -- for the same fault (Pixel:Edges, `decouple`): exactly one pixel
+        -- whatever the field is scaled to. The container also sits a level
+        -- above the field, so the backdrop's own NineSlice, a child frame at
+        -- the field's level, can never draw over it.
+        local _, rec = EV.Pixel:Edges(e, { size = 1, decouple = true })
+        if rec.host then S.Ours(rec.host) end
         p:Border("borderStrong")
-        -- The pop-up's field is user-scaled (UserScaledFrameTemplate) and
-        -- centred, so its edges land on part pixels. Unsnapped, a one-pixel
-        -- line there rounded away (the right edge); snapped, a line that is a
-        -- hair under one pixel (the scale's float error) can round to nothing
-        -- (then the left). Snapped, and a thousandth over a pixel: both ends
-        -- round, and a width of at least one pixel always keeps one.
-        EV.Pixel:Edges(e, { size = 1.001 })
-        local rec = EV.Pixel:EdgesOf(e)
-        for _, t in ipairs(rec and rec.edges or {}) do
-            EV.Pixel.KeepSnap(t, true)
-            if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(true) end
-            if t.SetTexelSnappingBias then t:SetTexelSnappingBias(0) end
-        end
         p:States(LOOK.input, { label = e })
         if e.Instructions then p:Label(e.Instructions, LOOK.input.rest.placeholder) end
         p:TextPad(LOOK.input.pad, LOOK.input.pad)

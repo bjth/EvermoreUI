@@ -331,15 +331,44 @@ function Painter:Label(fs, token, bold)
             T.Watch(fs, own)
             own()
         else
-            fs:SetTextColor(Colour(d.token))
+            S.RepaintText(fs)
             T.Watch(fs, S.RepaintText)
         end
     end
     return self
 end
 
+--- A drop shadow is there to lift light text off a dark ground. Under dark
+--- text on a light fill (a primary button's label) the same black shadow
+--- smears the letters into the fill, so dark text drops it and light text
+--- gets back whatever shadow the font string had before we touched it.
+local shadows = setmetatable({}, { __mode = "k" })  -- font string -> its own shadow
+local shadowScratch = {}
+function S.ShadowFor(fs, r, g, b)
+    if not (fs and fs.SetShadowColor and fs.GetShadowColor) then return end
+    local saved = shadows[fs]
+    if not saved then
+        local ok, sr, sg, sb, sa = pcall(fs.GetShadowColor, fs)
+        local okO, ox, oy = pcall(fs.GetShadowOffset, fs)
+        if not (ok and okO) then return end
+        saved = { sr or 0, sg or 0, sb or 0, sa or 0, ox or 0, oy or 0 }
+        shadows[fs] = saved
+    end
+    shadowScratch[1], shadowScratch[2], shadowScratch[3] = r, g, b
+    if T.Luminance(shadowScratch) < 0.18 then
+        fs:SetShadowColor(0, 0, 0, 0)
+    else
+        fs:SetShadowColor(saved[1], saved[2], saved[3], saved[4])
+        fs:SetShadowOffset(saved[5], saved[6])
+    end
+end
+
 --- Theme repaint for a font string we coloured: its token lives in S.D.
-function S.RepaintText(fs) fs:SetTextColor(Colour(S.D(fs).token or "text")) end
+function S.RepaintText(fs)
+    local r, g, b, a = Colour(S.D(fs).token or "text")
+    fs:SetTextColor(r, g, b, a)
+    S.ShadowFor(fs, r, g, b)
+end
 
 --- One of our glyphs, centred on the object.
 function Painter:Glyph(name, size, token)
@@ -400,7 +429,11 @@ function Painter:States(look, opts)
         if d.fill and r.fill then d.fill:SetColorTexture(T.C4(r.fill)) end
         local edgesOn = o.edgesOn or obj
         if r.edge and EV.Pixel:EdgesOf(edgesOn) then T.SetEdge(edgesOn, r.edge) end
-        if o.label and r.text and o.label.SetTextColor then o.label:SetTextColor(T.C4(r.text)) end
+        if o.label and r.text and o.label.SetTextColor then
+            local tr, tg, tb, ta = T.C4(r.text)
+            o.label:SetTextColor(tr, tg, tb, ta)
+            S.ShadowFor(o.label, tr, tg, tb)
+        end
         local glyph = o.glyph or d.glyph
         if glyph and r.glyph then glyph:SetVertexColor(T.C4(r.glyph)) end
         if o.chev and r.glyph then o.chev:SetColorLines(T.C4(r.glyph)) end
