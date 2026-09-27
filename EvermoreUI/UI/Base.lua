@@ -138,25 +138,66 @@ end
 --- opts: edgeOn = the frame the border goes on (default the frame itself),
 ---       edge = false for no border, sub = the fill's sublevel (default -8).
 --- The alpha can be a function, read on every repaint, for a setting.
+---
+--- Returns the fill and its Paint. Anything that changes what the surface
+--- shows afterwards goes through U.SurfaceState or U.SurfaceEdge, never by
+--- colouring the border directly: the theme repaint would put the Look's
+--- rest edge straight back over it.
+local surfaces = setmetatable({}, { __mode = "k" })   -- fill -> its record
 function U.Surface(frame, look, alpha, opts)
     if type(look) == "string" then look = T.LOOK[look] end
-    look = look or T.LOOK.raised
     opts = opts or {}
     local fill = EV.Pixel:Fill(frame, "BACKGROUND", opts.sub or -8)
     local edgeOn = opts.edge ~= false and (opts.edgeOn or frame) or nil
     if edgeOn then T.TokenBorder(edgeOn, "border") end
+    local rec = { look = look or T.LOOK.raised, alpha = alpha, edgeOn = edgeOn, c = {} }
     local function Paint()
-        local r = T.Resolve(look)
+        local r = T.Resolve(rec.look, rec.state)
         local c1, c2, c3, c4 = T.C4(r.fill)
-        local a = alpha
+        local a = rec.alpha
         if type(a) == "function" then a = a() end
         fill:SetColorTexture(c1, c2, c3, a or c4)
         -- Colour only: a module that hides the border (a setting) keeps it hidden.
-        if edgeOn and r.edge then EV.Pixel:SetEdgeColor(edgeOn, T.C4(r.edge)) end
+        if rec.edgeOn then
+            local e = r.edge
+            if rec.edge then e = T.SpecRGBA(rec.edge, rec.c) end
+            if rec.rgba then e = rec.rgba end
+            if e then EV.Pixel:SetEdgeColor(rec.edgeOn, T.C4(e)) end
+        end
     end
+    rec.Paint = Paint
+    surfaces[fill] = rec
     Paint()
     T.Watch(fill, Paint)
     return fill, Paint
+end
+
+--- Show a surface in another state of its Look (on, hover...), or in another
+--- Look altogether. `state` is kept and read on every repaint, so a caller
+--- can reuse one table and set its fields.
+function U.SurfaceState(fill, state, look)
+    local rec = surfaces[fill]
+    if not rec then return end
+    rec.state = state
+    if look then rec.look = type(look) == "string" and T.LOOK[look] or look end
+    rec.Paint()
+end
+
+--- Override a surface's edge colour. Either a colour spec (a token, or a
+--- Look's table form), which follows the theme, or r, g, b, a for a content
+--- colour that doesn't (an item's quality). nil hands the edge back to the
+--- Look.
+function U.SurfaceEdge(fill, spec, g, b, a)
+    local rec = surfaces[fill]
+    if not rec then return end
+    if type(spec) == "number" then
+        rec.edge = nil
+        rec.rgba = rec.rgba or {}
+        rec.rgba[1], rec.rgba[2], rec.rgba[3], rec.rgba[4] = spec, g, b, a or 1
+    else
+        rec.rgba, rec.edge = nil, spec
+    end
+    rec.Paint()
 end
 
 --- Paint a striped row's background (T.LOOK.row) for its position.

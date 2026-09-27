@@ -42,12 +42,14 @@ local function Locked() return InCombatLockdown() end
 --------------------------------------------------------------------------------
 --  Slots
 --------------------------------------------------------------------------------
+local PICKED = { on = true }       -- the selected slot's state in T.LOOK.slot
+
 local function Deselect()
     local s = selected
     selected = nil
     if s then
         s:EnableKeyboard(false)
-        T.SetEdge(s, T.Resolve(T.LOOK.slot).edge)
+        EV.UI.SurfaceState(s.well, nil)
         if s.editor then s.editor:Prompt() end
     end
 end
@@ -127,7 +129,7 @@ local function NewSlot(editor)
                 -- selected slot (OnEnter / OnLeave below), so a slot left
                 -- selected can't catch keys you meant for something else.
                 self:EnableKeyboard(self:IsMouseOver())
-                T.SetBorderToken(self, "accent")
+                EV.UI.SurfaceState(self.well, PICKED)
                 editor:Prompt(self)
             end
         elseif btn == "RightButton" then

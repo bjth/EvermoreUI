@@ -354,7 +354,7 @@ local function Build(stage)
     function grid.Paint(sel)
         for key, r in pairs(rows) do
             local picked = key ~= HIDDEN and sel == BarKey(key)
-            T.SetEdge(r, T.Resolve(T.LOOK.slot, { on = picked }).edge)
+            W.SurfaceEdge(r.bg, picked and T.LOOK.slot.on.edge or nil)
         end
         for _, t in ipairs(tiles) do if t:IsShown() then PaintTile(t) end end
     end

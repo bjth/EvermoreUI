@@ -264,7 +264,7 @@ local function Equipped(b)
         on = ok and eq == true
     end
     if b.Border then b.Border:SetAlpha(0) end
-    T.SetEdge(s.edge, T.Resolve(on and T.LOOK.slotEquipped or T.LOOK.slot).edge)
+    EV.UI.SurfaceState(s.well, nil, on and T.LOOK.slotEquipped or T.LOOK.slot)
 end
 
 --------------------------------------------------------------------------------

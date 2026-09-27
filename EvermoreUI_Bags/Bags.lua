@@ -278,6 +278,7 @@ local function Holder(view, bag)
 end
 
 local edges = setmetatable({}, { __mode = "k" })   -- item button -> our border frame
+local wells = setmetatable({}, { __mode = "k" })   -- item button -> its slot surface
 
 local function Skin(b)
     if edges[b] then return end
@@ -289,7 +290,7 @@ local function Skin(b)
     edge:SetAllPoints()
     edge:EnableMouse(false)
     edges[b] = edge
-    EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
+    wells[b] = EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
 end
 
 local function Button(view, bag, slot)
@@ -323,9 +324,9 @@ local function Paint(b, i)
     local q = i and i.quality
     if q and q > 1 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
         local c = ITEM_QUALITY_COLORS[q]
-        T.SetBorderColor(edges[b], c.r, c.g, c.b, 1)
+        EV.UI.SurfaceEdge(wells[b], c.r, c.g, c.b, 1)   -- content colour
     else
-        T.SetEdge(edges[b], T.Resolve(T.LOOK.slot).edge)
+        EV.UI.SurfaceEdge(wells[b], nil)
     end
 end
 
@@ -759,7 +760,7 @@ bankView = NewView("bank", {
             buy = made
             buy:SetSize(96, 22)
             buy.bg = EV.UI.Surface(buy, "control")
-            T.TokenBorder(buy, "accent")
+            EV.UI.SurfaceEdge(buy.bg, "accent")
             buy.label = T.Text(buy, "small", "text", true)
             buy.label:SetPoint("CENTER")
             buy.label:SetText(L["Buy a tab"])

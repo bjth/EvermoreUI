@@ -88,7 +88,9 @@ local function States(b)
         sh:ClearAllPoints(); sh:SetAllPoints(icon)
     end
     if b.IconBorder then b.IconBorder:SetAlpha(0) end
-    T.SetEdge(s.edge, T.Resolve(T.LOOK.slot, { on = IsOpen(b) }).edge)
+    s.state = s.state or {}
+    s.state.on = IsOpen(b)
+    EV.UI.SurfaceState(s.well, s.state)
 end
 
 local function Texts(b)
@@ -167,6 +169,7 @@ local function SetExpanded(on)
     M.db.collapsed = not on
 end
 
+local toggleState = {}
 local function PaintToggle()
     if not toggle then return end
     -- Points the way the bags will go on the next click: out along the bar
@@ -174,9 +177,13 @@ local function PaintToggle()
     local grow = ns.Grow(M.db, "left", "up")
     local back = ({ left = "right", right = "left", up = "down", down = "up" })[grow]
     toggle.chevron:Point(Expanded() and back or grow)
-    local r = T.Resolve(T.LOOK.buttonGhost, { hover = toggle.hot })
+    toggleState.hover = toggle.hot
+    local r = T.Resolve(T.LOOK.buttonGhost, toggleState)
     toggle.chevron:SetColorLines(T.C4(r.glyph))
-    toggle.bg:SetColorTexture(T.C4(r.fill))
+    -- It sits over the bar's own buttons, so its hover is a veil (60%) of a
+    -- ghost button's rather than a solid block.
+    local c1, c2, c3, c4 = T.C4(r.fill)
+    toggle.bg:SetColorTexture(c1, c2, c3, c4 * 0.6)
 end
 
 local Layout

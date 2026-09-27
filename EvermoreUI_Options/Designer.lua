@@ -870,7 +870,9 @@ local function Build()
     end)
     local cbg = T.Solid(canvas, "BACKGROUND", 0.06, 0.07, 0.08, 1)   -- the canvas: a neutral stage, not a surface
     cbg:SetAllPoints()
-    T.TokenBorder(canvas, "border")   -- content colour: the stage's frame
+    -- Its edge is an inset's; its fill is the stage above, so the surface's
+    -- own fill is clear.
+    W.Surface(canvas, "inset", 0)
     -- A faint dot grid, so empty space reads as a canvas rather than a hole.
     for gx = 1, 30 do
         for gy = 1, 20 do
