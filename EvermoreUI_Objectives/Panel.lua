@@ -48,7 +48,7 @@ ns.hiddenParent = hidden
 local function Tracker() return ObjectiveTrackerFrame end
 
 -- Blizzard's sections that our list replaces.
-local OURS = { "QuestObjectiveTracker", "CampaignQuestObjectiveTracker" }
+local OURS = { "QuestObjectiveTracker", "CampaignQuestObjectiveTracker", "ProfessionsRecipeTracker" }
 local suppressed = {}
 local function IsSuppressed(module) return suppressed[module] == true end
 local function RefreshSuppressed()
