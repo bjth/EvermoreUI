@@ -293,7 +293,7 @@ function CB.Build(f, preview)
     h.iconFrame = CreateFrame("Frame", nil, h)
     h.icon = h.iconFrame:CreateTexture(nil, "ARTWORK")
     h.icon:SetAllPoints()
-    h.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    h.icon:SetTexCoord(EV.Icons:Coords())
     h.iconEdge = h:CreateTexture(nil, "BORDER")
     EV.Pixel.NoSnap(h.iconEdge)
 

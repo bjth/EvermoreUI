@@ -44,29 +44,22 @@ function S.StepperLook(step, sd)
     end
 end
 
---- The one icon treatment, used by every part that shows an icon: zoomed in
---- past the border Blizzard bakes into its icon art (the crop ElvUI and our
---- own bags use), with a frame of ours hugging it that carries our edge. The
---- frame is a child of the icon's owner, one pixel out on every side, so the
---- edge sits just outside the art. Returns that frame; its edge is the
---- caller's (Painter:Border with `on` = the frame), and hiding it hides the
---- edge.
-S.ICON_CROP = 0.08
-local iconWells = setmetatable({}, { __mode = "k" })   -- icon texture -> its frame
+--- The one icon treatment, used by every part that shows an icon: the
+--- suite's icon style (EvermoreUI/Core/Icons.lua, General > Icons), the same
+--- crop and edge as every icon we draw ourselves. Blizzard's icon stays where
+--- Blizzard put it; the edge hugs it from outside, on a frame of ours, which
+--- this returns (hide it to hide the edge). An edge colour that means
+--- something (quality, hover) goes through EV.Icons:SetState on the icon.
 function S.IconWell(icon)
     if not (icon and icon.SetTexCoord and icon.GetParent) then return end
-    local c = S.ICON_CROP
-    icon:SetTexCoord(c, 1 - c, c, 1 - c)
-    local w = iconWells[icon]
-    if w then return w end
-    local ok, owner = pcall(icon.GetParent, icon)
-    if not (ok and owner and owner.GetFrameLevel) then return end
-    w = S.Ours(CreateFrame("Frame", nil, owner))
-    w:SetPoint("TOPLEFT", icon, "TOPLEFT", -1, 1)
-    w:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
-    w:EnableMouse(false)
-    iconWells[icon] = w
-    return w
+    local rec = EV.Icons:Style(icon)
+    if rec and rec.frame then S.Ours(rec.frame) end
+    return rec and rec.frame
+end
+
+--- The suite's crop, for icons whose coordinates Blizzard sets again later.
+function S.Crop(icon)
+    if icon and icon.SetTexCoord then icon:SetTexCoord(EV.Icons:Coords()) end
 end
 
 --- A scroll thumb through T.LOOK.scrollbar: `tex` is what we colour,
@@ -1463,13 +1456,15 @@ R{
             local r, g, bl = ib:GetVertexColor()
             r, g, bl = S.Num(r), S.Num(g), S.Num(bl)
             if shown and r and not (r > 0.95 and g > 0.95 and bl > 0.95) and not d.hover then
-                EV.Pixel:SetEdgeColor(well, r, g, bl, 1)
+                EV.Icons:SetState(icon, r, g, bl, 1)
+            elseif d.hover then
+                local e = T.Resolve(LOOK.slot, d).edge
+                EV.Icons:SetState(icon, e[1], e[2], e[3], e[4])
             else
-                T.SetEdge(well, T.Resolve(LOOK.slot, d).edge)
+                EV.Icons:SetState(icon, nil)
             end
         end
         S.Own(Sync, well)
-        p:Border(LOOK.slot.rest.edge, nil, well)
         for _, m in ipairs({ "SetVertexColor", "Show", "Hide", "SetShown" }) do
             if type(ib[m]) == "function" then pcall(hooksecurefunc, ib, m, Sync) end
         end
@@ -1532,7 +1527,6 @@ R{
         local d, bd = S.D(item), S.D(btn)
         local well = S.IconWell(icon)
         if not well then return end
-        S.PainterFor(btn):Border("borderStrong", nil, well)
 
         -- The two loops, cleared for good.
         for _, key in ipairs({ "ActionBarHighlight", "BorderSheen" }) do
@@ -1591,8 +1585,7 @@ R{
             else
                 if not bd.unmasked and btn.IconMask then pcall(icon.RemoveMaskTexture, icon, btn.IconMask) end
                 bd.unmasked = true
-                local c = S.ICON_CROP
-                icon:SetTexCoord(c, 1 - c, c, 1 - c)
+                S.Crop(icon)
                 well:Show()
                 bd.ring:Hide()
             end
@@ -2044,8 +2037,7 @@ R{
         b.Check:SetVertexColor(S.Colour("accent"))
         p:Fill(LOOK.tile.rest.fill)
         p:Border("border")
-        local well = S.IconWell(b.icon)
-        if well then S.PainterFor(b):Border("borderStrong", nil, well) end
+        S.IconWell(b.icon)
         if b.text then p:Label(b.text) end
         local d = S.D(b)
         p:States(LOOK.tile, { on = function() return b.SelectedBar:IsShown() end })
@@ -2145,10 +2137,7 @@ R{
         local icon = t.Icon
         if t.Mask and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, t.Mask) end
         local function Crop()
-            if rawget(t, "fillToInterior") then
-                local c = S.ICON_CROP
-                icon:SetTexCoord(c, 1 - c, c, 1 - c)
-            end
+            if rawget(t, "fillToInterior") then S.Crop(icon) end
         end
         Crop()
         p:After("SetChecked", function() Crop(); if d.Repaint then d.Repaint() end end)

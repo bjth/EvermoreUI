@@ -95,7 +95,7 @@ local function Dress(b)
         icon:ClearAllPoints()
         icon:SetPoint("TOPLEFT", b, "TOPLEFT", 2, -2)
         icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 2)
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        icon:SetTexCoord(EV.Icons:Coords())
     end
     if hl then
         hl:SetColorTexture(T.RGBA("text", 0.15))

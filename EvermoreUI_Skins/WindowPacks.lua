@@ -546,7 +546,7 @@ local function IconTab(k, tab)
         if tab[key] then S.Mute(tab[key]) end
     end
     k:Size(tab.Icon, TAB_ICON, TAB_ICON)
-    tab.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)   -- the icon's own baked edge
+    S.Crop(tab.Icon)   -- the suite's crop, past the icon's own baked edge
     if tab.IconMask then
         k:Anchors(tab.IconMask, { { "TOPLEFT", tab.Icon, "TOPLEFT", 0, 0 },
                                   { "BOTTOMRIGHT", tab.Icon, "BOTTOMRIGHT", 0, 0 } })

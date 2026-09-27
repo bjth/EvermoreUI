@@ -41,6 +41,36 @@ EV.Options:RegisterPage{
               tooltip = L["Every EvermoreUI control in one window. Also /evui widgets."],
               onClick = function() SlashCmdList.EVERMOREUI("widgets") end })
 
+        p:Section(L["Icons"])
+        local Icons = EV.Icons
+        local function IconSet(key)
+            return function() return Icons.Settings()[key] end,
+                   function(v) Icons.Settings()[key] = v; Icons:Refresh() end
+        end
+        local gz, sz = IconSet("zoom")
+        local gb, sb = IconSet("border")
+        local gc, sc = IconSet("borderColour")
+        p:Dual(
+            { type = "slider", text = L["Crop"], min = 0, max = 15, step = 1,
+              tooltip = L["How much of every icon's edge is trimmed: spells, items, auras, action buttons, reminders and Blizzard's own windows. Blizzard's icons have a baked-in frame; around 8% takes it off."],
+              fmt = function(v) return v .. "%" end, get = gz, set = sz },
+            { type = "slider", text = L["Border"], min = 0, max = 4, step = 1,
+              tooltip = L["The edge round every icon, in screen pixels. Nameplates pick a change up after a reload."],
+              fmt = function(v) return v == 0 and L["None"] or (v .. " px") end, get = gb, set = sb })
+        p:Dual(
+            { type = "dropdown", text = L["Border colour"], width = 170, values = Icons.COLOURS,
+              tooltip = L["The colour an icon's edge rests in. An edge that means something keeps its own colour: an item's quality, a debuff you can dispel, a reminder."],
+              disabled = function() return (Icons.Settings().border or 0) == 0 end,
+              get = gc, set = sc },
+            { type = "button", text = L["Icon style"], label = L["Reset"], width = 120,
+              tooltip = L["Back to 8% crop and a 1px edge in the theme's border colour."],
+              onClick = function()
+                  local st = Icons.Settings()
+                  for k, v in pairs(Icons.DEFAULTS) do st[k] = v end
+                  Icons:Refresh()
+                  EV.Options:Rebuild()
+              end })
+
         p:Section(L["Font"])
         p:Dual(
             { type = "dropdown", text = L["Font"], width = 170,

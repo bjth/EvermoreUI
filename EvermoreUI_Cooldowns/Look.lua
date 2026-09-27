@@ -39,6 +39,8 @@ local floor, max, min = math.floor, math.max, math.min
 local issecret = issecretvalue or function() return false end
 
 M.defaults.look = {
+    ownIcons    = false,      -- false: border, colour and crop follow the suite's
+                              -- icon style (General > Icons); true: the three below
     border      = 1,          -- px; 0 = none
     borderColour = "border",  -- theme token, or "class"
     zoom        = 8,          -- percent cropped off each edge
@@ -88,18 +90,33 @@ ns.LookColour = Colour
 
 local function Look() return M.db.look end
 
+-- The suite's icon style changed: follow it, unless we have our own.
+if EV.Icons then
+    EV.Icons:OnChange(function()
+        if not M.db.look.ownIcons and M:IsEnabled() then M:Refresh() end
+    end)
+end
+
+--- Border, border colour and crop: the suite's icon style (EV.Icons) unless
+--- this module has been given its own.
+function ns.IconLook()
+    local lk = Look()
+    if lk.ownIcons or not EV.Icons then return lk.border or 1, lk.borderColour, lk.zoom or 8 end
+    local st = EV.Icons.Settings()
+    return st.border or 1, st.borderColour, st.zoom or 8
+end
+
 --------------------------------------------------------------------------------
 --  Border, crop, swipe
 --------------------------------------------------------------------------------
 function ns.ApplyLook(f, s)
-    local lk = Look()
+    local size, colour, zoom = ns.IconLook()
     if s.edge then
-        local size = lk.border or 1
-        local b = EV.Pixel:CreateBorder(s.edge, max(1, size), Colour(lk.borderColour))
+        local b = EV.Pixel:CreateBorder(s.edge, max(1, size), Colour(colour))
         -- The edges only: the keybind and rank text live on this frame too.
         for _, e in ipairs(b.edges) do e:SetShown(size > 0) end
     end
-    local z = (lk.zoom or 8) / 100
+    local z = zoom / 100
     if f.Icon and f.Icon.SetTexCoord then f.Icon:SetTexCoord(z, 1 - z, z, 1 - z) end
     ns.ApplySwipe(f)
     -- Blizzard sets the swipe colour on every cooldown and aura refresh;
@@ -156,7 +173,7 @@ end
 
 local function Paint(g)
     local lk = Look()
-    local thick = max(2, (lk.border or 1) + 1)
+    local thick = max(2, (ns.IconLook()) + 1)
     EV.Pixel:CreateBorder(g.proc, thick, Colour(lk.procColour))
     EV.Pixel:CreateBorder(g.usable, thick, Colour(lk.procColour))
     local r, gg, b = Colour(lk.refreshColour)

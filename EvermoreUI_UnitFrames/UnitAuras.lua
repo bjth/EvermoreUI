@@ -184,7 +184,7 @@ function UA.Placeholders(h, shape, kind)
             if not s then
                 s = CreateFrame("Frame", nil, h)
                 s.icon = s:CreateTexture(nil, "ARTWORK")
-                s.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                s.icon:SetTexCoord(EV.Icons:Coords())
                 s.back = s:CreateTexture(nil, "BACKGROUND")
                 s.back:SetAllPoints()
                 h.samples[i] = s

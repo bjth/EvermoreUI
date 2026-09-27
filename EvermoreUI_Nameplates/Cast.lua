@@ -242,7 +242,7 @@ ns.Widget{
         local one = EV.Pixel:One(f)
         bar.icon:SetPoint("TOPLEFT", bar.iconFrame, "TOPLEFT", one, -one)
         bar.icon:SetPoint("BOTTOMRIGHT", bar.iconFrame, "BOTTOMRIGHT", -one, one)
-        bar.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        bar.icon:SetTexCoord(EV.Icons:Coords())
         -- Spell name below left, remaining time below right, cast target on
         -- the bar itself at the right. All three ride an overlay so the bar
         -- fill can never cover them.

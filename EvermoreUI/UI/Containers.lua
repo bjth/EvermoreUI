@@ -46,7 +46,7 @@ function U.Tabs(parent, tabs, get, set, opts)
             icon = b:CreateTexture(nil, "ARTWORK")
             icon:SetSize(16, 16)
             icon:SetTexture(t.icon)
-            icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            icon:SetTexCoord(EV.Icons:Coords())
         end
         local w = (text:GetStringWidth() or 0) + (icon and 22 or 0) + 28
         if opts.minWidth then w = max(w, opts.minWidth) end

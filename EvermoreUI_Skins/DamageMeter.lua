@@ -81,7 +81,7 @@ local function EntryLook(entry)
     end
     d.dmTrack:SetColorTexture(T.RGBA("surfaceSunk", 0.7))
     local icon = entry.Icon and entry.Icon.Icon
-    if icon then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    if icon then icon:SetTexCoord(EV.Icons:Coords()) end
     -- "Show bar icons" off hides the icon texture, not its frame: take our
     -- border with it.
     if entry.Icon then EV.Pixel:ShowEdges(entry.Icon, icon and icon:IsShown() or false) end

@@ -40,6 +40,14 @@ meter in our style, and cooldown icons that tell you more.
     wastes nothing. Works in combat.
 
 ### Changed
+- **One icon style for everything** (General > Icons): how much of each
+  icon's baked-in edge is cropped, how thick its border is and what colour
+  it rests in, set once and used by every icon EvermoreUI draws or skins:
+  action bars, bags, auras on your frames and nameplates, buff reminders,
+  quest items, loot rolls, the cooldown manager, and Blizzard's own windows
+  (character, spellbook, merchant, loot, mail). An edge that means
+  something keeps its colour: an item's quality, a debuff you can dispel, a
+  reminder. The cooldown manager follows it unless you give it its own.
 - **One look for every control.** Our buttons, boxes, tabs, lists and
   scroll bars, and Blizzard's own once skinned, now come from the same
   recipe, so a skinned window's buttons match ours in every state. Close

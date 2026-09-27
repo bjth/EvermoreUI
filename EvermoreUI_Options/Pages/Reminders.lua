@@ -92,7 +92,7 @@ local function Line(p, e, index, count)
     local icon = f:CreateTexture(nil, "ARTWORK")
     icon:SetSize(26, 26)
     icon:SetPoint("LEFT", 0, 0)
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    icon:SetTexCoord(EV.Icons:Coords())
     icon:SetTexture(M.EntryIcon(e))
     icon:SetDesaturated(not e.on)
 

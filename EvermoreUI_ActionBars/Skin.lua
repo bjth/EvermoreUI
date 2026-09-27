@@ -264,7 +264,8 @@ local function Equipped(b)
         on = ok and eq == true
     end
     if b.Border then b.Border:SetAlpha(0) end
-    EV.UI.SurfaceState(s.well, nil, on and T.LOOK.slotEquipped or T.LOOK.slot)
+    local icon = Icon(b)
+    if icon then EV.Icons:SetState(icon, on and T.LOOK.slotEquipped.rest.edge or nil) end
 end
 
 --------------------------------------------------------------------------------
@@ -347,21 +348,18 @@ function ns.SkinButton(b)
     if not s then
         s = {}
         skinned[b] = s
+        -- The suite's icon style (EV.Icons, General > Icons): its crop, its
+        -- edge, and the slot's well behind the icon for an empty slot.
         if icon then
             if b.IconMask and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, b.IconMask) end
-            icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            icon:ClearAllPoints()
-            icon:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
-            icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
+            EV.Icons:Style(icon, { host = b, fit = true, well = T.LOOK.slot.rest.fill })
         end
-        -- Our well behind the icon (shows on empty slots).
-        -- Border on our own child frame, above the icon (T.LOOK.slot).
+        -- A frame over the icon and its swipe, for the rank text.
         local edge = CreateFrame("Frame", nil, b)
         edge:SetAllPoints(b)
         edge:SetFrameLevel(b:GetFrameLevel() + 2)
         edge:EnableMouse(false)
         s.edge = edge
-        s.well = EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
         -- Cooldowns fill the icon exactly.
         for _, k in ipairs({ "cooldown", "chargeCooldown", "lossOfControlCooldown" }) do
             local cd = b[k]

@@ -404,16 +404,22 @@ end
 function ns.LookSettings(p)
     local g, s
     p:Section(L["Icons"])
+    local function Shared() return not ns.module.db.look.ownIcons end
+    g, s = LookRow("ownIcons")
+    p:Row{ type = "toggle", text = L["Own icon style"],
+           tooltip = L["Off: border, border colour and crop follow the icon style every EvermoreUI icon uses (General > Icons). On: set them here for the cooldown manager alone."],
+           get = g, set = s }
     g, s = LookRow("border")
     p:Row{ type = "slider", text = L["Border"], min = 0, max = 4, step = 1,
-           fmt = function(v) return v == 0 and L["None"] or (v .. " px") end, get = g, set = s }
+           fmt = function(v) return v == 0 and L["None"] or (v .. " px") end, get = g, set = s,
+           disabled = Shared }
     g, s = LookRow("borderColour")
     p:Row{ type = "dropdown", text = L["Border colour"], width = 170, values = ns.LOOK_COLOURS, get = g, set = s,
-           disabled = function() return ns.module.db.look.border == 0 end }
+           disabled = function() return Shared() or ns.module.db.look.border == 0 end }
     g, s = LookRow("zoom")
     p:Row{ type = "slider", text = L["Crop"], min = 0, max = 15, step = 1,
            tooltip = L["How much of the icon's edge is trimmed. Blizzard's icons have a baked-in frame; around 8% takes it off."],
-           fmt = function(v) return v .. "%" end, get = g, set = s }
+           fmt = function(v) return v .. "%" end, get = g, set = s, disabled = Shared }
     g, s = LookRow("swipe")
     p:Row{ type = "slider", text = L["Cooldown darkness"], min = 20, max = 100, step = 5,
            tooltip = L["How dark the sweep over an icon on cooldown is."],

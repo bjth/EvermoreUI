@@ -277,20 +277,18 @@ local function Holder(view, bag)
     return h
 end
 
-local edges = setmetatable({}, { __mode = "k" })   -- item button -> our border frame
-local wells = setmetatable({}, { __mode = "k" })   -- item button -> its slot surface
+local skinned = setmetatable({}, { __mode = "k" })   -- item button -> its icon
 
+--- The suite's icon style (EV.Icons, General > Icons) on a slot: its crop and
+--- edge, and the slot's well behind it for an empty one.
 local function Skin(b)
-    if edges[b] then return end
+    if skinned[b] then return end
     local nt = b.GetNormalTexture and b:GetNormalTexture()
     if nt then nt:SetAlpha(0) end
     local icon = b.icon or b.Icon
-    if icon then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
-    local edge = CreateFrame("Frame", nil, b)
-    edge:SetAllPoints()
-    edge:EnableMouse(false)
-    edges[b] = edge
-    wells[b] = EV.UI.Surface(b, "slot", nil, { edgeOn = edge })
+    if not icon then return end
+    EV.Icons:Style(icon, { host = b, fit = true, well = T.LOOK.slot.rest.fill })
+    skinned[b] = icon
 end
 
 local function Button(view, bag, slot)
@@ -322,11 +320,14 @@ local function Paint(b, i)
     b:SetMatchesSearch(not (i and i.filtered))
     -- Quality edge on our border (Blizzard's IconBorder stays for its own art).
     local q = i and i.quality
-    if q and q > 1 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
-        local c = ITEM_QUALITY_COLORS[q]
-        EV.UI.SurfaceEdge(wells[b], c.r, c.g, c.b, 1)   -- content colour
-    else
-        EV.UI.SurfaceEdge(wells[b], nil)
+    local icon = skinned[b]
+    if icon then
+        if q and q > 1 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
+            local c = ITEM_QUALITY_COLORS[q]
+            EV.Icons:SetState(icon, c.r, c.g, c.b, 1)   -- content colour
+        else
+            EV.Icons:SetState(icon, nil)
+        end
     end
 end
 

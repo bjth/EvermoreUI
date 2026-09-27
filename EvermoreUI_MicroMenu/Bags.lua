@@ -115,7 +115,7 @@ local function Dress(b)
     local icon = b.icon or b.Icon
     if icon then
         if b.SquareMask and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, b.SquareMask) end
-        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        icon:SetTexCoord(EV.Icons:Coords())
         icon:ClearAllPoints()
         icon:SetPoint("TOPLEFT", b, "TOPLEFT", 1, -1)
         icon:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)

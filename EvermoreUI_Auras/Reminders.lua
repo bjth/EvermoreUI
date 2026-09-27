@@ -379,12 +379,11 @@ local function Button(i)
     -- release when it is off, and ignores the other. Registering only one
     -- makes the button do nothing for half of all players.
     b:RegisterForClicks("AnyUp", "AnyDown")
-    b.well = EV.UI.Surface(b, "slot", nil, { edge = false, sub = 0 })
+    -- The suite's icon style (EV.Icons), its edge in amber: something you
+    -- should have up and don't.
     b.icon = b:CreateTexture(nil, "ARTWORK")
-    b.icon:SetPoint("TOPLEFT", 1, -1)
-    b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-    b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    T.TokenBorder(b, "warning")
+    EV.Icons:Style(b.icon, { host = b, fit = true, well = "surfaceSunk" })
+    EV.Icons:SetState(b.icon, "warning")
     b.label = T.Text(b, "small", "text")
     b.label:SetPoint("TOP", b, "BOTTOM", 0, -3)
     b.label:SetWordWrap(false)

@@ -323,7 +323,7 @@ local function Skin(f, def)
         for _, r in ipairs({ cd:GetRegions() }) do Flatten(r) end
         if cd.SetSwipeTexture then pcall(cd.SetSwipeTexture, cd, WHITE) end
     end
-    if f.Icon and f.Icon.SetTexCoord then f.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    if f.Icon and f.Icon.SetTexCoord then f.Icon:SetTexCoord(EV.Icons:Coords()) end
 
     local edge = CreateFrame("Frame", nil, f)
     edge:SetAllPoints(f)
@@ -522,7 +522,7 @@ local function EndTimer(f, s)
     s.ends = nil
     Under(f, s, 1)
     if s.edge then
-        if ns.LookColour then T.SetBorderColor(s.edge, ns.LookColour(M.db.look.borderColour))
+        if ns.LookColour then T.SetBorderColor(s.edge, ns.LookColour(select(2, ns.IconLook())))
         else T.SetEdge(s.edge, T.Resolve(T.LOOK.slot).edge) end
     end
 end

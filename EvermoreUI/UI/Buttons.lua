@@ -136,7 +136,7 @@ function U.IconButton(parent, opts, onClick)
     elseif opts.texture then
         icon:SetTexture(opts.texture)
         if type(opts.texture) == "number" or tostring(opts.texture):lower():find("icons") then
-            icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) -- trim the icon border
+            icon:SetTexCoord(EV.Icons:Coords()) -- trim the icon border
         end
     end
     b.icon = icon

@@ -553,7 +553,7 @@ local function NewItemButton(i)
     u.well = T.Solid(u, "BACKGROUND", 0, 0, 0, 0)   -- T.LOOK.slot, in Paint
     u.well:SetAllPoints()
     u.icon = u:CreateTexture(nil, "ARTWORK")
-    u.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    u.icon:SetTexCoord(EV.Icons:Coords())
     u.icon:SetPoint("CENTER")
     u.cd = CreateFrame("Cooldown", nil, u, "CooldownFrameTemplate")
     u.cd:SetAllPoints(u.icon)
