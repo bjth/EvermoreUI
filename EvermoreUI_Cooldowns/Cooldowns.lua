@@ -45,8 +45,9 @@ if EV_BLOCKED then return end
 --
 --  Your own icons (Custom.lua): trinket slots, items and spells Blizzard
 --  doesn't track, drawn on frames of ours and keyed "c:<uid>", so they take
---  part in your arrangement exactly as Blizzard's items do. And a fourth bar,
---  Your buffs, for the buffs you name (a paladin's seals, say).
+--  part in your arrangement exactly as Blizzard's items do. And your own bars
+--  (Custom.lua), keyed "u:<id>": icon bars, placed here like the cooldown
+--  bars and able to hold any cooldown; and buff bars of the buffs you name.
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 if not (EvermoreUI and EvermoreUI.NewModule) then return end
@@ -81,15 +82,20 @@ local M = EV:NewModule("Cooldowns", {
     arrange = {},
     -- Your own icons, per class: { { uid, kind = "slot"|"item"|"spell", id, bar }, ... }
     custom = {},
-    -- Buffs for the Your buffs bar, per class: { { spell = id or name, seen = { [id] = true } }, ... }
+    -- Buffs for the old single Your buffs bar, per class (moved into a bar of
+    -- your own on load): { { spell = id or name, seen = { [id] = true } }, ... }
     myBuffs = {},
+    -- Your own bars, per class: { { id, name, kind = "buffs"|"icons",
+    --   buffs = { { spell, seen }, ... } }, ... }. Their settings are in
+    -- bars["u:<id>"], made when the bar is.
+    userBars = {},
     bars = {
         essential = BarDefaults(42, 8, "CENTER", "DOWN", true),
         utility   = BarDefaults(32, 10, "CENTER", "DOWN", true),
         buffs     = BarDefaults(34, 10, "CENTER", "UP", false),
-        mine      = BarDefaults(32, 8, "RIGHT", "UP", false),
     },
 })
+M.BarDefaults = BarDefaults
 M.title = "Cooldowns"
 M.description = "Your cooldowns and tracked buffs in EvermoreUI bars, built on the game's own Cooldown Manager."
 ns.module = M
@@ -180,10 +186,33 @@ M.IdOf = IdOf
 
 local COOLDOWN_DEFS = {}
 for _, def in ipairs(BARS) do if not def.buff then COOLDOWN_DEFS[#COOLDOWN_DEFS + 1] = def end end
+M.COOLDOWN_DEFS = COOLDOWN_DEFS
+
+--- Every bar cooldowns can be placed on: the game's two and your icon bars.
+local function CooldownBars()
+    local out = {}
+    for _, d in ipairs(COOLDOWN_DEFS) do out[#out + 1] = d end
+    for _, d in ipairs(ns.UserDefs and ns.UserDefs() or {}) do
+        if not d.buff then out[#out + 1] = d end
+    end
+    return out
+end
+M.CooldownBars = CooldownBars
 
 --- The bar an item belongs on: yours if you moved it, else its own viewer's.
 --- nil when you've hidden it.
-local function Enabled(key) return key and M.db.bars[key] and M.db.bars[key].enabled end
+--- A bar a cooldown can go on right now: switched on, and for a bar of
+--- yours, one of this class's icon bars (a deleted bar, or another class's,
+--- can't take anything).
+local function Enabled(key)
+    if not (key and M.db.bars[key] and M.db.bars[key].enabled) then return false end
+    if key:sub(1, 2) == "u:" then
+        local def = ns.UserDef and ns.UserDef(key)
+        return def ~= nil and not def.buff
+    end
+    return true
+end
+M.CanTake = Enabled
 
 function M.BarOf(f, src)
     local a = M:Arrangement(false)
@@ -203,7 +232,7 @@ function M.BarOf(f, src)
         local to = not src.buff and a.bar[id]
         -- Moved to a bar you've since switched off: it goes home rather
         -- than being left where nobody places it.
-        if to and M.db.bars[to] and M.db.bars[to].enabled then return to end
+        if to and Enabled(to) then return to end
     end
     return src.key
 end
@@ -655,7 +684,7 @@ function Relayout(def)
     -- The two cooldown bars share items (you can move one across), so
     -- Blizzard laying out either viewer re-places both.
     if not def.buff then
-        for _, d in ipairs(COOLDOWN_DEFS) do PlaceOne(d) end
+        for _, d in ipairs(CooldownBars()) do PlaceOne(d) end
         PutAwayCustom()
     else
         PlaceOne(def)
@@ -683,14 +712,32 @@ M.Park = function(f) Park(f) end
 --  Wiring
 --------------------------------------------------------------------------------
 local function Build(def)
-    if holders[def.key] then return end
-    local bar = CreateFrame("Frame", "EvermoreUICooldowns_" .. def.key, UIParent)
+    if holders[def.key] then
+        holders[def.key].def = def
+        return holders[def.key]
+    end
+    local bar = CreateFrame("Frame", "EvermoreUICooldowns_" .. def.key:gsub(":", "_"), UIParent)
     bar:SetSize(40, 40)
+    bar.def = def
     holders[def.key] = bar
     EV.Movers:Register(bar, "CD_" .. def.key, def.label, def.pos, {
         group = L["Combat"], page = "cooldowns", designer = "cooldowns",
-        isDisabled = function() return not (M:IsEnabled() and M.db.bars[def.key].enabled) end,
+        isDisabled = function()
+            local db = M.db.bars[def.key]
+            return not (M:IsEnabled() and db and db.enabled and holders[def.key] == bar)
+        end,
     })
+    return bar
+end
+M.Holder = function(def) return Build(def) end
+
+--- A bar of yours was deleted: forget its frame and where it sat.
+function M.DropHolder(key)
+    local bar = holders[key]
+    if not bar then return end
+    holders[key] = nil
+    bar:Hide()
+    EV.Movers:Unregister("CD_" .. key)
 end
 
 local function Attach()

@@ -122,8 +122,9 @@ end
 function ns.ResetBar(def)
     local M = ns.module
     local db = M.db.bars[def.key]
+    if not db then return end
     wipe(db)
-    EV.DB.Merge(db, M.defaults.bars[def.key])
+    EV.DB.Merge(db, def.own and ns.NewDefaults(def.user and def.user.kind) or M.defaults.bars[def.key])
     Refresh()
 end
 
@@ -198,10 +199,17 @@ end
 --------------------------------------------------------------------------------
 --  Your own icons
 --------------------------------------------------------------------------------
-local BARS_FOR_NEW = {
-    { value = "essential", text = L["Essential cooldowns"] },
-    { value = "utility",   text = L["Utility cooldowns"] },
-}
+--- Bars your own icons can go on: the game's two and your icon bars.
+local function BarsForNew()
+    local out = {
+        { value = "essential", text = L["Essential cooldowns"] },
+        { value = "utility",   text = L["Utility cooldowns"] },
+    }
+    for _, d in ipairs(ns.UserDefs and ns.UserDefs() or {}) do
+        if not d.buff then out[#out + 1] = { value = d.key, text = d.label } end
+    end
+    return out
+end
 
 --- Everything you've added, with Remove, and the ways to add more.
 --- rebuild(commit) redraws the rows when the list changes; commit is true
@@ -210,7 +218,9 @@ local BARS_FOR_NEW = {
 function ns.CustomSettings(p, rebuild)
     local M = ns.module
     local list = M:CustomList()
-    local target = "essential"
+    -- The + at the end of a row opens this with that row's bar chosen.
+    local target = ns.addTarget or "essential"
+    if not M.CanTake(target) then target = "essential" end
     p:Section(L["Your own icons"])
     p:Note(L["Trinkets, potions and other items, and spells the game's Cooldown Manager doesn't list. They sit in your cooldown bars and drag about like the rest; the list is for this class, where they sit is per spec."], 0.7)
     if #list == 0 then p:Note(L["Nothing added yet."], 0.6) end
@@ -224,8 +234,8 @@ function ns.CustomSettings(p, rebuild)
     end
     p:Section(L["Add"])
     p:Note(L["Quickest: drag an item from your bags, or a spell from your spellbook, onto a cooldown row."], 0.6)
-    p:Row{ type = "dropdown", text = L["Goes on"], values = BARS_FOR_NEW,
-          get = function() return target end, set = function(v) target = v end }
+    p:Row{ type = "dropdown", text = L["Goes on"], values = BarsForNew,
+          get = function() return target end, set = function(v) target = v; ns.addTarget = v end }
     p:Row{ type = "dropdown", text = L["A trinket slot"],
            values = { { value = 13, text = ns.TRINKETS[13] }, { value = 14, text = ns.TRINKETS[14] } },
            tooltip = L["Shows whatever trinket is in that slot, while it has a Use."],
@@ -269,26 +279,68 @@ function ns.CustomIconSettings(p, f, done)
 end
 
 --------------------------------------------------------------------------------
---  Your buffs
+--  Your own bars
 --------------------------------------------------------------------------------
-function ns.MyBuffSettings(p, rebuild)
+--- Making bars.
+function ns.NewBarSettings(p, made)
     local M = ns.module
-    local list = M:MyBuffs()
-    p:Section(L["Your buffs"])
-    p:Note(L["A bar of just the buffs you name, whoever cast them: your seals, say, or an aura you keep up. Drawn by the game, so it keeps working in combat. Every rank counts."], 0.7)
+    local name = ""
+    p:Section(L["Your bars"])
+    p:Note(L["Bars of your own, as many as you like: a buff bar shows the buffs you name (your seals, or the raid buffs you want to see), an icon bar holds whatever you put on it (your trinkets and potions, or any cooldown dragged across)."], 0.7)
+    local list = M:UserBars()
+    if #list == 0 then p:Note(L["None yet."], 0.6) end
+    for _, b in ipairs(list) do
+        p:Note("|cffd4924e" .. (b.kind == "buffs" and L["Buffs"] or L["Icons"]) .. "|r  " .. (b.name or ""), 0.9)
+    end
+    p:Section(L["New bar"])
+    p:Row{ type = "input", text = L["Name"], width = 170, placeholder = L["Seals, Raid buffs, Potions..."],
+           get = function() return name end, set = function(v) name = v end }
+    p:Row{ type = "button", text = L["Shows buffs you name"], label = L["New buff bar"], width = 130,
+           onClick = function() local b = M:NewBar("buffs", name); made(b) end }
+    p:Row{ type = "button", text = L["Holds icons you put on it"], label = L["New icon bar"], width = 130,
+           onClick = function() local b = M:NewBar("icons", name); made(b) end }
+end
+
+--- One of your bars: its name, what it shows, how it looks, and Delete.
+function ns.UserBarSettings(p, def, rebuild, deleted)
+    local M = ns.module
+    local b = def.user
+    p:Section(L["Bar"])
+    p:Row{ type = "input", text = L["Name"], width = 170,
+           get = function() return b.name or "" end,
+           set = function(v) M:RenameBar(b, v); rebuild(true) end }
+    if b.kind == "buffs" then
+        ns.BuffList(p, b, rebuild)
+    else
+        p:Note(L["Drag cooldowns here from the other rows, drop items and spells on its row, or add your own with the + at the end of it."], 0.7)
+    end
+    ns.BarSettings(p, def)
+    p:Section(L["Delete"])
+    p:Row{ type = "button", text = L["Delete this bar"], label = L["Delete"], width = 90, confirm = true,
+           tooltip = L["Anything on it goes back to where it came from."],
+           onClick = function() M:DeleteBar(b); deleted() end }
+end
+
+--- A buff bar's buffs: the list, the ones on you now, and add by name.
+function ns.BuffList(p, b, rebuild)
+    local M = ns.module
+    local list = b.buffs or {}
+    b.buffs = list
+    p:Section(L["Buffs"])
+    p:Note(L["Just the buffs you name, whoever cast them. Drawn by the game, so it keeps working in combat. Every rank counts. Drag them along the row to change the order."], 0.7)
     if EV.AuraContainer and not EV.AuraContainer.Supported() then
         p:Note(L["This client doesn't provide the aura containers this bar needs."], 0.6)
     end
     if #list == 0 then p:Note(L["No buffs named yet."], 0.6) end
     for i, e in ipairs(list) do
-        p:Row{ type = "button", text = M.MyBuffName(e) or "?", label = L["Remove"], width = 90,
-               onClick = function() M.RemoveMyBuff(i); Refresh(); rebuild(true) end }
+        p:Row{ type = "button", text = M.BuffName(e) or "?", label = L["Remove"], width = 90,
+               onClick = function() M.RemoveBarBuff(b, i); Refresh(); rebuild(true) end }
     end
     -- Buffs on you right now (out of combat, where they can be read), to
     -- add with a click.
     local have = {}
     for _, e in ipairs(list) do
-        local n = M.MyBuffName(e)
+        local n = M.BuffName(e)
         if n then have[n:lower()] = true end
     end
     local now, seen = {}, {}
@@ -306,17 +358,16 @@ function ns.MyBuffSettings(p, rebuild)
         p:Section(L["On you now"])
         for _, a in ipairs(now) do
             p:Row{ type = "button", text = a.name, label = L["Add"], width = 90,
-                   onClick = function() M.AddMyBuff(a.spellId); Refresh(); rebuild(true) end }
+                   onClick = function() M.AddBarBuff(b, a.spellId); Refresh(); rebuild(true) end }
         end
     end
     p:Section(L["Add by name"])
-    p:Note(L["Or drag a spell from your spellbook onto the Your buffs row."], 0.6)
+    p:Note(L["Or drag a spell from your spellbook onto the bar's row."], 0.6)
     p:Row{ type = "input", text = L["Add a buff"], width = 170,
            placeholder = L["Name, ID or link"],
            tooltip = L["Its name covers every rank. Seal of Righteousness, for example."],
            get = function() return "" end,
            set = function(v)
-               if v ~= "" and M.AddMyBuff(v) then Refresh(); rebuild(true) end
+               if v ~= "" and M.AddBarBuff(b, v) then Refresh(); rebuild(true) end
            end }
-    ns.BarSettings(p, ns.MINE)
 end

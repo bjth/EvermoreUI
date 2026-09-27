@@ -18,13 +18,9 @@ if EV_BLOCKED then return end
 --  Those can be secret in combat, and a setter takes a secret value where
 --  Lua can't compare one, so nothing here reads them.
 --
---  Your buffs: a fourth bar of the buffs you name, drawn by the engine's aura
---  container (EV.AuraContainer), which filters in its own secure code and so
---  keeps working in combat. It matches by spell ID, and every rank of a buff
---  has its own, so each name brings in every rank in your spellbook plus any
---  rank seen on you (remembered in the entry's `seen`). Each buff is its own
---  group in the container, in your order, which is how the order you set
---  in the designer holds: the engine only sorts within a group.
+--  Your own bars: as many as you like, each a buff bar (the buffs you name,
+--  drawn by the engine's aura container) or an icon bar (placed like the
+--  game's cooldown bars). See "Your own bars" below.
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 if not (EvermoreUI and EvermoreUI.NewModule) then return end
@@ -52,7 +48,6 @@ local function ClassList(field)
 end
 
 function M:CustomList() return ClassList("custom") end
-function M:MyBuffs() return ClassList("myBuffs") end
 
 local seq = 0
 local function NewUID()
@@ -302,40 +297,106 @@ local function UpdateCounts()
 end
 
 --------------------------------------------------------------------------------
---  Your buffs
+--  Your own bars
+--
+--  As many as you like, per class, each with a name:
+--    buffs   the buffs you name, drawn by an engine aura container, one
+--            group per buff so your order holds (the engine only sorts
+--            within a group). Every rank counts.
+--    icons   placed by Cooldowns.lua like the game's two cooldown bars, and
+--            able to hold anything they can: your own icons, and any of
+--            Blizzard's cooldowns dragged across.
+--  A bar's settings are M.db.bars["u:<id>"], made with the bar and removed
+--  with it; its place on screen is edit mode's ("CD_u:<id>").
 --------------------------------------------------------------------------------
-local MINE = { key = "mine", label = L["Your buffs"], buff = true, own = true,
-               pos = { "CENTER", "CENTER", 0, -100 } }
-ns.MINE = MINE
-local mine          -- the bar's frame (edit mode moves it)
-local inside        -- the container's holder, inside the bar
+function M:UserBars() return ClassList("userBars") end
 
-function M.AddMyBuff(text)
+local function NewDefaults(kind)
+    if kind == "buffs" then return M.BarDefaults(32, 8, "RIGHT", "UP", false) end
+    return M.BarDefaults(36, 8, "CENTER", "DOWN", true)
+end
+ns.NewDefaults = NewDefaults
+
+local defs, defByKey = {}, {}
+local known = {}          -- keys of bars of ours we've made holders for
+
+local function PosFor(i) return { "CENTER", "CENTER", 0, -60 - (i - 1) * 46 } end
+
+--- Defs for this class's bars, rebuilt from the list.
+local function Defs()
+    wipe(defs); wipe(defByKey)
+    for i, b in ipairs(M:UserBars()) do
+        local d = { key = "u:" .. b.id, label = b.name or L["Bar"], buff = b.kind == "buffs",
+                    own = true, user = b, pos = PosFor(i) }
+        defs[#defs + 1] = d
+        defByKey[d.key] = d
+    end
+    return defs
+end
+function ns.UserDefs() return defs end
+function ns.UserDef(key) return defByKey[key] end
+
+--- Make a bar: kind "buffs" or "icons", and a name.
+function M:NewBar(kind, name)
+    local list = self:UserBars()
+    local b = { id = NewUID(), kind = kind == "buffs" and "buffs" or "icons",
+                name = (name and strtrim(name) ~= "" and strtrim(name))
+                    or (kind == "buffs" and L["Buffs"] or L["Icons"]) .. " " .. (#list + 1),
+                buffs = {} }
+    list[#list + 1] = b
+    self.db.bars["u:" .. b.id] = NewDefaults(b.kind)
+    ns.SyncUserBars()
+    return b
+end
+
+function M:RenameBar(b, name)
+    name = name and strtrim(name) or ""
+    if name == "" then return end
+    b.name = name
+    ns.SyncUserBars()
+end
+
+--- Delete a bar. Whatever was on it goes back where it came from.
+function M:DeleteBar(b)
+    local list = self:UserBars()
+    for i, x in ipairs(list) do if x == b then table.remove(list, i) break end end
+    local key = "u:" .. b.id
+    self.db.bars[key] = nil
+    for _, e in ipairs(self:CustomList()) do if e.bar == key then e.bar = "essential" end end
+    for _, a in pairs(self.db.arrange) do
+        if type(a) == "table" and type(a.bar) == "table" then
+            for id, to in pairs(a.bar) do if to == key then a.bar[id] = nil end end
+        end
+    end
+    ns.SyncUserBars()
+end
+
+function M.BuffName(e)
+    if type(e.spell) == "number" then return SpellName(e.spell) or ("#" .. e.spell) end
+    return e.spell
+end
+M.MyBuffName = M.BuffName
+
+--- Name a buff for a buff bar: a spell ID, a link or a name.
+function M.AddBarBuff(b, text)
     if type(text) ~= "string" and type(text) ~= "number" then return nil end
     local spell = tonumber(text) or (type(text) == "string" and tonumber(text:match("spell:(%d+)")))
     if not spell then
         spell = strtrim(tostring(text))
         if spell == "" then return nil end
     end
-    local list = M:MyBuffs()
+    b.buffs = b.buffs or {}
     local name = type(spell) == "number" and SpellName(spell) or spell
-    for _, e in ipairs(list) do
-        local en = type(e.spell) == "number" and SpellName(e.spell) or e.spell
+    for _, e in ipairs(b.buffs) do
+        local en = M.BuffName(e)
         if en and name and en:lower() == name:lower() then return e end
     end
     local e = { spell = spell, seen = {} }
-    list[#list + 1] = e
+    b.buffs[#b.buffs + 1] = e
     return e
 end
 
-function M.RemoveMyBuff(i)
-    table.remove(M:MyBuffs(), i)
-end
-
-function M.MyBuffName(e)
-    if type(e.spell) == "number" then return SpellName(e.spell) or ("#" .. e.spell) end
-    return e.spell
-end
+function M.RemoveBarBuff(b, i) table.remove(b.buffs, i) end
 
 --- Every spell ID in your spellbook with this name (each rank has its own).
 local function BookIDs(name, into)
@@ -358,14 +419,13 @@ local function BookIDs(name, into)
     end
 end
 
---- The spell IDs of each named buff, in your order: one set per buff, so
---- the bar can keep that order (a group each in the container).
-local function MineGroups()
+--- The spell IDs of each named buff on a bar, in its order.
+local function Groups(b)
     local groups = {}
-    for _, e in ipairs(M:MyBuffs()) do
+    for _, e in ipairs(b.buffs or {}) do
         local ids = {}
         if type(e.spell) == "number" then ids[e.spell] = true end
-        local name = M.MyBuffName(e)
+        local name = M.BuffName(e)
         if name then
             BookIDs(name, ids)
             local ok, info = pcall(C_Spell.GetSpellInfo, name)
@@ -377,23 +437,26 @@ local function MineGroups()
     return groups
 end
 
---- Out of combat, note the rank IDs of your named buffs that are on you.
+--- Out of combat, note the rank IDs of named buffs that are on you.
 local function Learn()
     if InCombatLockdown() then return false end
-    local list = M:MyBuffs()
-    if #list == 0 then return false end
     local byName = {}
-    for _, e in ipairs(list) do
-        local name = M.MyBuffName(e)
-        if name then byName[name:lower()] = e end
+    for _, b in ipairs(M:UserBars()) do
+        for _, e in ipairs(b.buffs or {}) do
+            local name = M.BuffName(e)
+            if name then
+                byName[name:lower()] = byName[name:lower()] or {}
+                table.insert(byName[name:lower()], e)
+            end
+        end
     end
+    if not next(byName) then return false end
     local learnt = false
     for i = 1, 40 do
         local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
         if not ok or not a then break end
         if Plain(a.name) and Plain(a.spellId) then
-            local e = byName[a.name:lower()]
-            if e then
+            for _, e in ipairs(byName[a.name:lower()] or {}) do
                 e.seen = e.seen or {}
                 if not e.seen[a.spellId] then e.seen[a.spellId] = true; learnt = true end
             end
@@ -402,16 +465,18 @@ local function Learn()
     return learnt
 end
 
-function ns.LayoutMine()
-    if not mine then return end
-    local db = M.db.bars.mine
-    local groups = MineGroups()
+local function LayoutBuffBar(def)
+    local holder = M.Holder(def)
+    holder.inside = holder.inside or CreateFrame("Frame", nil, holder)
+    local inside = holder.inside
+    local db = M.db.bars[def.key]
+    local groups = Groups(def.user)
     local n = #groups
     local C = EV.AuraContainer
-    if not (M:IsEnabled() and db.enabled and n > 0 and C and C.Supported()) then
-        mine:SetSize(40, 20)
-        if inside then C.Hide(inside) end
-        mine:SetAlpha(0)
+    if not (db and M:IsEnabled() and db.enabled and n > 0 and C and C.Supported()) then
+        holder:SetSize(max(db and db.size or 32, 20), max(db and db.size or 32, 20))
+        C.Hide(inside)
+        holder:SetAlpha(0)
         return
     end
     local cfg = {
@@ -419,34 +484,71 @@ function ns.LayoutMine()
         growX = db.grow == "LEFT" and "LEFT" or "RIGHT", growY = db.rows == "UP" and "UP" or "DOWN",
         showSwipe = true, showTimer = true, timerSize = max(9, floor(db.size * 0.36 + 0.5)),
     }
-    local w, h = C.BoxSize(cfg)
-    EV.Pixel:SetSize(mine, w, h)
-    inside:SetAllPoints(mine)
+    EV.Pixel:SetSize(holder, C.BoxSize(cfg))
+    inside:SetAllPoints(holder)
     -- A container only changes shape out of combat; in combat the one
     -- already built carries on.
     if not (InCombatLockdown() and inside.container) then
         C.Build(inside, cfg, { unit = "player", filter = "HELPFUL", groups = groups })
     end
-    local alpha = M.Opacity(db)
-    mine:SetAlpha(alpha or 0)
+    holder:SetAlpha(M.Opacity(db) or 0)
+end
+
+function ns.LayoutMine()
+    for _, d in ipairs(defs) do
+        if d.buff then LayoutBuffBar(d) end
+    end
+end
+
+--- Holders for this class's bars, and none for bars that have gone.
+function ns.SyncUserBars()
+    Defs()
+    local now = {}
+    for _, d in ipairs(defs) do
+        now[d.key] = true
+        known[d.key] = true
+        if not M.db.bars[d.key] then M.db.bars[d.key] = NewDefaults(d.user.kind) end
+        local holder = M.Holder(d)
+        local e = EV.Movers:Get("CD_" .. d.key)
+        if e then e.label = d.label end
+        if holder.inside and not d.buff then EV.AuraContainer.Hide(holder.inside) end
+    end
+    for key in pairs(known) do
+        if not now[key] then
+            known[key] = nil
+            M.DropHolder(key)
+        end
+    end
+    if M:IsEnabled() then M:LayoutAll() end
+end
+
+--- The one Your buffs bar of before becomes a buff bar of yours, keeping its
+--- settings and its place on screen.
+local function MoveOldBuffs()
+    local _, class = UnitClass("player")
+    local old = class and M.db.myBuffs[class]
+    if type(old) ~= "table" or #old == 0 then return end
+    local b = M:NewBar("buffs", L["Your buffs"])
+    b.buffs = old
+    M.db.myBuffs[class] = nil
+    local was = rawget(M.db.bars, "mine")
+    if type(was) == "table" then
+        for k, v in pairs(was) do M.db.bars["u:" .. b.id][k] = v end
+        M.db.bars.mine = nil
+    end
+    local core = EV.DB and EV.DB:GetCore()
+    if core and core.movers and core.movers.CD_mine then
+        core.movers["CD_u:" .. b.id] = core.movers.CD_mine
+        core.movers.CD_mine = nil
+    end
 end
 
 --------------------------------------------------------------------------------
 --  Wiring
 --------------------------------------------------------------------------------
 function ns.EnableCustom()
-    if not mine then
-        mine = CreateFrame("Frame", "EvermoreUICooldowns_mine", UIParent)
-        mine:SetSize(40, 20)
-        inside = CreateFrame("Frame", nil, mine)
-        inside:SetAllPoints()
-        EV.Movers:Register(mine, "CD_mine", MINE.label, MINE.pos, {
-            group = L["Combat"], page = "cooldowns", designer = "cooldowns",
-            isDisabled = function()
-                return not (M:IsEnabled() and M.db.bars.mine.enabled and #M:MyBuffs() > 0)
-            end,
-        })
-    end
+    MoveOldBuffs()
+    ns.SyncUserBars()
     ns.SyncCustom()
     if ns.customEvents then return end   -- enabled again: already listening
     ns.customEvents = true
@@ -457,7 +559,10 @@ function ns.EnableCustom()
     local function Resync()
         if queued then return end
         queued = true
-        C_Timer.After(0.2, function() queued = false; if M:IsEnabled() then ns.SyncCustom() end end)
+        C_Timer.After(0.2, function()
+            queued = false
+            if M:IsEnabled() then ns.SyncUserBars(); ns.SyncCustom() end
+        end)
     end
     local COOLDOWN = { SPELL_UPDATE_COOLDOWN = true, SPELL_UPDATE_CHARGES = true,
                        BAG_UPDATE_COOLDOWN = true, ACTIONBAR_UPDATE_COOLDOWN = true }
@@ -478,7 +583,7 @@ function ns.EnableCustom()
         elseif event == "BAG_UPDATE_DELAYED" then
             UpdateCounts()
         elseif event == "UNIT_AURA" then
-            -- A new rank of a named buff seen on you joins the bar's filter.
+            -- A new rank of a named buff seen on you joins its bar's filter.
             local now = GetTime()
             if now - lastLearn < 1 then return end
             lastLearn = now

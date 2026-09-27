@@ -12,10 +12,14 @@ doesn't track.
   many you carry and grey out when you have none; a trinket shows while it
   has a Use. Drag one from your bags or spellbook onto a row in the
   designer's Cooldowns tab, or press the + at the end of a row.
-- **Your buffs**: a bar of just the buffs you name, a paladin's seals for
-  example. Pick them from the buffs on you, drag a spell onto the row, or
-  type a name. Every rank counts, and it keeps working in combat. Size,
-  layout and visibility like the other bars; place it in edit mode.
+- **Bars of your own**, as many as you like, each with a name. A buff bar
+  shows just the buffs you name, in your order: your seals on one, the raid
+  buffs you care about on another. Pick them from the buffs on you, drag a
+  spell onto the row, or type a name; every rank counts, and it keeps
+  working in combat. An icon bar holds whatever you put on it: your
+  trinkets and potions, or any cooldown dragged across from the game's
+  bars. Each has its own size, layout and visibility, and its own place in
+  edit mode. New bar in the designer's Cooldowns tab.
 
 ### Fixes
 - The Buffs & Debuffs page said this client couldn't show them and hid its
