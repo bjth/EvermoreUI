@@ -7,7 +7,6 @@ local L = EV.L
 
 local M = EV:GetModule("Auras", true)
 if not M then return end
-local ns = EV._ModuleNS["EvermoreUI_Auras"]
 
 local TAB_BUFFS, TAB_DEBUFFS = L["Buffs"], L["Debuffs"]
 
@@ -15,7 +14,7 @@ local GROW_X = { { value = "LEFT", text = L["Left"] }, { value = "RIGHT", text =
 local GROW_Y = { { value = "DOWN", text = L["Down"] }, { value = "UP", text = L["Up"] } }
 local SORTS  = { { value = "default", text = L["Blizzard order"] }, { value = "time", text = L["Time left"] } }
 
-local function Supported() return ns and ns.Container and ns.Container.Supported() end
+local function Supported() return EV.AuraContainer and EV.AuraContainer.Supported() end
 
 --------------------------------------------------------------------------------
 --  Shared layout section (buffs and debuffs)
