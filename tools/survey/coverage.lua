@@ -38,6 +38,15 @@
 local RUNTIME = {
     navCrumb = { why = "matches on its parent being a nav bar, which only exists at runtime",
                  claims = { "NavButtonTemplate" } },
+    -- <ItemButton> inherits the intrinsic "ItemButton" (Blizzard_ItemButton,
+    -- intrinsic="true"), which declares IconBorder, icon and Count. The survey
+    -- does not model intrinsics, so no stand-in carries an IconBorder.
+    itemButton = { why = "its IconBorder comes from the ItemButton intrinsic, which the survey does not model",
+                   claims = { "PaperDollItemSlotButtonTemplate", "InspectPaperDollItemSlotButtonTemplate",
+                              "ContainerFrameItemButtonTemplate", "BankItemButtonTemplate",
+                              "CamelotBankItemButtonTemplate", "GuildBankItemButtonTemplate",
+                              "EquipmentFlyoutButtonTemplate", "OpenMailAttachment",
+                              "ProfessionsButtonTemplate", "ProfessionsGearSlotTemplate" } },
 }
 
 local function Main(shapesPath, root, mode, emit)

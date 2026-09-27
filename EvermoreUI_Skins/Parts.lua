@@ -44,6 +44,31 @@ function S.StepperLook(step, sd)
     end
 end
 
+--- The one icon treatment, used by every part that shows an icon: zoomed in
+--- past the border Blizzard bakes into its icon art (the crop ElvUI and our
+--- own bags use), with a frame of ours hugging it that carries our edge. The
+--- frame is a child of the icon's owner, one pixel out on every side, so the
+--- edge sits just outside the art. Returns that frame; its edge is the
+--- caller's (Painter:Border with `on` = the frame), and hiding it hides the
+--- edge.
+S.ICON_CROP = 0.08
+local iconWells = setmetatable({}, { __mode = "k" })   -- icon texture -> its frame
+function S.IconWell(icon)
+    if not (icon and icon.SetTexCoord and icon.GetParent) then return end
+    local c = S.ICON_CROP
+    icon:SetTexCoord(c, 1 - c, c, 1 - c)
+    local w = iconWells[icon]
+    if w then return w end
+    local ok, owner = pcall(icon.GetParent, icon)
+    if not (ok and owner and owner.GetFrameLevel) then return end
+    w = S.Ours(CreateFrame("Frame", nil, owner))
+    w:SetPoint("TOPLEFT", icon, "TOPLEFT", -1, 1)
+    w:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 1, -1)
+    w:EnableMouse(false)
+    iconWells[icon] = w
+    return w
+end
+
 --- A scroll thumb through T.LOOK.scrollbar: `tex` is what we colour,
 --- `hoverOn` the frame whose mouse-over and press count (the thumb itself on
 --- a modern bar, the whole Slider on a legacy one).
@@ -275,6 +300,16 @@ S.ORNATE = {
     "questbg%-", "questdetailsbackgrounds",
     "groupfinder%-waitdot", "spinner_",
     "shadowoverlay%-", "charactercreate%-ring",
+    -- The character window's own art (Camelot CharacterFrame.xml and
+    -- PaperDollFrame.xml): the stat header banners, the frame round every
+    -- equipment slot, the stone backdrop, the dividers and scroll line, the
+    -- item level plate, the sidebar tabs' frame; the stat pane's inside
+    -- border; the side tabs down a window's edge (LargeSideTabButtonTemplate,
+    -- whose selected and hover states the sideTab part follows).
+    "ui%-character%-info%-title", "ui%-character%-info%-gearslot",
+    "ui%-character%-info%-stat%-stonebg", "ui%-character%-info%-scrollline",
+    "ui%-character%-info%-itemlevel%-bounce", "ui%-character%-info%-stattab",
+    "common%-insideframe", "common%-framedivider", "common%-sidetab",
 }
 
 --------------------------------------------------------------------------------
@@ -1322,6 +1357,174 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  9g. Item button        anything built on ItemButtonTemplate
+--     The paper doll's slots, inspect, loot, the merchant, mail, quest
+--     rewards. Blizzard's slot frame (the normal texture, and the paper
+--     doll's BorderFrame) goes; the icon gets S.IconWell; the well is the
+--     slot Look. Quality is Blizzard's to decide and ours to show:
+--     SetItemButtonBorder shows IconBorder for a quality and hides it for
+--     none, SetItemButtonBorderVertexColor colours it (ItemButtonTemplate.lua,
+--     SetItemButtonQuality_Base). IconBorder stays out of sight, and its
+--     colour and visibility become our edge. Common (white) keeps the plain
+--     edge, as our bags do.
+--------------------------------------------------------------------------------
+local function ItemIcon(b) return b.icon or b.Icon or S.Sub(b, "IconTexture") end
+
+R{
+    name = "itemButton",
+    keys = { "IconBorder" },
+    test = function(b) local i = ItemIcon(b); return type(i) == "table" and i.SetTexCoord ~= nil end,
+    paint = function(b, p)
+        local icon, ib = ItemIcon(b), b.IconBorder
+        S.Blank(b)
+        S.Mute(ib)
+        if S.Alive(b.BorderFrame) then S.PainterFor(b.BorderFrame):Fade() end
+        p:Fill(LOOK.slot.rest.fill)
+        local well = S.IconWell(icon)
+        if not well then return end
+        local d = S.D(b)
+        local function Sync()
+            local shown = ib.IsShown and ib:IsShown()
+            local r, g, bl = ib:GetVertexColor()
+            r, g, bl = S.Num(r), S.Num(g), S.Num(bl)
+            if shown and r and not (r > 0.95 and g > 0.95 and bl > 0.95) and not d.hover then
+                EV.Pixel:SetEdgeColor(well, r, g, bl, 1)
+            else
+                T.SetEdge(well, T.Resolve(LOOK.slot, d).edge)
+            end
+        end
+        S.Own(Sync, well)
+        p:Border(LOOK.slot.rest.edge, nil, well)
+        for _, m in ipairs({ "SetVertexColor", "Show", "Hide", "SetShown" }) do
+            if type(ib[m]) == "function" then pcall(hooksecurefunc, ib, m, Sync) end
+        end
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
+        Sync()
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9h. Spellbook item     SpellBookItemTemplate: one spell in the spellbook
+--     Blizzard picks its art per spell (SpellBookItemMixin:UpdateArtSet: a
+--     square set for actives, a circle set for passives) and re-applies the
+--     border atlas and icon mask on every page, and the items are pooled, so
+--     one frame is active on this page and passive on the next. So ours is
+--     applied after every UpdateArtSet: an active spell gets S.IconWell, its
+--     mask taken off so the crop is square; a passive keeps Blizzard's round
+--     mask and gets a thin ring of ours instead of the frame. The same
+--     square-and-round split as the kit.
+--------------------------------------------------------------------------------
+R{
+    name = "spellItem",
+    keys = { "Backplate", "TextContainer", "Button" },
+    art  = { Backplate = "spellbook%-item%-backplate" },
+    paint = function(item, p)
+        local btn = item.Button
+        local icon = S.Alive(btn) and btn.Icon
+        if not (icon and icon.SetTexCoord) then return end
+        local d = S.D(btn)
+        local well = S.IconWell(icon)
+        if not well then return end
+        S.PainterFor(btn):Border("borderStrong", nil, well)
+        if not d.ring then
+            d.ring = S.Ours(btn:CreateTexture(nil, "OVERLAY", nil, 6))
+            d.ring:SetTexture(T.MEDIA .. "ring.png")
+            d.ring:SetPoint("TOPLEFT", icon, "TOPLEFT", -2, 2)
+            d.ring:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 2, -2)
+        end
+        local function Apply()
+            S.Mute(btn.Border)
+            S.Mute(btn.BorderShadow)
+            S.Mute(btn.IconHighlight)
+            local ok, passive = pcall(function() return item.spellBookItemInfo and item.spellBookItemInfo.isPassive end)
+            passive = ok and passive == true
+            if passive then
+                if d.unmasked and btn.IconMask then pcall(icon.AddMaskTexture, icon, btn.IconMask) end
+                d.unmasked = false
+                icon:SetTexCoord(0, 1, 0, 1)
+                well:Hide()
+                d.ring:Show()
+            else
+                if not d.unmasked and btn.IconMask then pcall(icon.RemoveMaskTexture, icon, btn.IconMask) end
+                d.unmasked = true
+                local c = S.ICON_CROP
+                icon:SetTexCoord(c, 1 - c, c, 1 - c)
+                well:Show()
+                d.ring:Hide()
+            end
+            d.ring:SetVertexColor(S.Colour("borderStrong"))
+        end
+        p:After("UpdateArtSet", Apply)
+        T.Watch(d.ring, Apply)
+        Apply()
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i. Stat header        CharacterStatFrameCategoryTemplate and the side
+--     pane's CharacterFrameSidePaneCategoryTemplate: a brown banner
+--     (UI-Character-Info-Title) with its title in it. Ours is the kit's group
+--     header: a control-coloured bar, its edge, the title in gold.
+--------------------------------------------------------------------------------
+R{
+    name = "statHeader",
+    keys = { "Background" },
+    art  = { Background = "ui%-character%-info%-title" },
+    test = function(f) return type(f.Title or f.Label) == "table" end,
+    paint = function(f, p)
+        p:Fade()
+        p:Fill("surface2")
+        p:Border("border")
+        p:Label(f.Title or f.Label, "title", true)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9j. Stat row           CharacterStatFrameTemplate and the scroll box's
+--     stat elements: a Line-Bounce background Blizzard shows on every other
+--     row. It becomes our faint stripe (the same texture, a flat colour of
+--     ours, so Blizzard's own alternation still decides which rows have it);
+--     the label muted, the value in body text.
+--------------------------------------------------------------------------------
+R{
+    name = "statRow",
+    keys = { "Background", "Value" },
+    art  = { Background = "ui%-character%-info%-line%-bounce" },
+    paint = function(f, p)
+        local bg = f.Background
+        local function Paint() bg:SetColorTexture(S.Colour({ "surfaceSunk", a = 0.45 })) end
+        Paint()
+        T.Watch(bg, Paint)
+        if f.Label then p:Label(f.Label, "textMuted") end
+        p:Label(f.Value, "text")
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9k. Side tab           LargeSideTabButtonTemplate: the big tabs down a
+--     window's edge (the character window's, the quest log's). Blizzard
+--     shows SelectedTexture for the chosen one (SidePanelTabButtonMixin:
+--     SetChecked); its art is in S.ORNATE, so it is out of sight and says
+--     which tab is on. Ours: an icon well in the slot Look, the icon kept
+--     (with Blizzard's mask), copper when selected.
+--------------------------------------------------------------------------------
+R{
+    name = "sideTab",
+    keys = { "Background", "Icon", "SelectedTexture" },
+    art  = { Background = "common%-sidetab" },
+    paint = function(t, p)
+        p:Fade(nil, { t.Icon })
+        p:Fill(LOOK.slot.rest.fill)
+        p:Border(LOOK.slot.rest.edge)
+        local sel = t.SelectedTexture
+        p:States(LOOK.slot, { on = function() return sel:IsShown() end })
+        local d = S.D(t)
+        p:After("SetChecked", function() if d.Repaint then d.Repaint() end end)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  9b. Legacy scroll bar  Slider-based, 10 templates
 --      MinimalScrollBar (the modern one, an EventFrame with a Track) is part
 --      9. Everything older is a Slider with ScrollUpButton/ScrollDownButton
@@ -1640,7 +1843,18 @@ end
 
 --- Shared by window and panel. Their treatment is the same; only our
 --- confidence about what the frame is differs.
+--- A window of its own (not a panel inside another): its parent is UIParent,
+--- or it is chrome covering one that is (the world map's BorderFrame).
+local function WindowTop(f)
+    local ok, parent = pcall(f.GetParent, f)
+    if not (ok and parent) then return false end
+    if parent == UIParent then return true end
+    local ok2, grand = pcall(parent.GetParent, parent)
+    return ok2 and grand == UIParent
+end
+
 local function PaintWindow(f, p)
+    if WindowTop(f) then S.Shadow(f) end
     p:Fade()
     p:FadeSlice()
     p:FadeKeys("Bg", "TopTileStreaks", "PortraitContainer", "portrait", "Center")

@@ -26,10 +26,11 @@ if not S then return end
 
 local P = S.Pack
 
---- A square button over the map in our button look: its art faded (all of
---- it, or all but `keep`), our fill and edge, and a chevron pointing `dir`
---- if it has one. Once per button. Returns its data and a painter.
-local function OverlayButton(k, b, dir, keep)
+--- A square button in our button look: its art faded (all of it, or all but
+--- `keep`), our fill and edge, and a chevron pointing `dir` if it has one.
+--- `on` says when it is on (default: Blizzard's isActive). Once per button.
+--- Returns its data and a painter.
+local function OverlayButton(k, b, dir, keep, on)
     if not S.Alive(b) then return end
     local d = S.D(b)
     local p = S.PainterFor(b)
@@ -41,7 +42,7 @@ local function OverlayButton(k, b, dir, keep)
     local rest = T.LOOK.button.rest
     p:Fill(rest.fill)
     p:Border(rest.edge)
-    local opts = { on = function() return b.isActive == true end }
+    local opts = { on = on or function() return b.isActive == true end }
     if dir then
         d.chev = S.Ours(T.Chevron(b, 5))
         d.chev:SetPoint("CENTER")
@@ -578,6 +579,56 @@ P{
                 k:After(paged, "DisplayViewsForCurrentPage", function(self2) LiftPage(self2, HidingPages()) end)
             end
             LiftPage(paged, hide)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  CharacterFrame (Camelot CharacterFrame.xml, PaperDollFrame.xml)
+--
+--  The equipment slots, the stat headers and rows, and the side tabs are
+--  parts (itemButton, statHeader, statRow, sideTab), and the window's own art
+--  is in S.ORNATE. What is left is named:
+--
+--    * PaperDollSidebarTab1-3, the stats / titles / equipment sets buttons
+--      over the stat pane: CheckButtons with their icon, a UI-Character-Info-
+--      StatTab frame and a -Selected checked texture (both in S.ORNATE). Ours
+--      are buttons, on while checked (PaperDollFrame_UpdateSidebarTabs sets
+--      it).
+--    * RightPaneToggleButton, the gold arrow that folds the stat pane: our
+--      button with a chevron as Blizzard's pointed (left while open), turned after
+--      SetRightPaneCollapsed.
+--------------------------------------------------------------------------------
+P{
+    name  = "CharacterFrame",
+    apply = function(f, k)
+        for i = 1, 3 do
+            local tab = _G["PaperDollSidebarTab" .. i]
+            if tab then
+                local d = OverlayButton(k, tab, nil, { tab.Icon }, function()
+                    local ok, on = pcall(tab.GetChecked, tab)
+                    return ok and on and true or false
+                end)
+                if d then
+                    k:After(tab, "SetChecked", function() if d.Repaint then d.Repaint() end end)
+                end
+            end
+        end
+
+        local toggle = f.RightPaneToggleButton
+        if toggle then
+            local function Collapsed()
+                if type(f.IsRightPaneCollapsed) ~= "function" then return false end
+                local ok, v = pcall(f.IsRightPaneCollapsed, f)
+                return ok and v and true or false
+            end
+            -- Blizzard's arrow points left while the pane is open.
+            local d = OverlayButton(k, toggle, Collapsed() and "right" or "left")
+            if d and d.chev then
+                local function Turn() d.chev:Point(Collapsed() and "right" or "left") end
+                Turn()
+                k:After(f, "SetRightPaneCollapsed", Turn)
+            end
         end
     end,
 }
