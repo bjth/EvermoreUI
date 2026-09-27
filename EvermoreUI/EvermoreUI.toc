@@ -33,6 +33,7 @@ Core\DB.lua
 Core\Pixel.lua
 Core\Media.lua
 Core\Theme.lua
+Core\Looks.lua
 Core\Palette.lua
 Core\FontObjects.xml
 Core\Fonts.lua

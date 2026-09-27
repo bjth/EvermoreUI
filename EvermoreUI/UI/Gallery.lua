@@ -134,6 +134,8 @@ EV:RegisterSlash("theme", function(rest)
         for _, mode in ipairs({ "standard", "high" }) do
             local fails = T.Audit(mode)
             EV:Print(mode, #fails == 0 and "|cff55ff55" .. L["all contrast checks pass"] .. "|r" or table.concat(fails, "; "))
+            local looks = T.AuditLooks and T.AuditLooks(mode) or {}
+            EV:Print(mode, #looks == 0 and "|cff55ff55" .. L["every control look passes"] .. "|r" or table.concat(looks, "; "))
         end
     else
         EV:Print(L["Contrast:"], T.mode, " (/evui theme standard | high | audit)")

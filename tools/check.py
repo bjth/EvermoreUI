@@ -5,6 +5,8 @@
     is a silent hole in game)
   * every .lua compiles under Lua 5.1, if luac5.1 or luac is on the PATH
   * EvermoreUI/Core/Changelog.lua is what CHANGELOG.md generates
+  * the palette and every control Look pass their contrast audit, if lua5.1
+    is on the PATH (tools/looks/audit.lua)
 """
 import os
 import shutil
@@ -69,9 +71,21 @@ def check_changelog():
         failures.append("EvermoreUI/Core/Changelog.lua is out of date: run python tools/changelog/build.py")
 
 
+def check_looks():
+    lua = shutil.which("lua5.1")
+    if not lua:
+        print("lua5.1 not found, skipping the looks audit")
+        return
+    r = subprocess.run([lua, os.path.join("tools", "looks", "audit.lua")], cwd=ROOT,
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        failures.append("looks audit:\n" + (r.stdout + r.stderr).strip())
+
+
 check_tocs()
 check_lua()
 check_changelog()
+check_looks()
 for f in failures:
     print("FAIL", f)
 print("%d problem%s" % (len(failures), "" if len(failures) == 1 else "s"))
