@@ -285,6 +285,7 @@ function Painter:Border(token, alpha, on)
     local obj = on or self.obj
     if not (obj and obj.CreateTexture) then return self end
     local d = S.D(obj)
+    if not EV.Pixel:EdgesOf(obj) and S.UserScaled(obj) then self:Unscaled(obj) end
     local edges = EV.Pixel:Edges(obj, { size = 1 })
     if not d.edges then
         for _, e in ipairs(edges) do Ours(e) end
@@ -303,6 +304,32 @@ function Painter:Border(token, alpha, on)
         T.Watch(edges[1], Paint)
     end
     d.border = edges
+    return self
+end
+
+--- For a frame Blizzard scales after we paint it (UserScaledFrameTemplate:
+--- the static pop-up's buttons and field). Call before Border. A strip sized
+--- to one pixel at the old scale comes out under a pixel at the new one and
+--- a side rounds away, so the strips go on a container of ours that ignores
+--- the frame's scale (Pixel:Edges, `decouple`, the nameplates' fix for the
+--- same fault): exactly one pixel whatever the frame is scaled to. The
+--- container sits a level above the frame, so a backdrop's NineSlice, a
+--- child at the frame's own level, cannot draw over it either.
+---
+--- Border calls this itself for anything carrying UserScaledElementMixin (or
+--- its by-height sibling), so every user-scaled control is covered: the
+--- pop-ups, the add-friend frame, text to speech.
+local function UserScaled(obj)
+    return type(obj.OnLoad_UserScaledElement) == "function"
+        or type(obj.OnLoad_UserScaledByHeight) == "function"
+end
+S.UserScaled = UserScaled
+
+function Painter:Unscaled(obj)
+    obj = obj or self.obj
+    if not (obj and obj.CreateTexture) or EV.Pixel:EdgesOf(obj) then return self end
+    local _, rec = EV.Pixel:Edges(obj, { size = 1, decouple = true })
+    if rec.host then Ours(rec.host) end
     return self
 end
 

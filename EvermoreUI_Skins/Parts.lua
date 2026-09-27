@@ -424,17 +424,6 @@ R{
         p:Fade()
         p:FadeSlice()
         p:Fill("surfaceSunk")
-        -- The pop-up's field is user-scaled (UserScaledFrameTemplate): its
-        -- scale is set after we have painted it, so a strip sized to one pixel
-        -- at the old scale comes out under a pixel at the new one and a side
-        -- rounds away (the right one first, the left one after). The strips go
-        -- on a container that ignores the field's scale, the nameplates' fix
-        -- for the same fault (Pixel:Edges, `decouple`): exactly one pixel
-        -- whatever the field is scaled to. The container also sits a level
-        -- above the field, so the backdrop's own NineSlice, a child frame at
-        -- the field's level, can never draw over it.
-        local _, rec = EV.Pixel:Edges(e, { size = 1, decouple = true })
-        if rec.host then S.Ours(rec.host) end
         p:Border("borderStrong")
         p:States(LOOK.input, { label = e })
         if e.Instructions then p:Label(e.Instructions, LOOK.input.rest.placeholder) end
