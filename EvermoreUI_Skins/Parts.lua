@@ -2018,14 +2018,23 @@ R{
             if busy then return end
             busy = true
             t:SetTexture(FLAT)
-            t:SetVertexColor(S.Colour("accent"))
+            -- The deep end of our copper, not the accent: the rank reads in
+            -- white across it, and on the bright accent it did not.
+            t:SetVertexColor(S.Colour("xp"))
             busy = false
         end
         Flat(fill)
         pcall(hooksecurefunc, fill, "SetAtlas", Flat)
         T.Watch(fill, Flat)
         Well(f, fill, 1)
-        if f.Rank and f.Rank.Text then p:Label(f.Rank.Text, "text", true) end
+        local text = f.Rank and f.Rank.Text
+        if text then
+            p:Label(text, "text", true)
+            -- Blizzard's font was outlined (Number12FontOutline); ours is not,
+            -- so a shadow keeps it off the fill.
+            text:SetShadowColor(0, 0, 0, 1)
+            text:SetShadowOffset(1, -1)
+        end
     end,
 }
 
@@ -2162,6 +2171,12 @@ R{
         StripArt(b.Icon)
         StripArt(b.Overlay)
         S.Blank(b)
+        -- The skill bar beside it is frameStrata HIGH (the book's template), so
+        -- at the button's own strata the bar's well covered its left edge.
+        b:SetFrameStrata("HIGH")
+        local okP, par = pcall(b.GetParent, b)
+        local bar = okP and par and rawget(par, "StatusBar")
+        if bar and bar.GetFrameLevel then b:SetFrameLevel(bar:GetFrameLevel() + 5) end
         p:Fill(LOOK.buttonDanger.rest.fill)
         p:Border(LOOK.buttonDanger.rest.edge)
         p:Glyph("close", LOOK.close.glyphSize, "danger")

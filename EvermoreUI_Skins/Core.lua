@@ -926,6 +926,9 @@ local function Step(w, budget)
     if not ok then
         walks[w.root] = nil
         geterrorhandler()(("EvermoreUI Skins walk: %s"):format(tostring(err)))
+        -- The window's pack still runs: one bad object must not leave the
+        -- whole window without its layout.
+        if w.after then pcall(w.after, w.root) end
         return true
     end
     if coroutine.status(w.co) ~= "dead" then return false end
