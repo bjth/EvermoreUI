@@ -215,7 +215,7 @@ function S.Layout()
         frame:SetPoint("BOTTOMRIGHT", dock, "BOTTOMLEFT")
     end
     frame:SetWidth(w)
-    local bg = ns.BG
+    local bg = ns.Window().fill
     frame.bg:SetColorTexture(bg[1], bg[2], bg[3], db.bgAlpha)
     frame.div:ClearAllPoints()
     frame.div:SetWidth(Px(1))

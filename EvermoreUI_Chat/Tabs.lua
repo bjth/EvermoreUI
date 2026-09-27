@@ -245,7 +245,7 @@ function T.PlaceBand()
     band:SetPoint("BOTTOMLEFT", panel, "TOPLEFT")
     band:SetPoint("BOTTOMRIGHT", panel, "TOPRIGHT")
     band:SetHeight(h)
-    local bg = ns.BG
+    local bg = ns.Window().fill
     band.bg:SetColorTexture(bg[1], bg[2], bg[3], db.bgAlpha)
     band.bg:SetShown(db.tabsInPanel)
     band.div:SetHeight(ns.Px(1))

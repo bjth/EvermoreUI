@@ -76,12 +76,15 @@ local function Usable(tt)
 end
 ns.Usable = Usable
 
-local BORDER_DEFAULT = EV.Theme.C.border
+-- Tooltips and menus are raised surfaces, like our own panels and menus:
+-- T.LOOK.raised, read at paint time so they follow the theme.
+local raisedOut = {}
+local function Raised() return EV.Theme.Resolve(EV.Theme.LOOK.raised, nil, raisedOut) end
 
 local function PaintBorder(tt)
     local d = state[tt]
     if not (d and d.edge) then return end
-    local c = (M.db.qualityBorder and d.quality) or BORDER_DEFAULT
+    local c = (M.db.qualityBorder and d.quality) or Raised().edge
     EV.Pixel:CreateBorder(d.edge, 1, c[1], c[2], c[3], c[4] or 1)
 end
 
@@ -106,7 +109,7 @@ local function Skin(tt)
         d.bg, d.edge = fill, edge
     end
     if tt.NineSlice then tt.NineSlice:SetAlpha(0) end
-    local bg = EV.Theme.C.surface1 -- raised: tooltips and menus, like our own
+    local bg = Raised().fill
     d.bg:SetColorTexture(bg[1], bg[2], bg[3], M.db.bgAlpha)
     d.bg:Show()
     local ok, lvl = pcall(tt.GetFrameLevel, tt)
@@ -244,10 +247,11 @@ function ns.SkinHeader(tt)
     for _, r in ipairs({ h:GetRegions() }) do
         if r.IsObjectType and r:IsObjectType("Texture") and not d.ours[r] then r:SetAlpha(on and 0 or 1) end
     end
-    local bg = EV.Theme.C.surface1 -- raised: tooltips and menus, like our own
+    local r = Raised()
+    local bg = r.fill
     d.bg:SetColorTexture(bg[1], bg[2], bg[3], M.db.bgAlpha)
     d.bg:SetShown(on)
-    local border = EV.Pixel:CreateBorder(d.edge, 1, unpack(EV.Theme.C.border))
+    local border = EV.Pixel:CreateBorder(d.edge, 1, EV.Theme.C4(r.edge))
     border.edges[2]:Hide() -- bottom: the tooltip's own top border closes the tab
     d.edge:SetShown(on)
     local label = h.Label or h.Text
@@ -376,7 +380,8 @@ local function SyncAuraTooltip()
     local inb = _G.AuraContainerInbound
     if not inb then return end
     if M.db.skin and inb.SetTooltipBackdrop and CreateColor then
-        local bg, bd = EV.Theme.C.surface1, EV.Theme.C.border
+        local r = Raised()
+        local bg, bd = r.fill, r.edge
         pcall(inb.SetTooltipBackdrop, {
             backdropInfo = {
                 bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -403,7 +408,7 @@ local menuOwned = setmetatable({}, { __mode = "k" })
 
 local function SkinMenu(frame)
     if not (M.db.menus and frame) or (frame.IsForbidden and frame:IsForbidden()) then return end
-    local bg = EV.Theme.C.surface1 -- raised: tooltips and menus, like our own
+    local bg = Raised().fill
     local one = EV.Pixel:One(frame)
     for _, r in ipairs({ frame:GetRegions() }) do
         if r.IsObjectType and r:IsObjectType("Texture") and not menuOwned[r] then
@@ -424,7 +429,7 @@ local function SkinMenu(frame)
     end
     local ok, lvl = pcall(frame.GetFrameLevel, frame)
     if ok and lvl then d.edge:SetFrameLevel(lvl + 4) end
-    EV.Pixel:CreateBorder(d.edge, 1, unpack(EV.Theme.C.border))
+    EV.Pixel:CreateBorder(d.edge, 1, EV.Theme.C4(Raised().edge))
     d.edge:Show()
 end
 

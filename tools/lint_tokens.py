@@ -4,8 +4,13 @@
 Modules may not compose a control or a panel from raw tokens. A button is
 U.Button, a bordered box is U.Surface or U.Panel, a control box goes through
 U.PaintBox and a Look (EvermoreUI/Core/Looks.lua). This lists every string
-literal naming a surface or border token in the EvermoreUI_* addons, except
-EvermoreUI_Skins, which paints through the Looks by construction.
+literal naming a surface or border token handed to something that paints,
+and every direct read of one from the palette (T.C.surface1), in the
+EvermoreUI_* addons, except EvermoreUI_Skins, which paints through the Looks
+by construction.
+
+It reads a line at a time, so a call split across lines can slip past it.
+It is a guard rail, not a proof.
 
 Content colours are allowed: bar fills, class and data colours, a track under
 a value. Mark such a line with the comment `-- content colour` and it is
@@ -20,10 +25,15 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # A chrome token handed to something that paints: a fill, a border, a colour.
 # Settings that merely share a name ("border" as an option key) don't match.
+# Also a straight read of the palette (T.C.surface1, Theme.C["border"]),
+# which is a raw token by another route, and either quote style.
+CHROME = r'(surface[0-9A-Za-z]*|border|borderStrong)'
 PATTERN = re.compile(
     r'(Fill|Solid|TokenBorder|SetBorderToken|RGBA|Mix|Glyph|SetColorTexture|SetVertexColor)'
-    r'\(.*"(surface[0-9A-Za-z]*|border|borderStrong)"'
-    r'|(token|Token)\s*=\s*[^\n]*"(surface[0-9A-Za-z]*|border|borderStrong)"')
+    r'\(.*["\']' + CHROME + r'["\']'
+    r'|(token|Token)\s*=\s*[^\n]*["\']' + CHROME + r'["\']'
+    r'|\bC\.' + CHROME + r'\b'
+    r'|\bC\[["\']' + CHROME + r'["\']\]')
 MARK = "-- content colour"
 
 
