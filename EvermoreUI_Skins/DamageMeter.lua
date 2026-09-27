@@ -84,11 +84,7 @@ local function EntryLook(entry)
     if icon then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
     -- "Show bar icons" off hides the icon texture, not its frame: take our
     -- border with it.
-    local edges = entry.Icon and S.D(entry.Icon).packEdges
-    if edges then
-        local shown = icon and icon:IsShown() or false
-        for _, e in ipairs(edges) do e:SetShown(shown) end
-    end
+    if entry.Icon then EV.Pixel:ShowEdges(entry.Icon, icon and icon:IsShown() or false) end
 end
 
 local function Entry(entry)

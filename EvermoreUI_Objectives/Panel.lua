@@ -181,7 +181,7 @@ local function Build()
     function panel:Paint()
         self.bg:SetColorTexture(T.RGBA("surface0", M.db.bgAlpha))
         T.SetBorderToken(self, "border")
-        for _, e in ipairs(self.evBorder and self.evBorder.edges or {}) do e:SetShown(M.db.border) end
+        T.ShowBorder(self, M.db.border)
     end
     T.Watch(panel)
 

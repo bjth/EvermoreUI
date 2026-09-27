@@ -220,87 +220,50 @@ end
 --- FillTarget in Parts.lua, which follows the Bg to wherever Blizzard put it.
 function Painter:Fill(token, alpha, sub, on)
     local obj = on or self.obj
+    if not (obj and obj.CreateTexture) then return self end
     local d = S.D(obj)
-    if not d.fill then
-        if not (obj.CreateTexture) then return self end
-        d.fill = Ours(obj:CreateTexture(nil, "BACKGROUND", nil, sub or -7))
-        d.fill:SetAllPoints(obj)
-        if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(d.fill) end
-    end
+    -- EV.Pixel keeps the texture; d.fill is the same one, for the parts
+    -- that recolour it (States, panelTab) and the packs that hide it.
+    d.fill = d.fill or Ours(EV.Pixel:Fill(obj, "BACKGROUND", sub or -7))
     d.fillToken, d.fillAlpha = token, alpha
     d.fill:SetColorTexture(T.RGBA(token, alpha))
-    T.Watch(d.fill)
-    d.fill.Paint = function(self2) self2:SetColorTexture(T.RGBA(d.fillToken, d.fillAlpha)) end
+    T.Watch(d.fill, function(t) t:SetColorTexture(T.RGBA(d.fillToken, d.fillAlpha)) end)
     return self
 end
 
---- One physical pixel of border, on four textures of our own.
+--- One physical pixel of border, on EV.Pixel's hairlines, which live in its
+--- weak table: nothing is written onto the object, so a Blizzard frame is
+--- safe to border.
 ---
---- Deliberately not EV.Pixel:CreateBorder, which stashes the border on
---- `frame.evBorder`. That is a field write on one of Blizzard's frames,
---- which can taint a protected one; our own widgets can afford it, a
---- skinned Blizzard window cannot. The edges live in our weak table
---- instead, so nothing of theirs is written to at all.
 --- `on` borders something other than the painted object, the same way Fill's
 --- fourth argument fills something else. A check box needs it: the button's
 --- rect is its hit area, not its box (the auction house's is 36x36 for a box
 --- that reads about 20), so the border belongs on the box we draw inside it.
---- Re-apply one border's thickness. Split out because it has to run again
---- whenever the scale changes: a strip sized for the old scale is no longer
---- one physical pixel at the new one.
-local bordered = setmetatable({}, { __mode = "k" })   -- object -> true
-
-local function Snap4(obj)
-    local d = S.D(obj)
-    local e = d.edges
-    if not e then return end
-    local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(obj)) or 1
-    e[1]:SetHeight(px); e[2]:SetHeight(px)
-    e[3]:SetWidth(px);  e[4]:SetWidth(px)
-end
-
-function S.ResnapBorders()
-    for obj in pairs(bordered) do
-        if S.Alive(obj) then Snap4(obj) end
-    end
-end
-
 function Painter:Border(token, alpha, on)
     local obj = on or self.obj
+    if not (obj and obj.CreateTexture) then return self end
     local d = S.D(obj)
-    if not obj.CreateTexture then return self end
+    local edges = EV.Pixel:Edges(obj, { size = 1 })
     if not d.edges then
-        local e = {}
-        for i = 1, 4 do
-            e[i] = Ours(obj:CreateTexture(nil, "BORDER", nil, 7))
-            -- Without this a one-physical-pixel strip is at the mercy of the
-            -- renderer's own texel snapping, and where it lands decides
-            -- whether you get a line, two lines, or none. The auction house
-            -- money boxes lost their top edge outright while the quantity box
-            -- two rows above drew its top edge twice. EV.Pixel:CreateBorder
-            -- has always done this; Painter:Border never did.
-            if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e[i]) end
-        end
-        e[1]:SetPoint("TOPLEFT");    e[1]:SetPoint("TOPRIGHT")
-        e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT")
-        e[3]:SetPoint("TOPLEFT");    e[3]:SetPoint("BOTTOMLEFT")
-        e[4]:SetPoint("TOPRIGHT");   e[4]:SetPoint("BOTTOMRIGHT")
-        d.edges = e
-        bordered[obj] = true
+        for _, e in ipairs(edges) do Ours(e) end
+        d.edges = edges
     end
-    -- Thickness every call, not just on creation: a second Border on the same
-    -- object used to keep whatever the first one measured.
-    Snap4(obj)
     d.edgeToken, d.edgeAlpha = token or "border", alpha
     local function Paint()
-        for _, t in ipairs(d.edges) do t:SetColorTexture(T.RGBA(d.edgeToken, d.edgeAlpha)) end
+        EV.Pixel:SetEdgeColor(obj, T.RGBA(d.edgeToken, d.edgeAlpha))
     end
     Paint()
-    T.Watch(d.edges[1])
-    d.edges[1].Paint = Paint
-    d.border = d.edges
+    T.Watch(edges[1], Paint)
+    d.border = edges
     return self
 end
+
+--- A painter for any object, for code outside a part (the packs' Kit).
+function S.PainterFor(obj) return setmetatable({ obj = obj }, Painter) end
+S.Painter = Painter
+
+--- Every hairline is EV.Pixel's now; one resnap covers them all.
+function S.ResnapBorders() EV.Pixel:ResnapAll() end
 
 --- A font string takes our face and one of our colours. Size and
 --- justification are Blizzard's; we do not re-flow their text.
@@ -316,11 +279,13 @@ function Painter:Label(fs, token, bold)
         local d = S.D(fs)
         d.token = token or "text"
         fs:SetTextColor(T.RGBA(d.token))
-        T.Watch(fs)
-        fs.Paint = function(self2) self2:SetTextColor(T.RGBA(S.D(self2).token)) end
+        T.Watch(fs, S.RepaintText)
     end
     return self
 end
+
+--- Theme repaint for a font string we coloured: its token lives in S.D.
+function S.RepaintText(fs) fs:SetTextColor(T.RGBA(S.D(fs).token or "text")) end
 
 --- One of our glyphs, centred on the object.
 function Painter:Glyph(name, size, token)
@@ -735,8 +700,7 @@ local function LiftText(obj)
                 if type(r.SetFixedColor) == "function" then pcall(r.SetFixedColor, r, true) end
                 S.D(r).token = "text"
                 pcall(r.SetTextColor, r, T.RGBA("text"))
-                T.Watch(r)
-                r.Paint = function(self2) self2:SetTextColor(T.RGBA(S.D(self2).token)) end
+                T.Watch(r, S.RepaintText)
             end
         end
     end

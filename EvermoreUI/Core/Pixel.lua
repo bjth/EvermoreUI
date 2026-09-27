@@ -216,25 +216,32 @@ do
     HookType(sb:GetStatusBarTexture())
 end
 
-function Pixel:CreateBackdrop(frame, r, g, b, a)
-    local bg = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bg:SetAllPoints()
-    bg:SetColorTexture(r or 0.05, g or 0.05, b or 0.06, a or 0.85)
-    NoSnap(bg)
-    frame.evBackdrop = bg
-    return bg
-end
-
 --------------------------------------------------------------------------------
---  Borders: four edge strips, `size` physical pixels thick. Every border is
---  remembered (weakly) and re-snapped whenever the scale changes.
+--  Hairlines and fills
+--
+--  The one implementation of "four one-physical-pixel textures in a colour"
+--  and "a flat texture behind everything", for our own frames and Blizzard's
+--  alike. Both live in weak tables keyed by the object, so nothing is ever
+--  written onto the object itself: a field on one of Blizzard's frames can
+--  taint it, and the skins paint Blizzard's frames with these same calls.
+--
+--    Pixel:Edges(obj, opts)      create or return; opts: size (px), decouple,
+--                                layer, sub. Returns the edge list and the
+--                                border record { edges, size, host }.
+--    Pixel:EdgesOf(obj)          the record, or nil
+--    Pixel:SetEdgeColor(obj, r, g, b, a)
+--    Pixel:ShowEdges(obj, shown)
+--    Pixel:Fill(obj, layer, sub) create or return the fill texture
+--    Pixel:FillOf(obj)           the fill texture, or nil
+--    Pixel:ResnapAll()           every hairline, after a scale change
 --------------------------------------------------------------------------------
-local borders = setmetatable({}, { __mode = "k" })  -- frame -> true
+local borders = setmetatable({}, { __mode = "k" })  -- object -> border record
+local fills = setmetatable({}, { __mode = "k" })    -- object -> fill texture
 
 --- Snap against the frame the strips actually LIVE on, which is not always
 --- the frame the border belongs to. See the decoupled case below.
-local function Snap4(frame, border)
-    local px = Pixel:One(border.host or frame) * (border.size or 1)
+local function Snap4(obj, border)
+    local px = Pixel:One(border.host or obj) * (border.size or 1)
     local e = border.edges
     e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
 end
@@ -267,23 +274,25 @@ end
 --- StatusBar: a bar's fill texture draws on the ARTWORK layer, above the
 --- BORDER layer, so a border drawn on the bar itself is underneath its own
 --- fill.
-function Pixel:CreateBorder(frame, size, r, g, b, a, decouple)
-    local border = frame.evBorder
+function Pixel:Edges(obj, opts)
+    opts = opts or {}
+    local border = borders[obj]
     if not border then
-        local host = frame
+        local host = obj
+        local decouple = opts.decouple
         if decouple then
-            local c = CreateFrame("Frame", nil, frame)
-            c:SetAllPoints(frame)
-            c:SetFrameLevel((frame:GetFrameLevel() or 0) + 1)
+            local c = CreateFrame("Frame", nil, obj)
+            c:SetAllPoints(obj)
+            c:SetFrameLevel((obj:GetFrameLevel() or 0) + 1)
             if c.SetIgnoreParentScale then
                 c:SetIgnoreParentScale(true)
                 c:SetScale(1)
             end
             host = c
         end
-        border = { edges = {}, host = (host ~= frame) and host or nil }
+        border = { edges = {}, host = (host ~= obj) and host or nil }
         for i = 1, 4 do
-            local t = host:CreateTexture(nil, decouple and "OVERLAY" or "BORDER", nil, 7)
+            local t = host:CreateTexture(nil, opts.layer or (decouple and "OVERLAY" or "BORDER"), nil, opts.sub or 7)
             -- Snapping stays OFF, deliberately. Its job here is to stop a
             -- one-pixel strip rounding to zero width; with the container
             -- decoupled the geometry is already exact.
@@ -295,19 +304,57 @@ function Pixel:CreateBorder(frame, size, r, g, b, a, decouple)
         e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT")
         e[3]:SetPoint("TOPLEFT");    e[3]:SetPoint("BOTTOMLEFT")
         e[4]:SetPoint("TOPRIGHT");   e[4]:SetPoint("BOTTOMRIGHT")
-        frame.evBorder = border
-        borders[frame] = true
+        borders[obj] = border
     end
-    border.size = size or 1
-    for i = 1, 4 do border.edges[i]:SetColorTexture(r or 0, g or 0, b or 0, a or 1) end
-    Snap4(frame, border)
+    if opts.size then border.size = opts.size end
+    Snap4(obj, border)
+    return border.edges, border
+end
+
+function Pixel:EdgesOf(obj) return borders[obj] end
+
+function Pixel:SetEdgeColor(obj, r, g, b, a)
+    local border = borders[obj]
+    if not border then return end
+    for _, e in ipairs(border.edges) do e:SetColorTexture(r or 0, g or 0, b or 0, a or 1) end
+end
+
+function Pixel:ShowEdges(obj, shown)
+    local border = borders[obj]
+    if not border then return end
+    for _, e in ipairs(border.edges) do e:SetShown(shown and true or false) end
+end
+
+--- A border `size` physical pixels thick in one colour: Edges plus a colour.
+function Pixel:CreateBorder(frame, size, r, g, b, a, decouple)
+    local _, border = self:Edges(frame, { size = size or 1, decouple = decouple })
+    self:SetEdgeColor(frame, r, g, b, a)
     return border
 end
 
-function Pixel:ResnapBorders()
-    for frame in pairs(borders) do
-        if frame.evBorder then Snap4(frame, frame.evBorder) end
+function Pixel:ResnapAll()
+    for obj, border in pairs(borders) do Snap4(obj, border) end
+end
+Pixel.ResnapBorders = Pixel.ResnapAll
+
+--- The flat texture behind an object's own drawing, created once.
+function Pixel:Fill(obj, layer, sub)
+    local t = fills[obj]
+    if not t then
+        t = obj:CreateTexture(nil, layer or "BACKGROUND", nil, sub or -7)
+        t:SetAllPoints(obj)
+        NoSnap(t)
+        fills[obj] = t
     end
+    return t
+end
+
+function Pixel:FillOf(obj) return fills[obj] end
+
+function Pixel:CreateBackdrop(frame, r, g, b, a)
+    local bg = self:Fill(frame, "BACKGROUND", -8)
+    bg:SetColorTexture(r or 0.05, g or 0.05, b or 0.06, a or 0.85)
+    return bg
 end
 
 --------------------------------------------------------------------------------
@@ -333,7 +380,7 @@ function Pixel:TargetScale()
 end
 
 local function Changed()
-    Pixel:ResnapBorders()
+    Pixel:ResnapAll()
     if EV.Movers and EV.dbReady then EV.Movers:ApplyAll() end
     EV:SendMessage("EV_PIXEL_CHANGED")
 end

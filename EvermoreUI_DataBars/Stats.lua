@@ -332,9 +332,7 @@ function ns.ApplyStats()
         local cfg = M.db[key]
         f.text:SetFont(font, cfg.fontSize, "")
         f.bg:SetShown(cfg.background)
-        if f.evBorder then
-            for _, e in ipairs(f.evBorder.edges) do e:SetShown(cfg.background) end
-        end
+        T.ShowBorder(f, cfg.background)
         local shown = cfg.enabled or (EV.Movers:IsUnlocked())
         f:SetShown(shown)
         if key == "fps" then

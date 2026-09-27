@@ -139,53 +139,15 @@ function Kit:Art(obj, ...)
     return self
 end
 
---- Our flat surface behind an object's own drawing.
+--- Our flat surface behind an object's own drawing, and a hairline round
+--- it: the Painter's own, so a part and a pack on one object share them.
 function Kit:Fill(obj, token, alpha, sub)
-    if not (Alive(obj) and obj.CreateTexture) then return self end
-    local d = S.D(obj)
-    if not d.packFill then
-        d.packFill = S.Ours(obj:CreateTexture(nil, "BACKGROUND", nil, sub or -7))
-        d.packFill:SetAllPoints(obj)
-    end
-    d.packFillToken, d.packFillAlpha = token, alpha
-    local function Paint(self2) self2:SetColorTexture(T.RGBA(d.packFillToken, d.packFillAlpha)) end
-    Paint(d.packFill)
-    T.Watch(d.packFill)
-    d.packFill.Paint = Paint
+    if Alive(obj) then S.PainterFor(obj):Fill(token, alpha, sub) end
     return self
 end
 
---- One physical pixel of border on four textures of our own.
 function Kit:Border(obj, token, alpha)
-    if not (Alive(obj) and obj.CreateTexture) then return self end
-    local d = S.D(obj)
-    if not d.packEdges then
-        local e = {}
-        for i = 1, 4 do
-            e[i] = S.Ours(obj:CreateTexture(nil, "BORDER", nil, 7))
-            -- See the note in Painter:Border: a hairline that is not exempt
-            -- from texel snapping is not reliably a hairline.
-            if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e[i]) end
-        end
-        e[1]:SetPoint("TOPLEFT");    e[1]:SetPoint("TOPRIGHT")
-        e[2]:SetPoint("BOTTOMLEFT"); e[2]:SetPoint("BOTTOMRIGHT")
-        e[3]:SetPoint("TOPLEFT");    e[3]:SetPoint("BOTTOMLEFT")
-        e[4]:SetPoint("TOPRIGHT");   e[4]:SetPoint("BOTTOMRIGHT")
-        d.packEdges = e
-    end
-    do
-        local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(obj)) or 1
-        local e = d.packEdges
-        e[1]:SetHeight(px); e[2]:SetHeight(px)
-        e[3]:SetWidth(px);  e[4]:SetWidth(px)
-    end
-    d.packEdgeToken, d.packEdgeAlpha = token or "border", alpha
-    local function Paint()
-        for _, t in ipairs(d.packEdges) do t:SetColorTexture(T.RGBA(d.packEdgeToken, d.packEdgeAlpha)) end
-    end
-    Paint()
-    T.Watch(d.packEdges[1])
-    d.packEdges[1].Paint = Paint
+    if Alive(obj) then S.PainterFor(obj):Border(token, alpha) end
     return self
 end
 
@@ -219,8 +181,7 @@ function Kit:Label(fs, token, bold)
         local d = S.D(fs)
         d.token = token or "text"
         fs:SetTextColor(T.RGBA(d.token))
-        T.Watch(fs)
-        fs.Paint = function(self2) self2:SetTextColor(T.RGBA(S.D(self2).token)) end
+        T.Watch(fs, S.RepaintText)
     end
     return self
 end
@@ -240,7 +201,6 @@ function Kit:NoFill(obj)
     local d = S.D(obj)
     d.wantsFill = false
     if d.fill and d.fill.SetAlpha then d.fill:SetAlpha(0) end
-    if d.packFill and d.packFill.SetAlpha then d.packFill:SetAlpha(0) end
     return self
 end
 

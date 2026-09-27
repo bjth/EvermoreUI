@@ -76,8 +76,7 @@ local function Rule(row)
                 S.D(r).ruled = true
                 local function Paint(self2) self2:SetColorTexture(T.RGBA("divider")) end
                 Paint(r)
-                T.Watch(r)
-                r.Paint = Paint
+                T.Watch(r, Paint)
             end
         end
     end
@@ -417,7 +416,7 @@ local function IconTabState(tab)
     if not d.iconBox then return end
     local on = tab.isSelected
     d.iconBox.fill:SetColorTexture(T.RGBA(on and "surface2" or "surfaceSunk"))
-    for _, e in ipairs(d.iconBox.edges) do e:SetColorTexture(T.RGBA(on and "accent" or "border")) end
+    EV.Pixel:SetEdgeColor(d.iconBox, T.RGBA(on and "accent" or "border"))
     if tab.Icon then
         local hot = on or (tab.IsMouseOver and tab:IsMouseOver())
         tab.Icon:SetDesaturated(not hot)
@@ -430,28 +429,17 @@ local function IconTab(k, tab)
     local d = S.D(tab)
     -- panelTab painted the whole 44px rect; that box goes, ours replaces it.
     if d.fill then d.fill:SetAlpha(0) end
-    if d.edges then for _, e in ipairs(d.edges) do e:SetAlpha(0) end end
+    EV.Pixel:ShowEdges(tab, false)
     if not d.iconBox then
         local box = CreateFrame("Frame", nil, tab)
         S.ours[box] = true
         box:SetSize(TAB_H, TAB_H)
         box:SetPoint("CENTER")
         box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
-        box.fill = box:CreateTexture(nil, "BACKGROUND")
-        box.fill:SetAllPoints()
-        box.edges = {}
-        for i = 1, 4 do
-            local e = box:CreateTexture(nil, "BORDER")
-            if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e) end
-            box.edges[i] = e
-        end
-        local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(box)) or 1
-        box.edges[1]:SetPoint("TOPLEFT");    box.edges[1]:SetPoint("TOPRIGHT");    box.edges[1]:SetHeight(px)
-        box.edges[2]:SetPoint("BOTTOMLEFT"); box.edges[2]:SetPoint("BOTTOMRIGHT"); box.edges[2]:SetHeight(px)
-        box.edges[3]:SetPoint("TOPLEFT");    box.edges[3]:SetPoint("BOTTOMLEFT");  box.edges[3]:SetWidth(px)
-        box.edges[4]:SetPoint("TOPRIGHT");   box.edges[4]:SetPoint("BOTTOMRIGHT"); box.edges[4]:SetWidth(px)
+        box.fill = EV.Pixel:Fill(box, "BACKGROUND")
+        EV.Pixel:Edges(box)
         d.iconBox = box
-        T.Watch(box.fill); box.fill.Paint = function() IconTabState(tab) end
+        T.Watch(box.fill, function() IconTabState(tab) end)
         -- Pooled buttons: hooks go on once per button, state is re-read each time.
         k:After(tab, "SetTabSelected", function() IconTabState(tab) end)
         k:Hook(tab, "OnEnter", function() IconTabState(tab) end)

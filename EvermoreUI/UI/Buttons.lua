@@ -19,8 +19,7 @@ local function PaintButton(b)
     local style = b._style
     local hover, pressed = b._hover, b._pressed
     local fill, label = b._fill, b.label
-    local edges = b.evBorder and b.evBorder.edges
-    local function edgeShown(on) if edges then for _, e in ipairs(edges) do e:SetShown(on) end end end
+    local function edgeShown(on) T.ShowBorder(b, on) end
     local tr, tg, tb = T.RGBA("text")
     if style == "primary" then
         edgeShown(false)
@@ -171,9 +170,8 @@ function U.IconButton(parent, opts, onClick)
     U.Init(b)
 
     function b:Paint()
-        local edges = self.evBorder.edges
         local ghost = self._style == "ghost"
-        for _, e in ipairs(edges) do e:SetShown(not ghost or self._hover) end
+        T.ShowBorder(self, not ghost or self._hover)
         if ghost then
             local token = self._pressed and "surfaceSunk" or (self._hover and "surface3")
             if token then self._fill:SetColorTexture(T.RGBA(token)) else self._fill:SetColorTexture(0, 0, 0, 0) end

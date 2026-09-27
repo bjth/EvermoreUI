@@ -130,8 +130,9 @@ function T.Apply(name)
         end
         T.C[k] = c
     end
-    for obj in pairs(T.watchers) do
-        if obj.Paint then pcall(obj.Paint, obj) end
+    for obj, fn in pairs(T.watchers) do
+        if type(fn) == "function" then pcall(fn, obj)
+        elseif obj.Paint then pcall(obj.Paint, obj) end
     end
     if EV.SendMessage then EV:SendMessage("EV_THEME_CHANGED", T.mode) end
 end
@@ -142,9 +143,11 @@ function T.Hex(token)
     return ("%02x%02x%02x"):format(math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
 end
 
---- Objects with a :Paint() method repaint themselves when the theme changes.
+--- Repaint on every theme change. T.Watch(obj) calls obj:Paint(), for our
+--- own objects; T.Watch(obj, fn) calls fn(obj) and keeps fn here, which is
+--- the form for anything of Blizzard's: it writes nothing onto the object.
 T.watchers = setmetatable({}, { __mode = "k" })
-function T.Watch(obj) T.watchers[obj] = true; return obj end
+function T.Watch(obj, fn) T.watchers[obj] = fn or true; return obj end
 
 --- Run fn now and again on every theme change (for code that colours plain
 --- regions rather than objects with a :Paint()). Kept for good: use it for
@@ -212,20 +215,30 @@ function T.Text(parent, size, token, bold, justify)
     return fs
 end
 
+--- A one-pixel border in a token colour (EV.Pixel:Edges underneath).
 function T.TokenBorder(frame, token, a)
     local r, g, b, al = T.RGBA(token or "border", a)
     return EV.Pixel:CreateBorder(frame, 1, r, g, b, al)
 end
 
 function T.SetBorderColor(frame, r, g, b, a)
-    local border = frame.evBorder
-    if not border then return end
-    for _, e in ipairs(border.edges) do e:SetColorTexture(r, g, b, a) end
+    EV.Pixel:SetEdgeColor(frame, r, g, b, a)
 end
 
 function T.SetBorderToken(frame, token, a)
     T.SetBorderColor(frame, T.RGBA(token, a))
 end
+
+--- A resolved colour ({ r, g, b, a } from T.Resolve) onto a border. A colour
+--- with no alpha hides the edges rather than drawing them clear.
+function T.SetEdge(frame, c)
+    local shown = c ~= nil and (c[4] or 1) > 0
+    EV.Pixel:ShowEdges(frame, shown)
+    if shown then EV.Pixel:SetEdgeColor(frame, c[1], c[2], c[3], c[4]) end
+end
+
+--- Show or hide a border made with T.TokenBorder.
+function T.ShowBorder(frame, shown) EV.Pixel:ShowEdges(frame, shown) end
 
 --- Soft drop shadow: stacked black rings outside the frame.
 function T.Shadow(frame, size, strength)

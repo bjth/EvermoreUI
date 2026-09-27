@@ -347,8 +347,7 @@ R{
             if thumb.SetAtlas then pcall(thumb.SetAtlas, thumb, nil) end
             thumb:SetColorTexture(T.RGBA("accent"))
             S.D(thumb).token = "accent"
-            T.Watch(thumb)
-            thumb.Paint = function(self) self:SetColorTexture(T.RGBA("accent")) end
+            T.Watch(thumb, function(t) t:SetColorTexture(T.RGBA("accent")) end)
         end
     end,
 }
@@ -1091,8 +1090,7 @@ R{
             if thumb.SetAtlas then pcall(thumb.SetAtlas, thumb, nil) end
             thumb:SetColorTexture(T.RGBA("surface3"))
             local function Paint(self) self:SetColorTexture(T.RGBA("surface3")) end
-            T.Watch(thumb)
-            thumb.Paint = Paint
+            T.Watch(thumb, Paint)
             if bar.HookScript then
                 bar:HookScript("OnEnter", function() thumb:SetColorTexture(T.RGBA("accent")) end)
                 bar:HookScript("OnLeave", function() thumb:SetColorTexture(T.RGBA("surface3")) end)
