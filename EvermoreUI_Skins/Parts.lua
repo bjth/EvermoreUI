@@ -1679,7 +1679,7 @@ R{
                 local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1
                 for _, t in ipairs(d.rules) do
                     t:SetHeight(px)
-                    t:SetColorTexture(S.Colour(T.Resolve(SL).rule))
+                    t:SetColorTexture(T.C4(T.Resolve(SL).rule))
                 end
             end
             Paint()
