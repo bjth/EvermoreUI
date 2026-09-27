@@ -152,6 +152,11 @@ function U.IconButton(parent, opts, onClick)
         local r = U.PaintBox(self, self._fill, self._look)
         if self._tint then
             if r.glyph then icon:SetVertexColor(T.C4(r.glyph)) end
+        elseif self._disabled then
+            -- A picture can't take the Look's disabled glyph colour, so it
+            -- greys and dims the way a faded control would.
+            icon:SetDesaturated(true)
+            icon:SetVertexColor(1, 1, 1, 0.45)
         else
             icon:SetDesaturated(opts.toggle and not self._selected and not self._hover or false)
             icon:SetVertexColor(1, 1, 1, (self._selected or self._hover or not opts.toggle) and 1 or 0.7)

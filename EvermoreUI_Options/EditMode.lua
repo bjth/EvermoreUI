@@ -247,6 +247,7 @@ end
 --------------------------------------------------------------------------------
 --  Handles (the overlay on each frame)
 --------------------------------------------------------------------------------
+local handleState = {}   -- reused: this runs every frame of a drag, for every handle
 local function PaintHandle(h)
     local key = h.key
     local sel = selected[key]
@@ -254,7 +255,9 @@ local function PaintHandle(h)
     local anchored = Movers:GetAnchor(key) ~= nil
     local isPickTarget = pick and pick.key ~= key
 
-    local r = T.Resolve(T.LOOK.mover, { on = sel, hover = hover, focus = isPickTarget and hover and not sel })
+    local st = handleState
+    st.on, st.hover, st.focus = sel, hover, isPickTarget and hover and not sel
+    local r = T.Resolve(T.LOOK.mover, st)
     h.fill:SetColorTexture(T.C4(r.fill))
     h.backing:SetColorTexture(T.C4(r.backing))
     T.SetEdge(h, r.edge)

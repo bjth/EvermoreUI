@@ -23,6 +23,7 @@ if EV_BLOCKED then return end
 local EV = EvermoreUI
 local T = EV.Theme
 local W = EV.UI
+local HOVER = { hover = true }
 
 local Builder = {}
 Builder.__index = Builder
@@ -117,7 +118,11 @@ local function BuildCell(builder, host, cfg)
     local hl = T.Solid(host, "BORDER", 0, 0, 0, 0)
     hl:SetAllPoints()
     hl:Hide()
-    T.OnTheme(function() hl:SetColorTexture(T.C4(T.Resolve(T.LOOK.row, { hover = true }).highlight)) end)
+    -- Watched on the texture, not T.OnTheme: pages are rebuilt, and OnTheme
+    -- callbacks live for good.
+    local function PaintHL(t) t:SetColorTexture(T.C4(T.Resolve(T.LOOK.row, HOVER).highlight)) end
+    PaintHL(hl)
+    T.Watch(hl, PaintHL)
     host:EnableMouse(true)
     host:SetScript("OnEnter", function(self)
         hl:Show()
