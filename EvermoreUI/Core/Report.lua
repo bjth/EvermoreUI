@@ -52,9 +52,15 @@ end)
 --------------------------------------------------------------------------------
 --  Recent errors mentioning us
 --------------------------------------------------------------------------------
+--- A secret message or stack (the error frame keeps Blizzard's too) is never
+--- read: indexing one is blocked and taints the caller.
+local function Readable(v)
+    return type(v) == "string" and not (issecretvalue and issecretvalue(v))
+end
+
 local function Ours(msg, stack)
-    return (type(msg) == "string" and msg:find("EvermoreUI", 1, true))
-        or (type(stack) == "string" and stack:find("EvermoreUI", 1, true))
+    return (Readable(msg) and msg:find("EvermoreUI", 1, true))
+        or (Readable(stack) and stack:find("EvermoreUI", 1, true))
 end
 
 local function FirstLines(s, n)
@@ -77,11 +83,19 @@ local caught, caughtIndex = {}, {}
 do
     local previous = geterrorhandler and geterrorhandler()
     if type(previous) == "function" and seterrorhandler then
+        local secret = issecretvalue or function() return false end
         seterrorhandler(function(msg, ...)
+            -- Every error in the game comes through here, Blizzard's own
+            -- included, and on Forever some of those carry a secret message
+            -- (the Cooldown Manager's, refreshing auras). Reading one is
+            -- blocked: "An attempt to index a secret value was blocked because
+            -- of taint from EvermoreUI - Report.lua" in the taint log, once per
+            -- refresh. A secret is never ours to record; hand it straight on.
+            if secret(msg) then return previous(msg, ...) end
             -- Errors from the game's own calls ("Font not set") don't name a
             -- file, so the stack is checked as well as the message.
             local okS, stack = pcall(debugstack, 2)
-            stack = okS and type(stack) == "string" and stack or ""
+            stack = okS and type(stack) == "string" and not secret(stack) and stack or ""
             if type(msg) == "string" and (msg:find("EvermoreUI", 1, true) or stack:find("EvermoreUI", 1, true)) then
                 local e = caughtIndex[msg]
                 if e then
