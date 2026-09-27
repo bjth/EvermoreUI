@@ -83,11 +83,17 @@ meter in our style, and cooldown icons that tell you more.
   proper filter button on one line, and plain rows with a copper highlight
   for the recipe you've picked (recipe colours still show how hard each
   one is). Create All, the count and Create are one group on a footer
-  across the bottom, with the count centred. The profession tabs down the side match
-  the character window's. Reagent and result icons use the icon style. The
+  across the bottom, with the count centred. The profession tabs down the
+  side match the character window's. Reagent and result icons use the icon style. The
   overview's cards are plain cards, their spells in the icon style and
   Unlearn a small red cross button, which now also sits beside the skill
   bar on a primary profession's own page.
+- **Pop-ups** (confirming an unlearn, deleting an item, naming a set) are
+  a plain window with our buttons, the one that confirms in copper, and a
+  proper box round the text field.
+- **Text on a control always reads.** Where a button's colour and its
+  label would be too close, the label switches to light or dark to suit,
+  and dark text drops the shadow that smeared it.
 - **Page arrows** in every window that uses the spellbook's (mail, the
   merchant, collections) are flat buttons with a chevron.
 
