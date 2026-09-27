@@ -58,6 +58,17 @@ meter in our style, and cooldown icons that tell you more.
   learned dimmed; the pager has a footer of its own with flat arrows. The
   pulsing glow and the sweep over every icon are gone: a spell on none of
   your bars has a small copper mark in its corner instead.
+- **The character window, redone.** Stat groups are a gold heading
+  between two rules instead of a box each. The stats, titles and sets
+  buttons and your level sit on a band at the top of the pane. The model's
+  backdrop stays inside the window. The tabs down the side are compact
+  squares. The tabs beside each slot are slim, flat, with an arrow, and
+  their list has a plain panel. New Set, Equip and Save are one set of
+  buttons with room between them; titles and equipment sets are rows and
+  cards in our look.
+- **Reputation, Skills, Currency and Statistics**: flat group headers with
+  an arrow, flat progress bars in a well, a copper highlight on the row
+  you've picked, and the detail pane's rule in our colours.
 - **Page arrows** in every window that uses the spellbook's (mail, the
   merchant, collections) are flat buttons with a chevron.
 

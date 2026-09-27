@@ -96,7 +96,7 @@ def flatten(node, templates, depth=0, seen=None):
     out["kv"].update(node.get("kv") or {})
     for ch in node.get("ch") or []:
         c = flatten(ch, templates, depth + 1, seen)
-        for key, dst in (("k", "k"), ("n", "n"), ("role", "role")):
+        for key, dst in (("k", "k"), ("n", "n"), ("role", "role"), ("arr", "arr")):
             if ch.get(key):
                 c[dst] = ch[key]
         c["own"] = True
@@ -113,7 +113,7 @@ def _lstr(s):
 
 def _lobj(o, out):
     out.append("{")
-    for key in ("t", "a", "f", "k", "n", "role"):
+    for key in ("t", "a", "f", "k", "n", "role", "arr"):
         if o.get(key):
             out.append("%s=%s," % (key, _lstr(o[key])))
     if o.get("own"):

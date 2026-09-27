@@ -675,22 +675,154 @@ P{
 --------------------------------------------------------------------------------
 --  CharacterFrame (Camelot CharacterFrame.xml, PaperDollFrame.xml)
 --
---  The equipment slots, the stat headers and rows, and the side tabs are
---  parts (itemButton, statHeader, statRow, sideTab), and the window's own art
---  is in S.ORNATE. What is left is named:
+--  The equipment slots, the stat headers and rows, the popout tabs, the
+--  title and set rows, New Set and the side tabs' look are parts; the
+--  window's own art is in S.ORNATE. This is the layout, all measured from
+--  Blizzard's XML:
 --
---    * PaperDollSidebarTab1-3, the stats / titles / equipment sets buttons
---      over the stat pane: CheckButtons with their icon, a UI-Character-Info-
---      StatTab frame and a -Selected checked texture (both in S.ORNATE). Ours
---      are buttons, on while checked (PaperDollFrame_UpdateSidebarTabs sets
---      it).
---    * RightPaneToggleButton, the gold arrow that folds the stat pane: our
---      button with a chevron as Blizzard's pointed (left while open), turned after
---      SetRightPaneCollapsed.
+--    LeftPaneHost        398 wide from y=-20, the model and the slots
+--      CharacterModelScene   fills it, with the race backdrop (four
+--                            BACKGROUND textures and an overlay) on its own
+--                            edges. On our window those edges are our border
+--                            and title rule, so the backdrop drew over both:
+--                            the "background outside the frame". Ours sits it
+--                            one pixel inside the border and under the rule.
+--    RightPaneHost       233 wide beside it
+--      StoneBg               the top of the pane (the stats, titles and sets
+--                            buttons and "Level N Class"); in S.ORNATE, which
+--                            left those floating. Ours is a band where it was,
+--                            shown exactly when Blizzard shows the stone
+--                            (UpdateRightPaneHeader: the Character tab only).
+--      common-framedivider   the seam between the panes; a hairline of ours.
+--    ModeTabs            64x384 off the window's right edge from y=-30; six
+--                        LargeSideTabButtonTemplate tabs sized from their art
+--                        (about 60x55) with a 50px icon, chained 2px apart by
+--                        UpdateTabLayout. Ours are LOOK.sideTab squares, the
+--                        chain kept, `gap` off the window.
+--    EquipmentManagerPane  NewSet 180x34 at BOTTOM y=50 over Equip and Save,
+--                        99x28 at x=-50 and x=50: touching. Ours: the two
+--                        with a gap, New Set spanning both at their height.
+--    PaperDollSidebarTab1-3  the stats / titles / sets buttons: our button,
+--                        on while checked.
+--    RightPaneToggleButton   the gold arrow that folds the stat pane: our
+--                        button with a chevron as Blizzard's pointed (left
+--                        while open), turned after SetRightPaneCollapsed.
 --------------------------------------------------------------------------------
+local SET_BUTTON = { w = 97, h = 28, gap = 4, bottom = 20, above = 6 }
+
+local function ModeTab(k, tab)
+    local SL = T.LOOK.sideTab
+    k:Size(tab, SL.box, SL.box)
+    local icon = tab.Icon
+    if not icon then return end
+    local function Seat(pressed)
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", tab, "CENTER", pressed and 1 or 0, pressed and -1 or 0)
+        icon:SetSize(SL.icon, SL.icon)
+    end
+    Seat(false)
+    -- Blizzard re-sizes the icon to its interior (50) on every SetChecked and
+    -- re-anchors it off centre on every press.
+    k:After(tab, "SetChecked", function() Seat(false) end)
+    k:Hook(tab, "OnMouseDown", function() Seat(true) end)
+    k:Hook(tab, "OnMouseUp", function() Seat(false) end)
+end
+
 P{
     name  = "CharacterFrame",
     apply = function(f, k)
+        -- The model and its backdrop, inside our border and under the title rule.
+        local left, scene = f.LeftPaneHost, _G.CharacterModelScene
+        if left and scene then
+            k:Anchors(scene, { { "TOPLEFT", left, "TOPLEFT", 1, -2 },
+                               { "BOTTOMRIGHT", left, "BOTTOMRIGHT", -1, 1 } })
+            -- The zoom and turn buttons are hidden until the model is set up,
+            -- after the window's walk; dress them when they appear.
+            local cf = scene.ControlFrame
+            if cf then
+                k:Dress(cf)
+                k:Hook(cf, "OnShow", function(self2) S.Walk(self2, 0) end)
+            end
+        end
+
+        -- The top of the right pane: a band where the stone was.
+        local right = f.RightPaneHost
+        local stone = right and right.StoneBg
+        if right and stone then
+            local band = Band(right, "header", "bottom", function(b)
+                b:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -2)
+                b:SetPoint("BOTTOMRIGHT", stone, "BOTTOMRIGHT", -1, 0)
+            end)
+            -- PaperDollLevelInfo is declared frameLevel="5", absolute, so on a
+            -- raised window it can sit under the band; keep it over.
+            local info = _G.PaperDollLevelInfo
+            if info and info:GetFrameLevel() <= band:GetFrameLevel() then
+                info:SetFrameLevel(band:GetFrameLevel() + 2)
+            end
+            local function Sync() band:SetShown(stone:IsShown()) end
+            Sync()
+            for _, m in ipairs({ "Show", "Hide", "SetShown" }) do k:After(stone, m, Sync) end
+
+            -- The seam between the panes.
+            k:Once(right, "seam", function()
+                local seam = S.Ours(right:CreateTexture(nil, "BORDER", nil, 7))
+                if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(seam) end
+                seam:SetPoint("TOPLEFT", right, "TOPLEFT", 0, -2)
+                seam:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 0, 1)
+                local function Paint()
+                    seam:SetColorTexture(S.Colour("border"))
+                    seam:SetWidth((EV.Pixel and EV.Pixel.One and EV.Pixel:One(right)) or 1)
+                end
+                Paint()
+                T.Watch(seam, Paint)
+            end)
+        end
+
+        -- The mode tabs down the right edge.
+        local tabs = f.ModeTabs
+        if tabs then
+            k:Move(tabs, "TOPLEFT", f, "TOPRIGHT", T.LOOK.sideTab.gap, -((S.TITLE_BAND or 20) + 8))
+            for _, tab in ipairs(tabs.Tabs or {}) do ModeTab(k, tab) end
+        end
+
+        -- The equipment manager's buttons.
+        local em = _G.PaperDollFrame and PaperDollFrame.EquipmentManagerPane
+        if em then
+            local SB = SET_BUTTON
+            local half = (SB.w + SB.gap) / 2
+            if em.EquipSet then
+                k:Size(em.EquipSet, SB.w, SB.h)
+                k:Move(em.EquipSet, "BOTTOM", em, "BOTTOM", -half, SB.bottom)
+            end
+            if em.SaveSet then
+                k:Size(em.SaveSet, SB.w, SB.h)
+                k:Move(em.SaveSet, "BOTTOM", em, "BOTTOM", half, SB.bottom)
+            end
+            if em.NewSet then
+                k:Size(em.NewSet, SB.w * 2 + SB.gap, SB.h)
+                k:Move(em.NewSet, "BOTTOM", em, "BOTTOM", 0, SB.bottom + SB.h + SB.above)
+            end
+        end
+
+        -- The equipment flyout: the list of what else fits a slot. Its own
+        -- frame on UIParent, filled in by EquipmentFlyout_UpdateItems, which
+        -- adds item buttons and backing pieces as it needs them. The backing
+        -- (UI-GearManager-Flyout) is in S.ORNATE_FILES; ours is a panel on the
+        -- button frame Blizzard sizes to the buttons, and a walk for the new
+        -- buttons and the page arrows.
+        local flyout = _G.EquipmentFlyoutFrame
+        if flyout and type(_G.EquipmentFlyout_UpdateItems) == "function" then
+            k:Once(flyout, "flyoutHook", function()
+                hooksecurefunc("EquipmentFlyout_UpdateItems", function()
+                    local bf = flyout.buttonFrame
+                    if bf then k:Panel(bf, "surface1") end
+                    local nav = flyout.NavigationFrame
+                    if nav then k:Panel(nav, "surface1") end
+                    S.Walk(flyout, 0)
+                end)
+            end)
+        end
+
         for i = 1, 3 do
             local tab = _G["PaperDollSidebarTab" .. i]
             if tab then
@@ -703,6 +835,8 @@ P{
                 end
             end
         end
+        local level = _G.CharacterLevelText
+        if level then k:Label(level, "title", true) end
 
         local toggle = f.RightPaneToggleButton
         if toggle then

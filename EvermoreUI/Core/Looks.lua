@@ -97,6 +97,16 @@ L.close = {
 L.pager = {                                    -- previous / next page: the button Look, this size
     box = 24, chevron = 5,
 }
+L.popout = {                                   -- the tab beside an equipment slot that opens its flyout:
+    short = 10, long = 22, chevron = 3,        -- the button Look, this size, on while the flyout is open
+}
+L.sideTab = {                                  -- a mode tab down a window's edge (the character window's):
+    box = 36, icon = 28, gap = 3,              -- the slot Look, this size, `gap` off the window
+}
+L.section = {                                  -- a section heading inside a pane: its name between two rules
+    rest = { text = "title", rule = "border" },
+    pad = 6, gap = 8,                          -- rule to the pane's edge, rule to the name
+}
 
 --------------------------------------------------------------------------------
 --  Choices
@@ -230,9 +240,11 @@ L.row = {                                      -- striped rows in a table or opt
     on    = { fill = { "surfaceSunk", a = 0.5 } },   -- every other row
     hover = { highlight = { "surface2", a = 0.35 } },
 }
-L.tile = {                                     -- a card holding one thing: a spell, an ability
+L.tile = {                                     -- a card holding one thing: a spell, an ability, a set
     rest     = { fill = "surface1", edge = { "border", "surface1", 0.5 }, mark = "accent" },
+    on       = { fill = { "accent", a = 0.13 }, edge = { "accent", a = 0.45 } },   -- the chosen one
     hover    = { fill = "surface2", edge = "borderStrong" },
+    onHover  = { fill = { "accent", a = 0.2 }, edge = "accent" },
     disabled = { fill = { "surface1", a = 0.45 }, edge = { "border", a = 0.45 } },   -- not learned yet
 }
 L.tileQuiet = {                                -- the same card for something passive: a step back

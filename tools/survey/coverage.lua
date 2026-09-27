@@ -148,6 +148,15 @@ local function Main(shapesPath, root, mode, emit)
     Obj.GetCheckedTexture = Slot("CheckedTexture")
     Obj.GetThumbTexture = Slot("ThumbTexture")
     Obj.GetFontString = Slot("ButtonText")
+    -- Regions are the textures and font strings a frame declares, keyed or not.
+    function Obj:GetRegions()
+        local out = {}
+        for _, k in ipairs(info[self].kids) do
+            local t = info[k].t
+            if TEXTURE[t] or FONT[t] then out[#out + 1] = k end
+        end
+        return unpack(out)
+    end
 
     local made = {}
     local function Build(o, name, parent)
@@ -167,6 +176,12 @@ local function Main(shapesPath, root, mode, emit)
             local child = Build(c, cname, obj)
             info[obj].kids[#info[obj].kids + 1] = child
             if c.k and not c.k:find("[%.%$]") then rawset(obj, c.k, child) end
+            -- parentArray: the client appends the child to a list on its parent.
+            if c.arr and not c.arr:find("[%.%$]") then
+                local list = rawget(obj, c.arr)
+                if type(list) ~= "table" or getmetatable(list) == Class then list = {}; rawset(obj, c.arr, list) end
+                list[#list + 1] = child
+            end
             if c.role then info[obj].slots[c.role] = child end
             if cname then _G[cname] = child; made[#made + 1] = cname end
         end

@@ -352,6 +352,9 @@ S.ORNATE_FILES = {
     "Interface\\FriendsFrame\\WhoFrame-ColumnTabs",
     "Interface\\PaperDollInfoFrame\\UI-Character-ScrollBar",
     "Interface\\PaperDollInfoFrame\\UI-Character-Skills-BarBorder",
+    -- the equipment flyout's backing and the ring it puts round its slot
+    "Interface\\PaperDollInfoFrame\\UI-GearManager-Flyout",
+    "Interface\\PaperDollInfoFrame\\UI-GearManager-ItemButton-Highlight",
     "Interface\\ClassTrainerFrame\\UI-ClassTrainer-HorizontalBar",
     "Interface\\SpellBook\\SpellBook-SkillLineTab",
     "Interface\\Store\\Store-Main",
@@ -1646,14 +1649,14 @@ R{
 --------------------------------------------------------------------------------
 --  9i. Stat header        CharacterStatFrameCategoryTemplate and the side
 --     pane's CharacterFrameSidePaneCategoryTemplate: a brown banner
---     (UI-Character-Info-Title) with its title in it. Ours is the kit's group
---     header: a control-coloured bar, its edge, the title in gold. The frame
---     is 40px tall (CharacterFrame.xml) with the banner stretched over all of
---     it, which read as a slab; ours is a 26px band centred in it, on a frame
---     of our own.
+--     (UI-Character-Info-Title) stretched over the whole 40px frame
+--     (CharacterFrame.xml), the name centred on it.
+--
+--     A box that size over every group of four stats is most of what made
+--     the stat pane read as slabs. Ours is LOOK.section: no box at all, the
+--     name in gold between two hairlines that run out to the pane's edges.
+--     Blizzard's own centring of the name is kept; the rules follow it.
 --------------------------------------------------------------------------------
-local HEADER_BAND = 26
-
 R{
     name = "statHeader",
     keys = { "Background" },
@@ -1661,28 +1664,414 @@ R{
     test = function(f) return type(f.Title or f.Label) == "table" end,
     paint = function(f, p)
         p:Fade()
+        local title = f.Title or f.Label
+        local SL = LOOK.section
+        p:Label(title, SL.rest.text, true)
         local d = S.D(f)
-        if not d.band then
-            d.band = S.Ours(CreateFrame("Frame", nil, f))
-            d.band:SetPoint("LEFT", f, "LEFT", 0, 0)
-            d.band:SetPoint("RIGHT", f, "RIGHT", 0, 0)
-            d.band:SetHeight(HEADER_BAND)
-            d.band:SetFrameLevel(math.max(0, f:GetFrameLevel() - 1))
-            d.band:EnableMouse(false)
+        if not d.rules then
+            local function Rule()
+                local t = S.Ours(f:CreateTexture(nil, "BORDER"))
+                if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(t) end
+                return t
+            end
+            d.rules = { Rule(), Rule() }
+            local l, r = d.rules[1], d.rules[2]
+            l:SetPoint("LEFT", f, "LEFT", SL.pad, 0)
+            l:SetPoint("RIGHT", title, "LEFT", -SL.gap, 0)
+            r:SetPoint("LEFT", title, "RIGHT", SL.gap, 0)
+            r:SetPoint("RIGHT", f, "RIGHT", -SL.pad, 0)
+            -- On the name's own centre line, not the frame's: Blizzard sets
+            -- the name 1px high (CENTER y=1).
+            local function Paint()
+                local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1
+                for _, t in ipairs(d.rules) do
+                    t:SetHeight(px)
+                    t:SetColorTexture(S.Colour(T.Resolve(SL).rule))
+                end
+            end
+            Paint()
+            T.Watch(l, Paint)
         end
-        p:Fill("surface2", nil, nil, d.band)
-        p:Border("border", nil, d.band)
-        p:Label(f.Title or f.Label, "title", true)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i1. Collapsible list headers and their parts, shared by the character
+--     window's Reputation, Skills, Currency and Statistics tabs (Camelot
+--     ReputationFrame.xml, SkillsFrame.xml, Blizzard_TokenUI.xml,
+--     StatisticsFrame.xml), which are built from the same four pieces:
+--
+--       <X>HeaderTemplate     a Button: an unkeyed common-button-list-
+--                             collapseExpand bar, StateIcon (plus / minus,
+--                             set in Initialize) at the right, Name
+--       ToggleCollapseButton  on a sub-header: campaign_headericon_closed /
+--                             _open, re-set through GetNormalTexture():SetAtlas
+--       BackgroundHighlight   on every entry: three soft charactercreate
+--                             line-mouseover pieces Blizzard tints (white, or
+--                             red at war) and fades (hover 0.1, selected 0.2)
+--       ColoredProgressBarTemplate  a rounded, masked bar
+--
+--     Ours: the kit's group header (like listHeader, the quest log's), a
+--     chevron for every open/closed control, a flat highlight (copper for the
+--     selected row), and a flat bar in a well.
+--------------------------------------------------------------------------------
+R{
+    name = "collapseHeader",
+    type = "Button",
+    keys = { "StateIcon", "Name" },
+    test = function(h)
+        for _, r in ipairs(S.Regions(h)) do
+            if S.ArtIs(r, "common%-button%-list%-collapseexpand") then return true end
+        end
+        return false
+    end,
+    paint = function(h, p)
+        p:Fade()
+        S.Mute(h.StateIcon)
+        p:Fill("surface2")
+        p:Border("border")
+        p:Label(h.Name, false, true)
+        local d = S.D(h)
+        if not d.chev then
+            d.chev = S.Ours(T.Chevron(h, 4))
+            d.chev:SetPoint("RIGHT", h, "RIGHT", -10, 0)
+        end
+        local function Collapsed()
+            return S.ArtIs(h.StateIcon, "list%-plus")
+        end
+        local function Sync()
+            local over = h.IsMouseOver and h:IsMouseOver()
+            if d.fill then d.fill:SetColorTexture(S.Colour(over and "surface3" or "surface2")) end
+            h.Name:SetTextColor(S.Colour(over and "text" or "title"))
+            d.chev:Point(Collapsed() and "right" or "down")
+            d.chev:SetColorLines(S.Colour(over and "text" or "textMuted"))
+        end
+        pcall(hooksecurefunc, h.StateIcon, "SetAtlas", function(t) t:SetAlpha(0); Sync() end)
+        p:Hook("OnEnter", Sync)
+        p:Hook("OnLeave", Sync)
+        p:Hook("OnShow", Sync)
+        S.Own(Sync, h, h.Name)
+        Sync()
+    end,
+}
+
+R{
+    name = "headerToggle",
+    type = "Button",
+    art  = { normal = "campaign_headericon" },
+    paint = function(b, p)
+        local d = S.D(b)
+        -- Faded, never blanked: Blizzard re-sets the art through
+        -- GetNormalTexture():SetAtlas, which needs the texture to be there.
+        local function Hide()
+            for _, g in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture" }) do
+                local ok, t = pcall(b[g], b)
+                if ok and t and t.SetAlpha then t:SetAlpha(0) end
+            end
+        end
+        if not d.chev then
+            d.chev = S.Ours(T.Chevron(b, 4))
+            d.chev:SetPoint("CENTER")
+        end
+        local function Sync()
+            Hide()
+            local ok, n = pcall(b.GetNormalTexture, b)
+            local open = ok and n and S.ArtIs(n, "_open")
+            d.chev:Point(open and "down" or "right")
+            local over = b.IsMouseOver and b:IsMouseOver()
+            d.chev:SetColorLines(S.Colour(over and "text" or "textMuted"))
+        end
+        local ok, n = pcall(b.GetNormalTexture, b)
+        if ok and n then pcall(hooksecurefunc, n, "SetAtlas", Sync) end
+        p:Hook("OnEnter", Sync)
+        p:Hook("OnLeave", Sync)
+        T.Watch(d.chev, Sync)
+        Sync()
+    end,
+}
+
+local FLAT = "Interface\\Buttons\\WHITE8X8"
+
+R{
+    name = "rowHighlight",
+    keys = { "Left", "Right", "Middle", "TextureRegions" },
+    art  = { Middle = "linemouseover" },
+    paint = function(f, p)
+        for _, r in ipairs(f.TextureRegions) do
+            if r.SetTexture then r:SetTexture(FLAT) end
+        end
+        -- Blizzard tints the pieces (white, or red for a faction at war) and
+        -- sets the frame's alpha; the selected row, not at war, is copper.
+        local okP, content = pcall(f.GetParent, f)
+        local entry = okP and content and content.GetParent and content:GetParent()
+        if entry and type(entry.RefreshBackgroundHighlightColor) == "function" then
+            local function Tint(e)
+                local okS, sel = pcall(e.IsSelected, e)
+                local okW, war = pcall(function() return e.IsAtWar and e:IsAtWar() end)
+                if okS and sel and not (okW and war) then
+                    for _, r in ipairs(f.TextureRegions) do r:SetVertexColor(S.Colour("accent")) end
+                end
+            end
+            pcall(hooksecurefunc, entry, "RefreshBackgroundHighlightColor", Tint)
+        end
+    end,
+}
+
+R{
+    name = "statBar",
+    keys = { "Fill", "Mask", "Text" },
+    art  = { Fill = "common%-stat%-bar" },
+    paint = function(f, p)
+        local fill = f.Fill
+        if fill.RemoveMaskTexture then pcall(fill.RemoveMaskTexture, fill, f.Mask) end
+        -- Blizzard colours a bar two ways: a coloured atlas
+        -- (SetFillTextureByColorType: red, green, blue, white) or white with a
+        -- vertex colour (reputation's standing colour). Ours is flat either way,
+        -- the colour kept.
+        local TOKENS = { red = "danger", green = "success", blue = "rested" }
+        local function Flat(t, atlas)
+            atlas = type(atlas) == "string" and atlas:lower() or ""
+            local kind = atlas:match("common%-stat%-bar%-(%a+)")
+            t:SetTexture(FLAT)
+            if TOKENS[kind] then t:SetVertexColor(S.Colour(TOKENS[kind])) end
+        end
+        local ok, atlas = pcall(fill.GetAtlas, fill)
+        Flat(fill, ok and atlas)
+        pcall(hooksecurefunc, fill, "SetAtlas", Flat)
+
+        local d = S.D(f)
+        if not d.track then
+            local h = S.Num(fill:GetHeight()) or 15
+            d.track = S.Ours(f:CreateTexture(nil, "BACKGROUND", nil, 1))
+            d.track:SetPoint("LEFT", f, "LEFT", 0, 0)
+            d.track:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+            d.track:SetHeight(h)
+            d.edges = {}
+            for i = 1, 4 do
+                local e = S.Ours(f:CreateTexture(nil, "ARTWORK", nil, -8))
+                if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e) end
+                d.edges[i] = e
+            end
+            local e, tr = d.edges, d.track
+            e[1]:SetPoint("BOTTOMLEFT", tr, "TOPLEFT");   e[1]:SetPoint("BOTTOMRIGHT", tr, "TOPRIGHT")
+            e[2]:SetPoint("TOPLEFT", tr, "BOTTOMLEFT");   e[2]:SetPoint("TOPRIGHT", tr, "BOTTOMRIGHT")
+            e[3]:SetPoint("TOPRIGHT", tr, "TOPLEFT");     e[3]:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
+            e[4]:SetPoint("TOPLEFT", tr, "TOPRIGHT");     e[4]:SetPoint("BOTTOMLEFT", tr, "BOTTOMRIGHT")
+            local function Paint()
+                local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1
+                e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
+                tr:SetColorTexture(S.Colour("surfaceSunk"))
+                for _, t in ipairs(e) do t:SetColorTexture(S.Colour("border")) end
+            end
+            Paint()
+            T.Watch(tr, Paint)
+        end
+        p:Label(f.Text, "text")
+    end,
+}
+
+R{
+    name = "sidePane",
+    keys = { "Title", "Subtitle", "Divider", "Description", "Content", "Footer" },
+    paint = function(f, p)
+        -- The title's colour is Blizzard's (SetPaneTitleColor: a faction's
+        -- standing, a skill's), so only our face.
+        p:Label(f.Title, false, true)
+        p:Label(f.Subtitle, false)
+        local div = f.Divider
+        if div and div.SetColorTexture then
+            local function Paint()
+                div:SetColorTexture(S.Colour("border"))
+                div:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1)
+            end
+            Paint()
+            T.Watch(div, Paint)
+            S.D(div).muted = nil
+            div:SetAlpha(1)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i2. Popout button     EquipmentFlyoutPopoutButtonTemplate: the tab beside
+--     an equipment slot that opens the list of what else fits it
+--     (Blizzard_FrameXML/Camelot/EquipmentFlyout.lua). A 20x43 gold pull
+--     tab, or 43x20 under the weapons. Blizzard re-sets its atlases, size and
+--     rotation in EquipmentFlyoutPopoutButton_RefreshVisualState on show,
+--     enter, leave, press and click, so ours is re-applied after that.
+--
+--     Ours is LOOK.popout: a slim box in the button Look, centred in
+--     Blizzard's rect (the hit area stays theirs), with a chevron the way
+--     the list opens; on (copper) while it is open (flyoutLocked).
+--------------------------------------------------------------------------------
+local popouts = setmetatable({}, { __mode = "k" })
+local popoutHooked
+
+local function PopoutDir(b)
+    local ok, par = pcall(b.GetParent, b)
+    par = ok and par or nil
+    local dir = (par and rawget(par, "flyoutDirection")) or rawget(b, "flyoutDirection")
+    if not dir and par and rawget(par, "verticalFlyout") then dir = "UP" end
+    dir = type(dir) == "string" and dir:lower() or "right"
+    return dir
+end
+
+local function PopoutSync(b)
+    local d = popouts[b]
+    if not d then return end
+    for _, g in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture" }) do
+        local ok, t = pcall(b[g], b)
+        if ok and t and t.SetAlpha then t:SetAlpha(0) end
+    end
+    local PL = LOOK.popout
+    local dir = PopoutDir(b)
+    local vertical = dir == "up" or dir == "down"
+    d.box:SetSize(vertical and PL.long or PL.short, vertical and PL.short or PL.long)
+    d.chev:Point(dir)
+    if d.Repaint then d.Repaint() end
+end
+
+R{
+    name = "popoutButton",
+    type = "Button",
+    art  = { normal = "ui%-character%-info%-button%-pull" },
+    paint = function(b, p)
+        local d = S.D(b)
+        if not d.box then
+            d.box = S.Ours(CreateFrame("Frame", nil, b))
+            d.box:SetPoint("CENTER")
+            d.box:EnableMouse(false)
+            d.chev = S.Ours(T.Chevron(d.box, LOOK.popout.chevron))
+            d.chev:SetPoint("CENTER")
+        end
+        p:Fill(LOOK.button.rest.fill, nil, nil, d.box)
+        p:Border(LOOK.button.rest.edge, nil, d.box)
+        local boxFill = S.D(d.box).fill
+        p:States(LOOK.button, { edgesOn = d.box, chev = d.chev,
+            on = function() return rawget(b, "flyoutLocked") == true end,
+            after = function(r) if boxFill and r.fill then boxFill:SetColorTexture(T.C4(r.fill)) end end })
+        popouts[b] = d
+        if not popoutHooked and type(_G.EquipmentFlyoutPopoutButton_RefreshVisualState) == "function" then
+            popoutHooked = true
+            hooksecurefunc("EquipmentFlyoutPopoutButton_RefreshVisualState", PopoutSync)
+        end
+        PopoutSync(b)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i3. Tertiary button   PaperDollTertiaryButtonTemplate: the equipment
+--     manager's New Set. A common-button-tertiary state atlas (re-set on
+--     every state change by PaperDollTertiaryButtonMixin:OnButtonStateChanged,
+--     the texture kept, so our alpha holds), a green GameFontGreen label and
+--     a green plus. Ours: our button, the label in its text colour, the plus
+--     kept and drawn in copper.
+--------------------------------------------------------------------------------
+R{
+    name = "tertiaryButton",
+    type = "Button",
+    keys = { "StateTexture" },
+    art  = { StateTexture = "common%-button%-tertiary" },
+    paint = function(b, p)
+        S.Blank(b)
+        S.Mute(b.StateTexture)
+        local label, plus
+        for _, r in ipairs(S.Regions(b)) do
+            local ot = r.GetObjectType and r:GetObjectType()
+            if ot == "FontString" and not label then label = r
+            elseif ot == "Texture" and S.ArtIs(r, "icon%-add") then plus = r end
+        end
+        p:Fill(LOOK.button.rest.fill)
+        p:Border(LOOK.button.rest.edge)
+        if plus then
+            plus:SetDesaturated(true)
+            plus:SetSize(12, 12)
+        end
+        if label then p:Label(label) end
+        p:States(LOOK.button, { label = label, after = function(r)
+            if plus then plus:SetVertexColor(S.Colour(S.D(b).disabled and "textDisabled" or "accent")) end
+        end })
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i4. Title row         PlayerTitleButtonTemplate: a title in the
+--     character window's titles list. Char-Stat file art top, middle and
+--     bottom, a gold UI-CheckBox-Check on the one you wear, the FriendsFrame
+--     highlight bars for selected and hover. Ours: the listItem Look, on for
+--     the worn title (Blizzard shows SelectedBar for it), the tick in copper.
+--     Blizzard's alternate-row Stripe (a flat colour it sets itself) stays.
+--------------------------------------------------------------------------------
+R{
+    name = "titleRow",
+    type = "Button",
+    keys = { "BgTop", "BgBottom", "BgMiddle", "Stripe", "Check", "SelectedBar" },
+    paint = function(b, p)
+        S.Blank(b)
+        S.Mute(b.BgTop); S.Mute(b.BgBottom); S.Mute(b.BgMiddle); S.Mute(b.SelectedBar)
+        local check = b.Check
+        check:SetDesaturated(true)
+        check:SetVertexColor(S.Colour("accent"))
+        p:Fill("surface2", 0)
+        local label = b.text or (b.GetFontString and b:GetFontString())
+        if label then p:Label(label) end
+        local d = S.D(b)
+        p:States(LOOK.listItem, { label = label, on = function() return b.SelectedBar:IsShown() end })
+        for _, m in ipairs({ "Show", "Hide", "SetShown" }) do
+            pcall(hooksecurefunc, b.SelectedBar, m, function() if d.Repaint then d.Repaint() end end)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i5. Gear set          GearSetButtonTemplate: an equipment set in the
+--     equipment manager. An OutfitCard atlas from the icon rightwards, with
+--     -Hover and -Selected versions Blizzard shows and hides
+--     (PaperDollEquipmentManagerPane_Update), an ornate frame round the icon
+--     and a ring round the spec icon. Ours is the kit's tile across the whole
+--     row, the icon in our well, on while the set is selected and lit while
+--     Blizzard's hover bar is up. The tick for the set you wear is kept, in
+--     copper; the edit and delete buttons are Blizzard's own small icons.
+--------------------------------------------------------------------------------
+R{
+    name = "gearSet",
+    type = "Button",
+    keys = { "HighlightBar", "SelectedBar", "Check", "icon", "SpecRing" },
+    paint = function(b, p)
+        p:Fade(nil, { b.icon, b.SpecIcon, b.Check })
+        S.Blank(b)
+        b.Check:SetDesaturated(true)
+        b.Check:SetVertexColor(S.Colour("accent"))
+        p:Fill(LOOK.tile.rest.fill)
+        p:Border("border")
+        local well = S.IconWell(b.icon)
+        if well then S.PainterFor(b):Border("borderStrong", nil, well) end
+        if b.text then p:Label(b.text) end
+        local d = S.D(b)
+        p:States(LOOK.tile, { on = function() return b.SelectedBar:IsShown() end })
+        for _, bar in ipairs({ b.SelectedBar, b.HighlightBar }) do
+            for _, m in ipairs({ "Show", "Hide", "SetShown" }) do
+                pcall(hooksecurefunc, bar, m, function()
+                    d.hover = b.HighlightBar:IsShown() or nil
+                    if d.Repaint then d.Repaint() end
+                end)
+            end
+        end
     end,
 }
 
 --------------------------------------------------------------------------------
 --  9o. Model control      ModelSceneControlButtonTemplate: the zoom, turn and
 --     reset buttons over a model (the character window, inspect, the dressing
---     room). A grey square atlas behind an icon atlas Blizzard sets per
---     button. Ours: our button, the icon kept and tinted to the Look's glyph
---     colour, lighter under the mouse.
+--     room). 32px buttons with a 4px HitRectInset, laid out with
+--     buttonHorizontalPadding -6 (ModelSceneControlFrame.xml), so the visible
+--     button is the middle 24 and neighbours overlap by 6. Painting the whole
+--     rect stacked them into one strip. Ours is a box the size of the hit
+--     area, centred, in our button Look, the icon kept and tinted to its
+--     glyph colour.
 --------------------------------------------------------------------------------
+local MODEL_BOX = 24
+
 R{
     name = "modelControl",
     type = "Button",
@@ -1691,10 +2080,21 @@ R{
     paint = function(b, p)
         S.Blank(b)
         p:Fade(nil, { b.Icon })
-        p:Fill(LOOK.button.rest.fill)
-        p:Border(LOOK.button.rest.edge)
+        local d = S.D(b)
+        if not d.box then
+            d.box = S.Ours(CreateFrame("Frame", nil, b))
+            d.box:SetSize(MODEL_BOX, MODEL_BOX)
+            d.box:SetPoint("CENTER")
+            d.box:EnableMouse(false)
+            d.box:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
+        end
+        p:Fill(LOOK.button.rest.fill, nil, nil, d.box)
+        p:Border(LOOK.button.rest.edge, nil, d.box)
         if b.Icon.SetDesaturated then b.Icon:SetDesaturated(true) end
-        p:States(LOOK.button, { glyph = b.Icon })
+        local boxFill = S.D(d.box).fill
+        p:States(LOOK.button, { glyph = b.Icon, edgesOn = d.box, after = function(r)
+            if boxFill and r.fill then boxFill:SetColorTexture(T.C4(r.fill)) end
+        end })
     end,
 }
 
@@ -1738,7 +2138,20 @@ R{
         local sel = t.SelectedTexture
         p:States(LOOK.slot, { on = function() return sel:IsShown() end })
         local d = S.D(t)
-        p:After("SetChecked", function() if d.Repaint then d.Repaint() end end)
+        -- The tab-shaped mask (common-sidetab-mask) cut the icon to Blizzard's
+        -- tab outline; in a square slot it is a square icon. An icon filled to
+        -- the interior (fillToInterior: a portrait, a file icon) gets our crop,
+        -- after Blizzard's UpdateIconInterior sets its own on every SetChecked.
+        local icon = t.Icon
+        if t.Mask and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, t.Mask) end
+        local function Crop()
+            if rawget(t, "fillToInterior") then
+                local c = S.ICON_CROP
+                icon:SetTexCoord(c, 1 - c, c, 1 - c)
+            end
+        end
+        Crop()
+        p:After("SetChecked", function() Crop(); if d.Repaint then d.Repaint() end end)
     end,
 }
 
