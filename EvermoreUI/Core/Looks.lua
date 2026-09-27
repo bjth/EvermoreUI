@@ -338,6 +338,25 @@ end
 --- Returns `out` (a reused table unless you pass one) with an { r, g, b, a }
 --- per key the look declares, e.g. out.fill, out.edge, out.text. A key no
 --- layer sets is absent. Don't hold on to the result past the next call.
+--- Text always reads against the control it sits on. A Look names its text
+--- colour per state, and in the standard palette each is right (dark on the
+--- copper primary, light on the stone). But the palette is the player's to
+--- change (Colours page, contrast mode): a darker copper under the same dark
+--- text would stop reading. So wherever a state draws a solid fill, the text
+--- (and a glyph) is checked against it, and if it falls short of WCAG AA
+--- (4.5:1) it becomes whichever of our light or dark text reads better.
+local LIGHT, DARK = {}, {}
+local function Legible(out, key)
+    local fg, bg = out[key], out.fill
+    if not (fg and bg and (bg[4] or 1) >= 0.5 and (fg[4] or 1) > 0) then return end
+    if not T.Contrast then return end
+    if T.Contrast(fg, bg) >= 4.5 then return end
+    T.SpecRGBA("text", LIGHT)
+    T.SpecRGBA("onAccent", DARK)
+    local pick = T.Contrast(LIGHT, bg) >= T.Contrast(DARK, bg) and LIGHT or DARK
+    fg[1], fg[2], fg[3] = pick[1], pick[2], pick[3]
+end
+
 function T.Resolve(look, state, out)
     out = out or scratch
     wipe(pick)
@@ -353,6 +372,12 @@ function T.Resolve(look, state, out)
         local t = out[k]
         if type(t) ~= "table" then t = {}; out[k] = t end
         T.SpecRGBA(spec, t)
+    end
+    -- Not for a disabled control: dim is how it says it can't be used, and
+    -- WCAG leaves inactive controls out for the same reason.
+    if not (state and state.disabled) then
+        Legible(out, "text")
+        Legible(out, "glyph")
     end
     return out
 end
