@@ -98,6 +98,16 @@ local function Performance(p)
           get = SG("durability", "fontSize"), set = SS("durability", "fontSize"), disabled = function() return not M.db.durability.enabled end },
         { type = "button", text = L["Position"], label = L["Reset"], width = 100,
           onClick = function() EV.Movers:Reset("Durability") end })
+
+    p:Section(L["Gold"])
+    p:Dual(ST("gold", "enabled", L["Show gold"], L["Your gold. Hover for every character's and the account bank's; click for the Characters window."]),
+           ST("gold", "total", L["All my characters' gold"], L["Shows the total across your characters (in the scope set on the Characters page) instead of this character's."]))
+    p:Dual(ST("gold", "showLabel", L["Show label"], L["Prefixes the amount with Gold, or All for the total."]),
+           ST("gold", "background", L["Background"], L["A panel and border behind the text."]))
+    p:Dual({ type = "slider", text = L["Font size"], min = 8, max = 24, step = 1,
+             get = SG("gold", "fontSize"), set = SS("gold", "fontSize"), disabled = function() return not M.db.gold.enabled end },
+           { type = "button", text = L["Position"], label = L["Reset"], width = 100,
+             onClick = function() EV.Movers:Reset("Gold") end })
 end
 
 EV.Options:RegisterPage{
@@ -148,7 +158,7 @@ EV.Options:RegisterPage{
               onClick = function() EV.Movers:Reset("XPBar") end })
     end,
     onReset = function(tab)
-        local group = tab == TAB_PERF and { "fps", "latency", "durability" } or { "xp" }
+        local group = tab == TAB_PERF and { "fps", "latency", "durability", "gold" } or { "xp" }
         for _, g in ipairs(group) do
             wipe(M.db[g])
             EV.DB.Merge(M.db[g], M.defaults[g])

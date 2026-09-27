@@ -591,6 +591,7 @@ function M:OnEnable()
         TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnItem)
     end
     if ns.EnablePrice then ns.EnablePrice() end
+    if ns.EnableCounts then ns.EnableCounts() end
 
     -- The bar is re-shown by Blizzard per unit; keep it hidden when it's off.
     if GameTooltipStatusBar then

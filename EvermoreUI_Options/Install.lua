@@ -213,9 +213,28 @@ STEPS[#STEPS + 1] = { key = "characters", title = L["Characters"],
                        end)
                end }
 
-        local alts = EV.Alts and EV.Alts:List() or {}
-        if #alts > 1 then
-            p:Note((L["EvermoreUI knows %d of your characters on this account."]):format(#alts), 0.7)
+        if EV.Alts then
+            local A = EV.Alts
+            p:Section(L["Your other characters"])
+            p:Row{ type = "toggle", text = L["Remember what my characters carry"],
+                   tooltip = L["Each character's gold, bags, bank and mail, recorded as you play it: item tooltips then say who has how many, and /evui alts shows them all side by side."],
+                   get = function() return A:Settings().track end,
+                   set = function(v) A:Settings().track = v; A:Invalidate("settings") end }
+            p:Row{ type = "dropdown", text = L["Whose characters count"], width = 250,
+                   values = {
+                       { value = "faction", text = L["My faction, any realm"] },
+                       { value = "realm",   text = L["My realm and faction"] },
+                       { value = "all",     text = L["Every character"] },
+                   },
+                   disabled = function() return not A:Settings().track end,
+                   get = function() return A:Settings().scope end,
+                   set = function(v) A:Settings().scope = v; A:Invalidate("scope") end }
+            local known = #A:List()
+            if known > 1 then
+                p:Note((L["EvermoreUI knows %d of your characters on this account. Each one you log in on joins them."]):format(known), 0.7)
+            else
+                p:Note(L["Each character you log in on joins the list. A bank is known once you've visited a banker."], 0.7)
+            end
         end
     end }
 
@@ -262,7 +281,7 @@ local GROUPS = {
     { key = "Combat", title = L["Combat"],
       mods = { "UnitFrames", "SwingTimer", "GroupFrames", "Nameplates", "ActionBars", "Cooldowns", "Auras", "Reminders" } },
     { key = "Interface", title = L["Interface"],
-      mods = { "Minimap", "Objectives", "DataBars", "MicroMenu", "BagBar", "Bags", "LootRolls", "ReadyCheck", "LootStats" } },
+      mods = { "Minimap", "Objectives", "DataBars", "MicroMenu", "BagBar", "Bags", "Characters", "LootRolls", "ReadyCheck", "LootStats" } },
     { key = "Chat", title = L["Chat & Tooltips"], mods = { "Chat", "Tooltips" } },
 }
 

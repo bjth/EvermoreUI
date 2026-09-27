@@ -1,8 +1,8 @@
 if EV_BLOCKED then return end
 --------------------------------------------------------------------------------
 --  Stats.lua
---  Two small readouts: framerate and latency. Each is its own movable
---  element with a tooltip.
+--  Small readouts: framerate, latency, durability and gold. Each is its own
+--  movable element with a tooltip.
 --
 --    [ FPS 144 ]      [ MS 42 / 87 ]
 --
@@ -13,7 +13,8 @@ if EV_BLOCKED then return end
 --  FPS tooltip: now, the last minute's average and low, and memory use
 --  (EvermoreUI and the heaviest addons; refreshed on hover, never in
 --  combat). MS tooltip: home and world with what each covers, plus
---  bandwidth.
+--  bandwidth. Gold tooltip: every character's gold (EV.Alts, in the scope
+--  set on the Characters page), the account bank's, and the total.
 --------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 local EV = EvermoreUI
@@ -53,6 +54,15 @@ M.defaults.durability = {
     interval   = 0,      -- event driven (UPDATE_INVENTORY_DURABILITY); 0 = hover refresh only
     good       = 50,     -- at or above: good
     ok         = 25,     -- at or above: ok, below: poor
+}
+M.defaults.gold = {
+    enabled    = false,
+    showLabel  = false,
+    colourize  = false,
+    background = true,
+    fontSize   = 13,
+    interval   = 0,      -- event driven (PLAYER_MONEY)
+    total      = false,  -- show every character's gold rather than this one's
 }
 M.description = "Experience bar with quest and rested segments, XP/hour and session stats, plus framerate, latency and durability readouts."
 
@@ -146,10 +156,20 @@ end
 
 --- Redraw the readouts: both, or just one ("fps" / "latency").
 function M:UpdateStats(which)
-    local fps, lat, dur = frames.fps, frames.latency, frames.durability
-    if which == "latency" then fps, dur = nil, nil
-    elseif which == "fps" then lat, dur = nil, nil
-    elseif which == "durability" then fps, lat = nil, nil end
+    local fps, lat, dur, gold = frames.fps, frames.latency, frames.durability, frames.gold
+    if which == "latency" then fps, dur, gold = nil, nil, nil
+    elseif which == "fps" then lat, dur, gold = nil, nil, nil
+    elseif which == "durability" then fps, lat, gold = nil, nil, nil
+    elseif which == "gold" then fps, lat, dur = nil, nil, nil end
+    if gold and gold:IsShown() then
+        local cfg = self.db.gold
+        local copper = GetMoney and GetMoney() or 0
+        if cfg.total and EV.Alts then copper = EV.Alts:Money() end
+        -- Whole gold once there's any; the tooltip has the exact figures.
+        if copper >= 10000 then copper = floor(copper / 10000) * 10000 end
+        local label = cfg.showLabel and (Colour(cfg.total and L["All"] or L["Gold"], "textMuted", true) .. " ") or ""
+        gold.text:SetText(label .. EV:FormatMoney(copper))
+    end
     if dur and dur:IsShown() then
         local cfg = self.db.durability
         local d = EV:ReadDurability()
@@ -227,6 +247,26 @@ function M:ShowStatsTooltip(owner)
         local r, g, b = T.RGBA(token or "text")
         tt:AddDoubleLine(left, right, mr, mg, mb, r, g, b)
     end
+    if owner.key == "gold" then
+        tt:AddLine(L["Gold"], ar, ag, ab)
+        if not EV.Alts then
+            Row(L["This character"], EV:FormatMoney(GetMoney() or 0))
+            tt:Show()
+            return
+        end
+        local total, list, bank = EV.Alts:Money()
+        for _, e in ipairs(list) do
+            if e.info.money then
+                tt:AddDoubleLine(EV.Alts:Coloured(e.info), EV:FormatMoney(e.info.money), 1, 1, 1, tr, tg, tb)
+            end
+        end
+        if bank and bank > 0 then Row(L["Account bank"], EV:FormatMoney(bank)) end
+        tt:AddLine(" ")
+        tt:AddDoubleLine(L["Total"], EV:FormatMoney(total), ar, ag, ab, tr, tg, tb)
+        tt:AddLine(L["Click for your characters."], mr, mg, mb, true)
+        tt:Show()
+        return
+    end
     if owner.key == "durability" then
         local cfg = self.db.durability
         local d = EV:ReadDurability()
@@ -301,11 +341,14 @@ function ns.ApplyStats()
             Fit(f, (cfg.showLabel and (L["FPS"] .. " ") or "") .. "000")
         elseif key == "durability" then
             Fit(f, (cfg.showLabel and (L["Gear"] .. " ") or "") .. "100%")
+        elseif key == "gold" then
+            Fit(f, (cfg.showLabel and (L["Gold"] .. " ") or "") .. EV:FormatMoney(9999990000))
         else
             local label = cfg.showLabel and ((cfg.mode == "home" and L["Home"] or cfg.mode == "world" and L["World"] or L["MS"]) .. " ") or ""
             Fit(f, label .. (cfg.mode == "both" and "000 / 000" or "000") .. (cfg.showLabel and "" or " ms"))
         end
-        EV.Movers:Apply(key == "fps" and "FPS" or key == "durability" and "Durability" or "Latency")
+        EV.Movers:Apply(key == "fps" and "FPS" or key == "durability" and "Durability"
+            or key == "gold" and "Gold" or "Latency")
     end
     M:UpdateStats()
 end
@@ -314,7 +357,20 @@ function ns.EnableStats()
     frames.fps = Create("fps", "EvermoreUIFPS")
     frames.latency = Create("latency", "EvermoreUILatency")
     frames.durability = Create("durability", "EvermoreUIDurability")
+    frames.gold = Create("gold", "EvermoreUIGold")
     ns.statFrames = frames
+    EV.Movers:Register(frames.gold, "Gold", L["Gold"], { "TOP", "TOP", -170, -6 }, {
+        group = L["Data Bars"], page = "databars",
+        isDisabled = function() return not M.db.gold.enabled end,
+    })
+    frames.gold:SetScript("OnClick", function()
+        if SlashCmdList.EVERMOREUI then SlashCmdList.EVERMOREUI("alts") end
+    end)
+    local goldEvents = CreateFrame("Frame")
+    goldEvents:RegisterEvent("PLAYER_MONEY")
+    goldEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+    goldEvents:SetScript("OnEvent", function() M:UpdateStats("gold") end)
+    M:RegisterMessage("EV_ALTS_CHANGED", function() M:UpdateStats("gold") end)
     EV.Movers:Register(frames.durability, "Durability", L["Durability"], { "TOP", "TOP", 144, -6 }, {
         group = L["Data Bars"], page = "databars",
         isDisabled = function() return not M.db.durability.enabled end,

@@ -37,6 +37,7 @@ Pages\Objectives.lua
 Pages\DataBars.lua
 Pages\MicroMenu.lua
 Pages\Bags.lua
+Pages\Characters.lua
 Pages\Group.lua
 Pages\Chat.lua
 Pages\Tooltips.lua

@@ -73,7 +73,9 @@ local function Units(p)
     p:Dual(T("targetLine", L["Who they're targeting"], L["A Target: row, updated while the tooltip is up. Shows You in red when it's you."]),
            T("showIds", L["Spell and item IDs"], L["Handy for addon work."]))
     p:Section(L["Items"])
-    p:Dual(T("sellPrice", L["Sell price"], L["What an item sells for at a vendor, with the price of one when it's a stack."]), nil)
+    p:Dual(T("sellPrice", L["Sell price"], L["What an item sells for at a vendor, with the price of one when it's a stack."]),
+           T("itemCounts", L["Counts across your characters"], L["How many each of your characters has, and the account bank. Whose items count is set on the Characters page."]))
+    p:Dual(T("countsDetail", L["Where they keep them"], L["Bags, bank, mail or equipped, beside each character's count."]), nil)
 end
 
 local function Position(p)
@@ -102,7 +104,7 @@ EV.Options:RegisterPage{
     onReset = function(tab)
         local keys = {
             [TAB_LOOK] = { "skin", "bgAlpha", "qualityBorder", "menus", "compareGap", "font", "outline", "titleSize", "bodySize", "healthBar", "barHeight" },
-            [TAB_UNITS] = { "classColours", "hideTitles", "guildRank", "itemLevel", "targetLine", "showIds", "sellPrice" },
+            [TAB_UNITS] = { "classColours", "hideTitles", "guildRank", "itemLevel", "targetLine", "showIds", "sellPrice", "itemCounts", "countsDetail" },
             [TAB_POSITION] = { "anchor", "cursorPos", "cursorX", "cursorY" },
         }
         for _, k in ipairs(keys[tab] or keys[TAB_LOOK]) do M.db[k] = M.defaults[k] end
