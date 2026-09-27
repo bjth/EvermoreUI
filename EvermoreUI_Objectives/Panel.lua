@@ -204,7 +204,7 @@ local function Build()
     collapse.chev = chev
     collapse:SetScript("OnClick", function()
         M.db.collapsed = not M.db.collapsed
-        ns.Layout()
+        ns.RefreshList(true)
     end)
     strip.collapse = collapse
 
@@ -344,15 +344,17 @@ function ns.Layout()
     if tracker and tracker:GetParent() == sheet and tonumber(tracker.topModulePadding) ~= anchoredPad then
         ns.Safe("anchor", function() AnchorTracker(tracker) end)
     end
+    -- Folded, the strip hides the quests and Blizzard's sections under them;
+    -- the list still carries the professions group, which folds on its own.
+    local folded = M.db.collapsed and true or false
     local bh = BlizzardHeight()
-    sheet:SetShown(M.db.blizzard and true or false)
+    sheet:SetShown(M.db.blizzard and not folded)
     sheet:SetAlpha(bh > 0 and 1 or 0)
 
-    local content = ContentHeight()
+    local content = folded and (ns.ListHeight and ns.ListHeight() or 0) or ContentHeight()
     scroll:SetContentHeight(max(content, 1))
     local maxView = max(40, M.db.height - stripH - 8)
-    local view = M.db.fitContent and min(maxView, content) or maxView
-    if M.db.collapsed then view = 0 end
+    local view = (M.db.fitContent or folded) and min(maxView, content) or maxView
     scroll:SetShown(view > 0)
     local h = stripH + (view > 0 and (view + 8) or 2)
     panel:SetSize(M.db.width, max(h, 4))

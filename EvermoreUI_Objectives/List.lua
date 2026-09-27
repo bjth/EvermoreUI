@@ -43,8 +43,8 @@ local ITEM_W = 34        -- the row's item button: this wide, the row's full hei
 local SCROLLBAR = 12     -- always reserved, so text never rewraps when the bar appears
 
 local list
-local pools = { header = {}, block = {}, popup = {}, recipe = {} }
-local counts = { header = 0, block = 0, popup = 0, recipe = 0 }
+local pools = { header = {}, block = {}, popup = {}, recipe = {}, group = {} }
+local counts = { header = 0, block = 0, popup = 0, recipe = 0, group = 0 }
 local flashes = {}       -- questID -> time the flash started
 local height = 0
 
@@ -720,7 +720,8 @@ end
 --------------------------------------------------------------------------------
 --  Tracked recipes
 --
---  Their own section, beside the quests: the recipe's icon where a quest has
+--  Their own group under the quests, headed like the panel's strip heads
+--  the quests (not a section inside them): the recipe's icon where a quest has
 --  its marker, its name, and a line per required reagent with what you have
 --  against what it needs, done in green once you have enough. The same data
 --  and rules as Blizzard's recipe tracker (Blizzard_ProfessionsRecipeTracker,
@@ -793,8 +794,14 @@ local function CollectRecipes()
             local ok, sch = pcall(C_TradeSkillUI.GetRecipeSchematic, id, recraft)
             if ok and type(sch) == "table" then
                 local info = C_TradeSkillUI.GetRecipeInfo and C_TradeSkillUI.GetRecipeInfo(id)
+                local prof
+                if C_TradeSkillUI.GetTradeSkillLineForRecipe then
+                    local okL, _, lineName, _, parentName = pcall(C_TradeSkillUI.GetTradeSkillLineForRecipe, id)
+                    if okL then prof = Str(parentName, Str(lineName, nil)) end
+                end
                 local r = {
                     id = id, recraft = recraft, lines = {}, done = true,
+                    profession = prof or L["Other"],
                     name = recraft and PROFESSIONS_CRAFTING_FORM_RECRAFTING_HEADER
                         and PROFESSIONS_CRAFTING_FORM_RECRAFTING_HEADER:format(sch.name or "") or sch.name or "",
                     icon = (info and info.icon) or sch.icon,
@@ -899,6 +906,40 @@ local function NewRecipe()
         GameTooltip:Hide()
     end)
     return b
+end
+
+--- A group of its own beside the quests, headed the way the panel's strip
+--- heads the quests: its name and count in the strip's muted small text, a
+--- hairline above it, and the strip's collapse chevron on the right (up while
+--- open). Folding the quests leaves this open, and the other way round.
+local GROUP_H = 22
+local function NewGroup()
+    local g = CreateFrame("Button", nil, list)
+    g:SetHeight(GROUP_H)
+    g.rule = T.Solid(g, "BORDER", 0, 0, 0, 0)   -- T.LOOK.window divider, in Paint
+    g.rule:SetPoint("TOPLEFT"); g.rule:SetPoint("TOPRIGHT")
+    g.rule:SetHeight(EV.Pixel:One(g))
+    g.hover = T.Fill(g, "HIGHLIGHT", "accent", 0.06)
+    g.hover:SetAllPoints()
+    g.text = U.Label(g, "", "textMuted", "small")
+    g.text:SetPoint("LEFT", 6, 0)
+    g.chev = T.Chevron(g, 4, 1)
+    g.chev:SetPoint("RIGHT", -8, 0)
+    function g:Paint()
+        self.rule:SetColorTexture(T.C4(T.Resolve(T.LOOK.window).divider))
+        self.hover:SetColorTexture(T.RGBA("accent", 0.06))
+        self.chev:SetColorLines(T.RGBA("textMuted"))
+    end
+    T.Watch(g)
+    g:Paint()
+    g:SetScript("OnClick", function(self)
+        local c = ns.Char()
+        if type(c.sections) ~= "table" then c.sections = {} end
+        c.sections[self.key] = not c.sections[self.key] or nil
+        PlaySound(SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856)
+        ns.RefreshList(true)
+    end)
+    return g
 end
 
 --- Draw one recipe at y; returns its height.
@@ -1065,11 +1106,14 @@ Draw = function()
         combatDraw = true -- not protected: draw, but leave the secure buttons for later
     end
     itemUsed = 0
-    counts.header, counts.block, counts.popup, counts.recipe = 0, 0, 0, 0
+    counts.header, counts.block, counts.popup, counts.recipe, counts.group = 0, 0, 0, 0, 0
     local w = Width()
     list:SetWidth(w)
-    local y = DrawPopups(0)
-    local quests = Collect()
+    -- The panel's strip heads the quests and folds them away; the
+    -- professions below keep their own fold.
+    local questsShut = M.db.collapsed and true or false
+    local y = questsShut and 0 or DrawPopups(0)
+    local quests = questsShut and {} or Collect()
     local sections = Sections(quests)
     for _, s in ipairs(sections) do
         local h = Acquire("header", NewHeader)
@@ -1091,22 +1135,48 @@ Draw = function()
     end
     local recipes = CollectRecipes()
     if #recipes > 0 then
-        local h = Acquire("header", NewHeader)
-        h.key = "recipes"
-        h:ClearAllPoints()
-        h:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -y)
-        h:SetWidth(w)
-        h.text:SetText(Str(TRADE_SKILLS, L["Professions"]))
-        h.count:SetText(#recipes)
+        local g = Acquire("group", NewGroup)
+        g.key = "recipes"
+        g:ClearAllPoints()
+        g:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -y)
+        g:SetWidth(w)
+        g.text:SetText(format("%s %d", Str(TRADE_SKILLS, L["Professions"]), #recipes))
         local collapsed = Collapsed("recipes")
-        h.chev:Point(collapsed and "right" or "down")
-        y = y + HEADER_H + 3
+        g.chev:Flip(not collapsed)
+        y = y + GROUP_H + 2
         if not collapsed then
+            -- A section per profession, as the quests have one per zone.
+            local profs, byName = {}, {}
             for _, r in ipairs(recipes) do
-                y = y + DrawRecipe(r, y) + BLOCK_GAP
+                local s = byName[r.profession]
+                if not s then
+                    s = { name = r.profession, recipes = {} }
+                    byName[r.profession] = s
+                    profs[#profs + 1] = s
+                end
+                s.recipes[#s.recipes + 1] = r
+            end
+            table.sort(profs, function(a, b) return a.name < b.name end)
+            for _, s in ipairs(profs) do
+                local key = "prof:" .. s.name
+                local h = Acquire("header", NewHeader)
+                h.key = key
+                h:ClearAllPoints()
+                h:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -y)
+                h:SetWidth(w)
+                h.text:SetText(s.name)
+                h.count:SetText(#s.recipes)
+                local shut = Collapsed(key)
+                h.chev:Point(shut and "right" or "down")
+                y = y + HEADER_H + 3
+                if not shut then
+                    for _, r in ipairs(s.recipes) do
+                        y = y + DrawRecipe(r, y) + BLOCK_GAP
+                    end
+                end
+                y = y + 3
             end
         end
-        y = y + 3
     end
     if not combatDraw then ParkUnusedItems() end
     combatDraw = false
