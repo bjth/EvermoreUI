@@ -3256,6 +3256,8 @@ end
 
 S.TitleBar = TitleBar
 
+S.TitleBar = TitleBar
+
 -- The portrait toggles are global functions, taking the window.
 local portraitHooked = false
 local function HookPortraitToggles()
