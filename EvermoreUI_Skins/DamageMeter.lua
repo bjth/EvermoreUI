@@ -68,7 +68,8 @@ local function EntryLook(entry)
     local sb = entry.StatusBar
     if not (sb and d.dmTrack) then return end
     -- Blizzard's bar shadow and its edge: gone, whatever style is picked.
-    for _, r in ipairs(entry.BackgroundRegions or {}) do S.Mute(r) end
+    local regions = entry.GetBackgroundRegions and entry:GetBackgroundRegions() or sb.BackgroundRegions
+    for _, r in ipairs(regions or {}) do S.Mute(r) end
     local path = BarTexture()
     if d.dmTex ~= path then
         d.dmTex = path
@@ -79,7 +80,15 @@ local function EntryLook(entry)
         if c and c.GetRGB and tex then tex:SetVertexColor(c:GetRGB()) end
     end
     d.dmTrack:SetColorTexture(T.RGBA("surfaceSunk", 0.7))
-    if entry.Icon and entry.Icon.Icon then entry.Icon.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    local icon = entry.Icon and entry.Icon.Icon
+    if icon then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    -- "Show bar icons" off hides the icon texture, not its frame: take our
+    -- border with it.
+    local edges = entry.Icon and S.D(entry.Icon).packEdges
+    if edges then
+        local shown = icon and icon:IsShown() or false
+        for _, e in ipairs(edges) do e:SetShown(shown) end
+    end
 end
 
 local function Entry(entry)
