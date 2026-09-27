@@ -506,19 +506,13 @@ BOOK.viewX = math.floor((BOOK.pageW - BOOK.viewW + 8) / 2)
 
 local function IconTabState(tab)
     local d = S.D(tab)
-    if not d.iconBox then return end
-    local on = tab.isSelected
-    local hover = tab.IsMouseOver and tab:IsMouseOver()
-    local r = T.Resolve(T.LOOK.slot, { on = on, hover = hover })
-    d.iconBox.fill:SetColorTexture(T.C4(r.fill))
-    T.SetEdge(d.iconBox, r.edge)
-    if tab.Icon then
-        local hot = on or hover
-        tab.Icon:SetDesaturated(not hot)
-        tab.Icon:SetAlpha(hot and 1 or 0.7)
-    end
+    if not (d.iconBox and d.iconBox.Paint) then return end
+    d.iconBox.Paint(tab.isSelected, tab.IsMouseOver and tab:IsMouseOver())
 end
 
+--- A school tab as a tab: a square of the button's height standing on the
+--- tool bar's rule (S.TabFace, open at the bottom), one pixel over it so the
+--- chosen school's tab runs into the page below it.
 local function IconTab(k, tab)
     if not (S.Alive(tab) and tab.tabIcon and tab.Icon) then return end
     local d = S.D(tab)
@@ -529,13 +523,15 @@ local function IconTab(k, tab)
     if not d.iconBox then
         local box = CreateFrame("Frame", nil, tab)
         S.ours[box] = true
-        box:SetSize(TAB_H, TAB_H)
-        box:SetPoint("CENTER")
+        local one = EV.Pixel:One(tab)
+        box:SetWidth(TAB_H)
+        box:SetPoint("TOP", tab, "TOP", 0, 0)
+        box:SetPoint("BOTTOM", tab, "BOTTOM", 0, -one)
         box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
-        box.fill = EV.Pixel:Fill(box, "BACKGROUND")
-        EV.Pixel:Edges(box)
+        box:EnableMouse(false)
+        box.Paint = S.TabFace(box, "bottom", tab.Icon)
         d.iconBox = box
-        T.Watch(box.fill, function() IconTabState(tab) end)
+        T.Watch(box, function() IconTabState(tab) end)
         -- Pooled buttons: hooks go on once per button, state is re-read each time.
         k:After(tab, "SetTabSelected", function() IconTabState(tab) end)
         k:Hook(tab, "OnEnter", function() IconTabState(tab) end)
@@ -591,8 +587,9 @@ P{
 
         local tabs = book.CategoryTabSystem
         if tabs then
-            -- The first box sits `pad` in: the button is wider than its box.
-            k:Move(tabs, "LEFT", bar, "LEFT", BOOK.pad - (TAB_W - TAB_H) / 2, 0)
+            -- Standing on the bar's rule, the first box `pad` in (the button
+            -- is wider than its box).
+            k:Move(tabs, "BOTTOMLEFT", bar, "BOTTOMLEFT", BOOK.pad - (TAB_W - TAB_H) / 2, 0)
             if tabs.tabs then for _, tab in ipairs(tabs.tabs) do IconTab(k, tab) end end
             k:Once(tabs, "iconTabs", function()
                 -- Tabs are rebuilt from a pool whenever the spell list changes.

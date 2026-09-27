@@ -1843,16 +1843,34 @@ R{
         -- (SetFillTextureByColorType: red, green, blue, white) or white with a
         -- vertex colour (reputation's standing colour). Ours is flat either way,
         -- the colour kept.
+        --
+        -- The two meet on the skills bars: a blue atlas, then
+        -- UpdateBarColor(WHITE_FONT_COLOR) as a vertex colour, so on the flat
+        -- texture the white won and every bar went white. A white vertex
+        -- colour means "the atlas's own colour", and is read as that.
         local TOKENS = { red = "danger", green = "success", blue = "rested" }
+        local kind, busy
+        local function Tint(t)
+            if TOKENS[kind] then
+                busy = true
+                t:SetVertexColor(S.Colour(TOKENS[kind]))
+                busy = false
+            end
+        end
         local function Flat(t, atlas)
             atlas = type(atlas) == "string" and atlas:lower() or ""
-            local kind = atlas:match("common%-stat%-bar%-(%a+)")
+            kind = atlas:match("common%-stat%-bar%-(%a+)")
             t:SetTexture(FLAT)
-            if TOKENS[kind] then t:SetVertexColor(S.Colour(TOKENS[kind])) end
+            Tint(t)
         end
         local ok, atlas = pcall(fill.GetAtlas, fill)
         Flat(fill, ok and atlas)
         pcall(hooksecurefunc, fill, "SetAtlas", Flat)
+        pcall(hooksecurefunc, fill, "SetVertexColor", function(t, r, g, b)
+            if busy then return end
+            r, g, b = S.Num(r), S.Num(g), S.Num(b)
+            if r and g and b and r > 0.99 and g > 0.99 and b > 0.99 then Tint(t) end
+        end)
 
         local d = S.D(f)
         if not d.track then
@@ -2141,28 +2159,83 @@ R{
 --     which tab is on. Ours: an icon well in the slot Look, the icon kept
 --     (with Blizzard's mask), copper when selected.
 --------------------------------------------------------------------------------
+--- A tab's face, through LOOK.windowTab. A tab reads as a tab when the chosen
+--- one is part of what it opens: the window's own surface, no edge on the
+--- side that meets the window (and one pixel over the window's border, which
+--- the caller arranges by where it puts the tab), and a copper bar on the far
+--- side. The others are sunk, edged all round, their icons dimmed.
+---
+--- `open` is the side facing the window: "left" for tabs down a window's
+--- right edge, "bottom" for tabs along a tool bar. Returns Paint(on, hover).
+local EDGE_OF = { top = 1, bottom = 2, left = 3, right = 4 }
+local FAR_SIDE = { left = "right", right = "left", bottom = "top", top = "bottom" }
+function S.TabFace(f, open, icon)
+    local d = S.D(f)
+    local TL = LOOK.windowTab
+    if not d.tabFill then
+        d.tabFill = S.Ours(EV.Pixel:Fill(f, "BACKGROUND", -7))
+        EV.Pixel:Edges(f)
+        d.tabBar = S.Ours(f:CreateTexture(nil, "BORDER", nil, 6))
+        local far = FAR_SIDE[open] or "right"
+        if far == "right" or far == "left" then
+            d.tabBar:SetPoint("TOP" .. far:upper(), f, "TOP" .. far:upper())
+            d.tabBar:SetPoint("BOTTOM" .. far:upper(), f, "BOTTOM" .. far:upper())
+            d.tabBar:SetWidth(TL.bar)
+        else
+            d.tabBar:SetPoint(far:upper() .. "LEFT", f, far:upper() .. "LEFT")
+            d.tabBar:SetPoint(far:upper() .. "RIGHT", f, far:upper() .. "RIGHT")
+            d.tabBar:SetHeight(TL.bar)
+        end
+    end
+    local st = {}
+    local function Paint(on, hover)
+        st.on, st.hover = on and true or false, hover and true or false
+        local r = T.Resolve(TL, st)
+        d.tabFill:SetColorTexture(T.C4(r.fill))
+        T.SetEdge(f, r.edge)
+        local rec = EV.Pixel:EdgesOf(f)
+        local openEdge = rec and rec.edges[EDGE_OF[open] or 3]
+        if openEdge then openEdge:SetShown(not st.on) end
+        d.tabBar:SetColorTexture(T.C4(r.bar))
+        if icon and r.icon then
+            icon:SetDesaturated(not (st.on or st.hover))
+            icon:SetAlpha(r.icon[4] or 1)
+        end
+    end
+    d.TabPaint = Paint
+    return Paint
+end
+
 R{
     name = "sideTab",
     keys = { "Background", "Icon", "SelectedTexture" },
     art  = { Background = "common%-sidetab" },
     paint = function(t, p)
         p:Fade(nil, { t.Icon })
-        p:Fill(LOOK.slot.rest.fill)
-        p:Border(LOOK.slot.rest.edge)
-        local sel = t.SelectedTexture
-        p:States(LOOK.slot, { on = function() return sel:IsShown() end })
-        local d = S.D(t)
+        local sel, icon, d = t.SelectedTexture, t.Icon, S.D(t)
+        -- These tabs hang off a window's right edge (the character window's,
+        -- the quest log's), so their open side is the left.
+        local Paint = S.TabFace(t, "left", icon)
+        local function Sync() Paint(sel:IsShown(), d.hover) end
         -- The tab-shaped mask (common-sidetab-mask) cut the icon to Blizzard's
-        -- tab outline; in a square slot it is a square icon. An icon filled to
-        -- the interior (fillToInterior: a portrait, a file icon) gets our crop,
-        -- after Blizzard's UpdateIconInterior sets its own on every SetChecked.
-        local icon = t.Icon
+        -- tab outline; in a square tab it is a square icon. The side tab icons
+        -- (INV_SideTab_*) are painted for that mask, with a dark vignette in
+        -- their corners, so they are cropped a step harder than the suite's
+        -- crop, after Blizzard's UpdateIconInterior sets its own on every
+        -- SetChecked.
         if t.Mask and icon.RemoveMaskTexture then pcall(icon.RemoveMaskTexture, icon, t.Mask) end
         local function Crop()
-            if rawget(t, "fillToInterior") then S.Crop(icon) end
+            if rawget(t, "fillToInterior") then
+                local z = math.max(select(1, EV.Icons:Coords()), 0.12)
+                icon:SetTexCoord(z, 1 - z, z, 1 - z)
+            end
         end
         Crop()
-        p:After("SetChecked", function() Crop(); if d.Repaint then d.Repaint() end end)
+        p:After("SetChecked", function() Crop(); Sync() end)
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
+        S.Own(Sync, t)
+        Sync()
     end,
 }
 
