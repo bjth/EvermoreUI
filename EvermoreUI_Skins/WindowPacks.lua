@@ -1706,7 +1706,8 @@ P{
 --  character count on the label's line at the well's right; Delete left and
 --  New / Exit right on the footer; every button 24 tall.
 --------------------------------------------------------------------------------
-local MACRO = { tool = 36, pad = 8, gap = 6, footer = 36, button = 24, short = 96 }
+local MACRO = { tool = 36, pad = 8, gap = 6, footer = 36, button = 24, short = 96,
+                box = 295, rise = 4, label = 12 }
 
 P{
     name  = "MacroFrame",
@@ -1758,12 +1759,23 @@ P{
             k:Fill(box, "surfaceSunk")
             k:Border(box, "border")
             k:Anchors(box, {
-                { "TOPLEFT",     f,    "TOPLEFT",  6, -289 },
+                { "TOPLEFT",     f,    "TOPLEFT",  6, -M.box },
                 { "BOTTOMRIGHT", foot, "TOPRIGHT", -(338 - 328), M.gap },
             })
             -- The character count on the label's line, straight after the
             -- label: at the line's right end it sat under Cancel.
+            -- The text scrolls inside the well, following it down.
+            local scroll = _G.MacroFrameScrollFrame
+            if scroll then
+                k:Anchors(scroll, {
+                    { "TOPLEFT",     box, "TOPLEFT",     10, -6 },
+                    { "BOTTOMRIGHT", box, "BOTTOMRIGHT", -26, 6 },
+                })
+            end
             local count, label = _G.MacroFrameCharLimitText, _G.MacroFrameEnterMacroText
+            -- The label sits on the well rather than on the stripped slot
+            -- art, so the buttons above can be placed clear of it.
+            if label then k:Move(label, "BOTTOMLEFT", box, "TOPLEFT", 2, M.rise) end
             if count and label then
                 k:Move(count, "LEFT", label, "RIGHT", M.pad, 0)
                 count:SetJustifyH("LEFT")
@@ -1779,7 +1791,11 @@ P{
         -- Change Name/Icon beside them on their middle line, the selected
         -- macro's slot to its left on the same line.
         local save, cancel, edit = _G.MacroSaveButton, _G.MacroCancelButton, _G.MacroEditButton
-        if cancel then k:Size(cancel, M.short, M.button) end
+        if cancel then
+            k:Size(cancel, M.short, M.button)
+            -- Cancel's foot M.gap clear of the label line above the well.
+            if box then k:Move(cancel, "BOTTOMRIGHT", box, "TOPRIGHT", 0, M.rise + M.label + M.gap) end
+        end
         if save then
             k:Size(save, M.short, M.button)
             if cancel then k:Move(save, "BOTTOM", cancel, "TOP", 0, M.gap) end
@@ -1944,6 +1960,21 @@ P{
         end
 
         for i = 1, 42 do CalDay(_G["CalendarDayButton" .. i]) end
+
+        -- The grid runs to within a pixel or two of the bottom edge, while
+        -- the sides get about ten. Grow the frame by the difference so the
+        -- bottom margin matches the sides, measured rather than assumed.
+        local function Fit()
+            local d1, d42 = _G.CalendarDayButton1, _G.CalendarDayButton42
+            if not (d1 and d42) then return end
+            local l, fl = d1:GetLeft(), f:GetLeft()
+            local b, fb = d42:GetBottom(), f:GetBottom()
+            if not (l and fl and b and fb) then return end
+            local want = (l - fl) - (b - fb)
+            if math.abs(want) > 0.5 then k:Size(f, nil, f:GetHeight() + want) end
+        end
+        Fit()
+        k:Hook(f, "OnShow", function() C_Timer.After(0, Fit) end, "calendarFit")
 
         k:Once(f, "calendarDays", function()
             if type(_G.CalendarFrame_UpdateDay) == "function" then
