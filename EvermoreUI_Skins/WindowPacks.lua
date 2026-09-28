@@ -1958,18 +1958,18 @@ local function CalSide(name, closeName)
                 b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
                 b:SetHeight(top)
             end)
+            -- Blizzard's plate is 39 tall against our 24, and the generic
+            -- layer dresses it as a pane: its fill and edge hung below the
+            -- band and read as a taller bar. Hide the plate outright and put
+            -- the name on the band; Setup still sets its text there.
             local header = f.Header
             if header and band then
-                -- The plate is 39 tall against our 24; the generic layer's
-                -- fill on it hung below the band and read as a taller bar.
-                k:Fade(header)
-                k:NoFill(header)
-                k:Move(header, "CENTER", band, "CENTER", 0, 0)
-                -- Blizzard pins the name 13 down a 39 tall plate; centre
-                -- the name itself on the band, not the plate.
-                if header.Text then
-                    k:Move(header.Text, "CENTER", band, "CENTER", 0, 0)
-                    k:Label(header.Text, W.title, true)
+                k:Mute(header)
+                local name = header.Text
+                if name then
+                    if name:GetParent() ~= band then name:SetParent(band) end
+                    k:Move(name, "CENTER", band, "CENTER", 0, 0)
+                    k:Label(name, W.title, true)
                 end
             end
             local close = _G[closeName]
