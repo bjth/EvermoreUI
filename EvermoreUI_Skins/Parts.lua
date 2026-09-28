@@ -1637,7 +1637,16 @@ R{
         p:Fill(LOOK.tile.rest.fill)
         p:Border(LOOK.tile.rest.edge)
         p:States(LOOK.tile)
+        -- The icon filled the button's full height (30 of 30, 39 of 41),
+        -- over the card's own edge. Inside it, with room for the icon's edge.
         local icon = b.Icon
+        local okH, h = pcall(b.GetHeight, b)
+        h = okH and S.Num(h) or nil
+        if h and h > 12 then
+            local inset = 3
+            p:Reseat(icon, { { "LEFT", inset, 0 } })
+            icon:SetSize(h - 2 * inset, h - 2 * inset)
+        end
         EV.Icons:Style(icon, { host = b })
         local name = b.Name
         if not name then return end
