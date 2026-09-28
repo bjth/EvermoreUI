@@ -4710,8 +4710,13 @@ P{
             k:Move(mgr, "BOTTOMLEFT", bar, "BOTTOMLEFT", CFG.pad, -1)
             local function Tabs()
                 if not (mgr.tabPool and mgr.tabPool.EnumerateActive) then return end
+                -- The pool hands its tabs back in no particular order; lay
+                -- them out by chat window number, as Blizzard's chain does.
+                local list = {}
+                for tab in mgr.tabPool:EnumerateActive() do list[#list + 1] = tab end
+                table.sort(list, function(a, b) return (a:GetID() or 0) < (b:GetID() or 0) end)
                 local prev
-                for tab in mgr.tabPool:EnumerateActive() do
+                for _, tab in ipairs(list) do
                     CfgTab(k, tab)
                     tab:ClearAllPoints()
                     if prev then
