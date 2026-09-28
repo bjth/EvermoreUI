@@ -1858,7 +1858,7 @@ R{
             if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(d.rule) end
             local function Paint()
                 d.rule:SetColorTexture(S.Colour("border"))
-                d.rule:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1)
+                d.rule:SetHeight(EV.Pixel:Line(f))
             end
             Paint()
             T.Watch(d.rule, Paint)
@@ -1903,7 +1903,7 @@ R{
             -- On the name's own centre line, not the frame's: Blizzard sets
             -- the name 1px high (CENTER y=1).
             local function Paint()
-                local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1
+                local px = EV.Pixel:Line(f)
                 for _, t in ipairs(d.rules) do
                     t:SetHeight(px)
                     t:SetColorTexture(T.C4(T.Resolve(SL).rule))
@@ -2096,7 +2096,7 @@ R{
             e[3]:SetPoint("TOPRIGHT", tr, "TOPLEFT");     e[3]:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
             e[4]:SetPoint("TOPLEFT", tr, "TOPRIGHT");     e[4]:SetPoint("BOTTOMLEFT", tr, "BOTTOMRIGHT")
             local function Paint()
-                local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1
+                local px = EV.Pixel:Line(f)
                 e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
                 tr:SetColorTexture(S.Colour("surfaceSunk"))
                 for _, t in ipairs(e) do t:SetColorTexture(S.Colour("border")) end
@@ -2120,7 +2120,7 @@ R{
         if div and div.SetColorTexture then
             local function Paint()
                 div:SetColorTexture(S.Colour("border"))
-                div:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1)
+                div:SetHeight(EV.Pixel:Line(f))
             end
             Paint()
             T.Watch(div, Paint)
@@ -2170,7 +2170,7 @@ local function Well(host, around, sub)
     e[3]:SetPoint("TOPRIGHT", tr, "TOPLEFT");     e[3]:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
     e[4]:SetPoint("TOPLEFT", tr, "TOPRIGHT");     e[4]:SetPoint("BOTTOMLEFT", tr, "BOTTOMRIGHT")
     local function Paint()
-        local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(host)) or 1
+        local px = EV.Pixel:Line(host)
         e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
         tr:SetColorTexture(S.Colour("surfaceSunk"))
         for _, t in ipairs(e) do t:SetColorTexture(S.Colour("border")) end
@@ -2434,7 +2434,7 @@ R{
             d.rule:SetPoint("TOP", bracket, "TOP")
             d.rule:SetPoint("BOTTOM", bracket, "BOTTOM")
             local function Paint()
-                d.rule:SetWidth(EV.Pixel:One(f))
+                d.rule:SetWidth(EV.Pixel:Line(f))
                 d.rule:SetColorTexture(S.Colour("border"))
             end
             Paint()
@@ -2465,7 +2465,7 @@ R{
             d.rule:SetPoint("LEFT", f.Line, "LEFT")
             d.rule:SetPoint("RIGHT", f.Line, "RIGHT")
             local function Paint()
-                d.rule:SetHeight(EV.Pixel:One(f))
+                d.rule:SetHeight(EV.Pixel:Line(f))
                 d.rule:SetColorTexture(T.C4(T.Resolve(LOOK.section).rule))
             end
             Paint()
@@ -3027,7 +3027,7 @@ R{
             d.rule:SetPoint("LEFT", f.Title, "RIGHT", SC.gap, 0)
             d.rule:SetPoint("RIGHT", f, "RIGHT", -SC.pad, 0)
             local function Paint()
-                d.rule:SetHeight(EV.Pixel:One(f))
+                d.rule:SetHeight(EV.Pixel:Line(f))
                 d.rule:SetColorTexture(T.C4(T.Resolve(SC).rule))
             end
             Paint()

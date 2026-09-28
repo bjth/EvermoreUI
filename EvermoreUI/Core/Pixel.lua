@@ -43,6 +43,23 @@ function Pixel:One(frame)
     return perfect / es
 end
 
+--- The thickness of a hairline n physical pixels wide (n defaults to 1), in
+--- this frame's coordinate space.
+---
+--- A hair over the exact size, on purpose. An unsnapped texture lights the
+--- pixels whose centres it covers, and its far edge is exclusive. `One` is a
+--- float (768 over the screen height, over the effective scale), so a
+--- "one pixel" strip comes out a few millionths short; when its edge lands on
+--- a pixel centre, which it does whenever a frame sits on a half pixel (any
+--- odd-width frame centred on the screen: every static pop-up), the strip
+--- covers no centre at all and that side of the border is simply not drawn.
+--- Half a percent over makes it cover one centre wherever it lands; it would
+--- take an edge within a two-hundredth of a pixel of a centre to light two.
+local LINE = 1.005
+function Pixel:Line(frame, n)
+    return self:One(frame) * (n or 1) * LINE
+end
+
 --- Round v to the nearest whole physical pixel (min 1px when v > 0).
 function Pixel:Snap(frame, v)
     local one = self:One(frame)
@@ -223,7 +240,7 @@ local fills = setmetatable({}, { __mode = "k" })    -- object -> fill texture
 --- Snap against the frame the strips actually LIVE on, which is not always
 --- the frame the border belongs to. See the decoupled case below.
 local function Snap4(obj, border)
-    local px = Pixel:One(border.host or obj) * (border.size or 1)
+    local px = Pixel:Line(border.host or obj, border.size or 1)
     local e = border.edges
     e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
 end

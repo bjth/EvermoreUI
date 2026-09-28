@@ -220,7 +220,7 @@ local function Build()
     pstrip:SetHeight(STRIP_H)
     pstrip.rule = T.Solid(pstrip, "BORDER", 0, 0, 0, 0)   -- T.LOOK.window divider, in Paint
     pstrip.rule:SetPoint("TOPLEFT"); pstrip.rule:SetPoint("TOPRIGHT")
-    pstrip.rule:SetHeight(EV.Pixel:One(pstrip))
+    pstrip.rule:SetHeight(EV.Pixel:Line(pstrip))
     pstrip.left = U.Label(pstrip, "", "textMuted", "small")
     pstrip.left:SetPoint("TOPLEFT", 8, -5)
     local pcollapse = U.IconButton(pstrip, { size = 18, style = "ghost", tooltip = L["Collapse"] })

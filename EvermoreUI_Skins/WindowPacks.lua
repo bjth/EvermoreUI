@@ -108,7 +108,7 @@ local function Band(host, key, rule, place)
         local function Paint()
             b.fill:SetColorTexture(S.Colour(BAND_FILL))
             b.rule:SetColorTexture(S.Colour("border"))
-            b.rule:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(b)) or 1)
+            b.rule:SetHeight(EV.Pixel:Line(b))
         end
         Paint()
         T.Watch(b.fill, Paint)
@@ -368,7 +368,7 @@ local function Hairlines(host, around, token)
     e[3]:SetPoint("TOPRIGHT", around, "TOPLEFT");       e[3]:SetPoint("BOTTOMRIGHT", around, "BOTTOMLEFT")
     e[4]:SetPoint("TOPLEFT", around, "TOPRIGHT");       e[4]:SetPoint("BOTTOMLEFT", around, "BOTTOMRIGHT")
     local function Paint()
-        local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(host)) or 1
+        local px = EV.Pixel:Line(host)
         e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
         for _, t in ipairs(e) do t:SetColorTexture(T.RGBA(token)) end
     end
@@ -439,7 +439,7 @@ P{
             local function Paint()
                 strip:SetColorTexture(T.RGBA("titleBar", 0.96))
                 line:SetColorTexture(T.RGBA("borderStrong"))
-                line:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(border)) or 1)
+                line:SetHeight(EV.Pixel:Line(border))
             end
             Paint()
             T.Watch(strip); strip.Paint = Paint
@@ -652,7 +652,7 @@ P{
                     g:SetPoint("BOTTOMRIGHT", v2, "BOTTOMLEFT", x, 0)
                     local function Paint()
                         g:SetColorTexture(S.Colour("border"))
-                        g:SetWidth((EV.Pixel and EV.Pixel.One and EV.Pixel:One(v2)) or 1)
+                        g:SetWidth(EV.Pixel:Line(v2))
                     end
                     Paint()
                     T.Watch(g, Paint)
@@ -782,7 +782,7 @@ P{
                 seam:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 0, 1)
                 local function Paint()
                     seam:SetColorTexture(S.Colour("border"))
-                    seam:SetWidth((EV.Pixel and EV.Pixel.One and EV.Pixel:One(right)) or 1)
+                    seam:SetWidth(EV.Pixel:Line(right))
                 end
                 Paint()
                 T.Watch(seam, Paint)
@@ -1097,7 +1097,7 @@ P{
                 rule:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT", 1, 0)
                 local function Paint()
                     rule:SetColorTexture(S.Colour("border"))
-                    rule:SetWidth((EV.Pixel and EV.Pixel.One and EV.Pixel:One(page)) or 1)
+                    rule:SetWidth(EV.Pixel:Line(page))
                 end
                 Paint()
                 T.Watch(rule, Paint)
@@ -1273,7 +1273,7 @@ P{
                 rule:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT", SET.gap, -SET.gap)
                 local function Paint()
                     rule:SetColorTexture(S.Colour("border"))
-                    rule:SetWidth(EV.Pixel:One(f))
+                    rule:SetWidth(EV.Pixel:Line(f))
                 end
                 Paint()
                 T.Watch(rule, Paint)
@@ -1292,7 +1292,7 @@ P{
                 rule:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -SET.pad, 0)
                 local function Paint()
                     rule:SetColorTexture(S.Colour("border"))
-                    rule:SetHeight(EV.Pixel:One(header))
+                    rule:SetHeight(EV.Pixel:Line(header))
                 end
                 Paint()
                 T.Watch(rule, Paint)
