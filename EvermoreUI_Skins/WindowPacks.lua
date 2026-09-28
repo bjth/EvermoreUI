@@ -153,6 +153,30 @@ local function IconPopup(k, pop)
         if edit.SetTextInsets then edit:SetTextInsets(6, 6, 0, 0) end
         k:Size(edit, nil, 24)
     end
+    -- A footer for Okay and Cancel (Blizzard: 78x22 at the bottom right on
+    -- nothing), and the grid ending a gap above it rather than on its line.
+    local foot = Band(pop, "footer", "top", function(b)
+        b:SetPoint("BOTTOMLEFT", pop, "BOTTOMLEFT", 1, 1)
+        b:SetPoint("BOTTOMRIGHT", pop, "BOTTOMRIGHT", -1, 1)
+        b:SetHeight(36)
+    end)
+    local cancel, okay = box and box.CancelButton, box and box.OkayButton
+    if cancel then
+        k:Size(cancel, 96, 24)
+        k:Move(cancel, "RIGHT", foot, "RIGHT", -7, 0)
+    end
+    if okay then
+        k:Size(okay, 96, 24)
+        if cancel then k:Move(okay, "RIGHT", cancel, "LEFT", -6, 0) end
+    end
+    local grid = pop.IconSelector
+    if grid then
+        k:Anchors(grid, {
+            { "TOPLEFT",     pop,  "TOPLEFT",  21, -97 },
+            { "BOTTOMRIGHT", foot, "TOPRIGHT", -10, 6 },
+        })
+    end
+
     local sel = box and box.SelectedIconArea and box.SelectedIconArea.SelectedIconButton
     if sel then
         k:Once(sel, "popupIcon", function()
