@@ -695,11 +695,14 @@ P{
 --                         outside it, and the close button at TOPRIGHT 2,6.
 --                         RefreshAlpha sets its alpha to 1 - opacity.
 --
---  Ours: the eight pieces go, a hairline goes round the CANVAS (not the frame,
---  which it does not fill) on BorderFrame so the opacity setting takes it too,
---  a sunk fill behind the canvas that follows the same alpha, the close button
---  flush inside the canvas's top right corner as on our windows, and the tab a
---  window tab standing on the map's top edge, label centred.
+--  Ours: the eight pieces go and no edge replaces them; the map sits on our
+--  sunk backdrop, cut to the CANVAS (not the frame, which it does not fill),
+--  which follows the opacity setting as the border frame does. The close
+--  button is flush inside the canvas's top right corner as on our windows,
+--  and the tab a window tab standing on the map's top edge, label centred.
+--
+--  The opacity setting opens OpacityFrame (Blizzard_ColorPickerFrame), which
+--  has its own pack below.
 --
 --  The frame is in neither UIPanelWindows nor UISpecialFrames (Toggle shows
 --  it with a bare Show), so Discover.lua takes it by name.
@@ -770,7 +773,6 @@ P{
         end
 
         k:Once(f, "zoneMap", function()
-            Hairlines(border, canvas, "borderStrong")
             local back = S.Ours(f:CreateTexture(nil, "BACKGROUND", nil, -7))
             back:SetAllPoints(canvas)
             local function Paint() back:SetColorTexture(T.RGBA("surfaceSunk")) end
@@ -787,6 +789,39 @@ P{
         if close then k:Move(close, "TOPRIGHT", canvas, "TOPRIGHT", 0, 0) end
 
         ZoneTab(k)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  OpacityFrame (Blizzard_ColorPickerFrame): the little opacity pop-up the
+--  zone map, chat and colour picker open. 80x180, BackdropTemplate with
+--  BACKDROP_DIALOG_32_32, the title "$parentText" at TOP -15, and
+--  OpacityFrameSlider: a 16x128 vertical slider on BACKDROP_SLIDER_8_8 with a
+--  white "+" above and "-" below in GameFontNormalHuge. Shown with a bare
+--  Show, so Discover.lua takes it by name.
+--
+--  The backdrop is cleared (Blizzard sets it once, from backdropInfo, and
+--  never again) and the frame drawn as our pop-ups are: the window surface,
+--  its edge and shadow. The slider is the slider part's, by its thumb file.
+--------------------------------------------------------------------------------
+P{
+    name  = "OpacityFrame",
+    addon = "Blizzard_ColorPickerFrame",
+    apply = function(f, k)
+        k:Once(f, "opacityDialog", function()
+            if f.ClearBackdrop then pcall(f.ClearBackdrop, f) else k:Fade(f) end
+            S.PainterFor(f):Surface("window")
+            S.Shadow(f)
+        end)
+        local title = _G.OpacityFrameText
+        if title then k:Label(title, T.LOOK.window.rest.title, true) end
+        local sl = _G.OpacityFrameSlider
+        if sl then
+            k:Dress(sl)
+            for _, r in ipairs(S.Regions(sl)) do
+                if r.GetObjectType and r:GetObjectType() == "FontString" then k:Label(r, "text") end
+            end
+        end
     end,
 }
 

@@ -468,7 +468,20 @@ R{
     -- attaches its thumb as `Thumb`, a scroll bar as `ThumbTexture` or
     -- `thumbTexture`, and never both. The legacy scroll bars are picked up
     -- by scrollBarLegacy below.
-    keys = { "Thumb" },
+    --
+    -- The older sliders (OptionsSliderTemplate's family, the opacity
+    -- slider) declare their thumb as a ThumbTexture element too, and are
+    -- told apart from scroll bars by its file: a slider's is
+    -- UI-SliderBar-Button-Horizontal or -Vertical, a scroll bar's
+    -- UI-ScrollBar-Knob. Nothing else draws with those two files.
+    test = function(sl)
+        if type(rawget(sl, "Thumb") or sl.Thumb) == "table" then return true end
+        if not sl.GetThumbTexture then return false end
+        local ok, t = pcall(sl.GetThumbTexture, sl)
+        if not (ok and t) then return false end
+        return S.ArtIsFile(t, "Interface\\Buttons\\UI-SliderBar-Button-Vertical")
+            or S.ArtIsFile(t, "Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    end,
     -- Ours is the slider our own options draw (UI/Inputs.lua, U.Slider): a
     -- thin track across the middle of the slider's rect, the accent filled
     -- up to the thumb, a square thumb on a halo that grows under the mouse.

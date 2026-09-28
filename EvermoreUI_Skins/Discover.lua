@@ -67,6 +67,7 @@ local function Sweep()
     Take("DropDownList2")
     -- The zone map toggles itself with a bare Show and is in neither table.
     Take("BattlefieldMapFrame")
+    Take("OpacityFrame")
 end
 S.Sweep = Sweep
 
