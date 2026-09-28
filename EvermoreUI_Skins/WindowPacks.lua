@@ -3996,7 +3996,7 @@ P{
 }
 
 --------------------------------------------------------------------------------
---  AuctionHouseFrame (Blizzard_AuctionHouseUI, Shared + Classic family, which
+--  AuctionHouseFrame (Blizzard_AuctionHouseUI, Shared + Mainline family, which
 --  Camelot loads). An 800x538 PortraitFrameTemplate with three display modes
 --  (AuctionHouseFrameDisplayMode), each a set of sub-frames SetDisplayMode
 --  shows:
@@ -4018,11 +4018,11 @@ P{
 --              buyout) hanging 22 below the frame.
 --
 --  Every table is an AuctionHouseItemListTemplate: a background texture and
---  nine-slice, a 19px HeaderContainer, a ScrollBox under it and a classic
---  scroll bar overhanging the right edge, and a RefreshFrame (the count and a
+--  nine-slice, a 19px HeaderContainer, a ScrollBox under it and a
+--  MinimalScrollBar beside the right edge, and a RefreshFrame (the count and a
 --  refresh button) pushed up by per-list offsets to sit on the row above.
 --  The money is a ThinGoldEdge box on an inset under the bottom-left corner.
---  The mode tabs hang below the window, as the classic character window's.
+--  The mode tabs hang below the window, as Blizzard's bottom tabs do.
 --
 --  Ours: a 40px tool bar under the title in every mode (the search in Buy,
 --  the "Create Auction" heading in Sell, the Auctions / Bids tabs in
@@ -4177,7 +4177,7 @@ local function AHCard(k, disp)
     if ib and ib.EmptyBackground then S.StripArt(ib.EmptyBackground) end
 end
 
--- The mode tabs (CharacterFrameTabButtonTemplate, the Cata one) hang
+-- The mode tabs (PanelTabButtonTemplate) hang
 -- under the window: window tab faces open on their top, the chosen one the
 -- window's own surface running up into it, a copper bar along its foot.
 -- PanelTemplates keeps the choice on the window (selectedTab indexes Tabs).
@@ -4532,6 +4532,278 @@ P{
             if dlg.Border then k:Mute(dlg.Border) end
             k:Fill(dlg, T.LOOK.window.rest.fill)
             k:Border(dlg, T.LOOK.window.rest.edge)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  ChatConfigFrame (Blizzard_ChatFrame, Mainline ChatConfigFrame.xml / .lua,
+--  which Camelot loads). A 745x605 dialog: DialogBorderTemplate and a
+--  DialogHeaderTemplate title; the chat windows as ChatWindowTab buttons
+--  (pooled by ChatTabManager, re-acquired on every show, the choice shown by
+--  FCFTab_UpdateColors) over ChatConfigCategoryFrame, a TooltipBackdrop box
+--  12 in holding ConfigCategoryButtonTemplate rows (16 tall, a blue-tinted
+--  UI-Listbox-Highlight2 locked on the open one by ChatConfigCategory_OnClick);
+--  ChatConfigBackgroundFrame, another box, to its right, the open panel on it.
+--  Each panel's lists are built on show by ChatConfig_CreateCheckboxes /
+--  _CreateTieredCheckboxes / _CreateColorSwatches into a box with a header
+--  (ChatConfigBoxWithHeaderTemplate): one TooltipBorderBackdrop row per entry,
+--  a 24px UI-CheckBox check and label, a colour swatch, and on the channel
+--  rows a UI-GroupLoot-Pass leave button. Defaults / Reset Positions (or the
+--  combat log's or text to speech's defaults) and Okay sit on the bottom
+--  edge, 11 in and 12 up.
+--
+--  Ours: a tool bar under the title with the chat window tabs standing on its
+--  rule as window tab faces; a footer with the defaults left and Okay right;
+--  the category list flat as list items, a hairline between it and the
+--  panel; each list a sunk well, its rows unboxed with a hairline under each;
+--  the leave button our close glyph. Lists built after the walk are dressed
+--  as Blizzard builds them.
+--------------------------------------------------------------------------------
+local CFG = { tool = 40, footer = 36, button = 24, pad = 8, gap = 6, side = 136,
+              row = 22, tab = 28, short = 96, text = 10 }
+
+local function CfgTabState(tab)
+    local d = S.D(tab)
+    if not (d.textBox and d.textBox.Paint) then return end
+    local on = d.cfgOn and true or false
+    local hover = tab.IsMouseOver and tab:IsMouseOver() or false
+    d.textBox.Paint(on, hover)
+    local text = tab.Text
+    if text then
+        text:SetTextColor(T.C4(T.Resolve(T.LOOK.tab, { on = on, hover = hover }).text))
+        text:ClearAllPoints()
+        text:SetPoint("CENTER", tab, "CENTER", 0, 0)
+    end
+end
+
+local function CfgTab(k, tab)
+    if not S.Alive(tab) then return end
+    local d = S.D(tab)
+    k:Fade(tab)
+    if d.fill then d.fill:SetAlpha(0) end
+    d.edgeless = true
+    EV.Pixel:ShowEdges(tab, false)
+    k:Size(tab, nil, CFG.tab)
+    if not d.textBox then
+        local box = S.Ours(CreateFrame("Frame", nil, tab))
+        box:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        box:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, -EV.Pixel:One(tab))
+        box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
+        box:EnableMouse(false)
+        box.Paint = S.TabFace(box, "bottom")
+        local bd = S.D(box)
+        if bd.tabInset then bd.tabInset:Hide() end
+        d.textBox = box
+        T.Watch(box, function() CfgTabState(tab) end)
+        tab:HookScript("OnEnter", function() CfgTabState(tab) end)
+        tab:HookScript("OnLeave", function() CfgTabState(tab) end)
+    end
+    CfgTabState(tab)
+end
+
+-- A category row: a list item, copper while its panel is open (Blizzard's
+-- LockHighlight), its blue highlight art gone.
+local function CfgCategory(b)
+    if not S.Alive(b) then return end
+    local d = S.D(b)
+    local hi = b.Highlight or (b.GetHighlightTexture and b:GetHighlightTexture())
+    if hi then S.StripArt(hi) end
+    b:SetHeight(CFG.row)
+    local text = b.NormalText
+    if text then
+        text:ClearAllPoints()
+        text:SetPoint("LEFT", b, "LEFT", CFG.text, 0)
+    end
+    local p = S.PainterFor(b)
+    p:Fill("surface2")
+    if not d.cfgHooked then
+        d.cfgHooked = true
+        local function Sync() if d.Repaint then d.Repaint() end end
+        hooksecurefunc(b, "LockHighlight", function() d.cfgOn = true; Sync() end)
+        hooksecurefunc(b, "UnlockHighlight", function() d.cfgOn = false; Sync() end)
+    end
+    p:States(T.LOOK.listItem, { on = function() return d.cfgOn end })
+end
+
+-- A backdrop box (TooltipBackdropTemplate and its border-only sibling) left
+-- as a plain rect: its nine-slice faded, no fill, no edge.
+local function CfgFlat(k, box)
+    if not S.Alive(box) then return end
+    local ns = box.NineSlice
+    if ns then
+        S.PainterFor(ns):FadeSlice(ns)
+        k:NoFill(ns)
+        EV.Pixel:ShowEdges(ns, false)
+    end
+    k:NoFill(box)
+    EV.Pixel:ShowEdges(box, false)
+end
+
+-- A list Blizzard has just built: the box a sunk well, each row unboxed with
+-- a hairline under it, the leave buttons our close glyph, and the whole
+-- thing walked so its check boxes and swatches are dressed.
+local function CfgList(k, box)
+    if not S.Alive(box) then return end
+    CfgFlat(k, box)
+    k:Fill(box, "surfaceSunk")
+    k:Border(box, "border")
+    local title = box.header or _G[(box:GetName() or "") .. "Title"]
+    if title then k:Label(title, "title", true) end
+    for _, row in ipairs(S.Children(box)) do
+        if row.CheckButton or row.ColorSwatch or (row.GetName and row:GetName() and row:GetName():find("Swatch%d+$")) then
+            CfgFlat(k, row)
+            local d = S.D(row)
+            if not d.cfgRule then
+                d.cfgRule = S.Ours(row:CreateTexture(nil, "BORDER", nil, 1))
+                EV.Pixel.NoSnap(d.cfgRule)
+                d.cfgRule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 1, 0)
+                d.cfgRule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 0)
+                local function Paint()
+                    d.cfgRule:SetColorTexture(S.Colour("divider"))
+                    d.cfgRule:SetHeight(EV.Pixel:Line(row))
+                end
+                Paint()
+                T.Watch(d.cfgRule, Paint)
+            end
+            local leave = rawget(row, "CloseChannel")
+            if leave and not S.D(leave).cfgLeave then
+                S.D(leave).cfgLeave = true
+                S.claimed[leave] = S.claimed[leave] or "pack"
+                local lp = S.PainterFor(leave)
+                lp:Fade()
+                S.Blank(leave)
+                lp:Fill("surface2")
+                lp:Glyph("close", 8, "textMuted")
+                lp:States(T.LOOK.close)
+                k:Size(leave, 16, 16)
+            end
+        end
+    end
+    S.Walk(box, 0)
+end
+
+P{
+    name  = "ChatConfigFrame",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local under = -(top + CFG.tool)
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(CFG.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(CFG.footer)
+        end)
+
+        -- The chat windows' tabs on the tool bar's rule.
+        local mgr = f.ChatTabManager
+        if mgr then
+            k:Move(mgr, "BOTTOMLEFT", bar, "BOTTOMLEFT", CFG.pad, -1)
+            local function Tabs()
+                if not (mgr.tabPool and mgr.tabPool.EnumerateActive) then return end
+                local prev
+                for tab in mgr.tabPool:EnumerateActive() do
+                    CfgTab(k, tab)
+                    tab:ClearAllPoints()
+                    if prev then
+                        tab:SetPoint("LEFT", prev, "RIGHT", 2, 0)
+                    else
+                        tab:SetPoint("BOTTOMLEFT", mgr, "TOPLEFT", 0, 0)
+                    end
+                    prev = tab
+                end
+            end
+            Tabs()
+            k:After(mgr, "UpdateTabDisplay", Tabs)
+            k:Once(f, "cfgTabColours", function()
+                if type(_G.FCFTab_UpdateColors) == "function" then
+                    hooksecurefunc("FCFTab_UpdateColors", function(tab, selected)
+                        if tab and tab.GetParent and tab:GetParent() == mgr then
+                            S.D(tab).cfgOn = selected and true or false
+                            CfgTabState(tab)
+                        end
+                    end)
+                end
+            end)
+        end
+
+        -- The categories, flat down the left.
+        local cats = _G.ChatConfigCategoryFrame
+        if cats then
+            CfgFlat(k, cats)
+            AHSeam(cats, "RIGHT")
+            k:Anchors(cats, {
+                { "TOPLEFT",     f,    "TOPLEFT", 1, under },
+                { "BOTTOMRIGHT", foot, "TOPLEFT", CFG.side, 0 },
+            })
+            for i = 1, 7 do
+                local b = _G["ChatConfigCategoryFrameButton" .. i]
+                if b then CfgCategory(b) end
+            end
+            for _, i in ipairs({ 1, 5 }) do
+                local b = _G["ChatConfigCategoryFrameButton" .. i]
+                if b then
+                    k:Anchors(b, {
+                        { "TOPLEFT",  cats, "TOPLEFT",  CFG.gap - 2, -CFG.gap },
+                        { "TOPRIGHT", cats, "TOPRIGHT", -CFG.gap, -CFG.gap },
+                    })
+                end
+            end
+        end
+
+        -- The panel's ground, and the combat log's, to the right of it.
+        for _, name in ipairs({ "ChatConfigBackgroundFrame", "ChatConfigCombatSettings" }) do
+            local bg = _G[name]
+            if bg and cats then
+                CfgFlat(k, bg)
+                k:Anchors(bg, {
+                    { "TOPLEFT",     cats, "TOPRIGHT", 0, 0 },
+                    { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+                })
+            end
+        end
+
+        -- The footer: defaults left, Okay right.
+        local def, redock = f.DefaultButton, f.RedockButton
+        for _, b in ipairs({ def, redock, _G.CombatLogDefaultButton, _G.TextToSpeechDefaultButton,
+                             _G.ChatConfigFrameOkayButton, _G.ChatConfigFrameCancelButton }) do
+            if b then k:Size(b, nil, CFG.button) end
+        end
+        if def then k:Move(def, "LEFT", foot, "LEFT", CFG.pad, 0) end
+        if redock and def then k:Move(redock, "LEFT", def, "RIGHT", CFG.gap, 0) end
+        for _, b in ipairs({ _G.CombatLogDefaultButton, _G.TextToSpeechDefaultButton }) do
+            if b then k:Move(b, "LEFT", foot, "LEFT", CFG.pad, 0) end
+        end
+        local okay, cancel = _G.ChatConfigFrameOkayButton, _G.ChatConfigFrameCancelButton
+        if okay then
+            k:Size(okay, CFG.short, CFG.button)
+            k:Move(okay, "RIGHT", foot, "RIGHT", -CFG.pad, 0)
+        end
+        if cancel and okay then
+            k:Size(cancel, CFG.short, CFG.button)
+            k:Move(cancel, "RIGHT", okay, "LEFT", -CFG.gap, 0)
+        end
+
+        -- Lists, as Blizzard builds them.
+        k:Once(f, "cfgLists", function()
+            for _, fn in ipairs({ "ChatConfig_CreateCheckboxes", "ChatConfig_CreateTieredCheckboxes",
+                                  "ChatConfig_CreateColorSwatches" }) do
+                if type(_G[fn]) == "function" then
+                    hooksecurefunc(fn, function(box) CfgList(k, box) end)
+                end
+            end
+        end)
+        for _, name in ipairs({ "ChatConfigChatSettingsLeft", "ChatConfigChannelSettingsLeft",
+                                "ChatConfigOtherSettingsCombat", "ChatConfigOtherSettingsPVP",
+                                "ChatConfigOtherSettingsAdditionalColors", "ChatConfigOtherSettingsSystem",
+                                "ChatConfigOtherSettingsCreature", "ChatConfigTextToSpeechChannelSettingsLeft" }) do
+            local box = _G[name]
+            if box and box.checkBoxTable or (box and box.swatchTable) then CfgList(k, box) end
         end
     end,
 }
