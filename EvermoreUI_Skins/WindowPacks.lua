@@ -277,6 +277,19 @@ local function QuestLogDetails(k)
     if not det then return end
     if det.Bg then S.StripArt(det.Bg) end
 
+    -- The page is 502 tall from the log's top; with the log now under the
+    -- map's tool bar, that ran off the window's bottom. Its bottom is tied
+    -- to the log's instead, and the text's 430 with it: from under the
+    -- header to where Blizzard's own gap above the buttons began (29 up).
+    local parent = det:GetParent()
+    k:Anchors(det, { { "TOPRIGHT", parent, "TOPRIGHT", 0, -1 },
+                     { "BOTTOMRIGHT", qm, "BOTTOMRIGHT", 0, 3 } })
+    local text = det.ScrollFrame
+    if text then
+        k:Anchors(text, { { "TOPLEFT", det, "TOPLEFT", 5, -(QLOG.head + 3) },
+                          { "BOTTOMLEFT", det, "BOTTOMLEFT", 5, 29 } })
+    end
+
     local back = det.BackFrame
     if back then
         k:Fade(back)
@@ -331,7 +344,7 @@ end
 
 -- TITLE_CANVAS_SPACER_FRAME_HEIGHT (Blizzard_WorldMap.lua: the map's top),
 -- our title band plus its rule, and the tool bar's contents.
-local MAP = { spacer = 67, top = (S.TITLE_BAND or 24) + 2, control = 30, gap = 6, search = 190 }
+local MAP = { spacer = 67, top = (S.TITLE_BAND or 24) + 2, control = 30, gap = 6, search = 180, edge = 8 }
 
 P{
     name  = "WorldMapFrame",
@@ -407,6 +420,32 @@ P{
             OverlayButton(k, toggle.CloseButton, "right")
         end
 
+        -- The map's corner furniture, off its edges: the waypoint pin at the
+        -- canvas's top left (Camelot: TOPLEFT +3 0, flush with the top), the
+        -- quest log toggle at its bottom right (-2 +1), and the coordinates at
+        -- its bottom left (+68 +2).
+        local canvas = f.ScrollContainer
+        if canvas then
+            if f.WorldMapTrackingPinButton then
+                k:Move(f.WorldMapTrackingPinButton, "TOPLEFT", canvas, "TOPLEFT", MAP.edge, -MAP.edge)
+            end
+            if toggle then k:Move(toggle, "BOTTOMRIGHT", canvas, "BOTTOMRIGHT", -MAP.edge, MAP.edge) end
+        end
+        -- The coordinates: two lines, each a label with no anchor of its own,
+        -- so each sat centred in its 100px row and a longer player line began
+        -- further left than the cursor line over it. Both from the left edge.
+        for _, child in ipairs(S.Children(f)) do
+            if child.CursorCoords and child.PlayerCoords then
+                for _, row in ipairs({ child.CursorCoords, child.PlayerCoords }) do
+                    if row.Label then
+                        k:Move(row.Label, "LEFT", row, "LEFT", 0, 0)
+                        row.Label:SetJustifyH("LEFT")
+                    end
+                end
+                if canvas then k:Move(child, "BOTTOMLEFT", canvas, "BOTTOMLEFT", MAP.edge, MAP.edge) end
+            end
+        end
+
         -- The waypoint pin button (WorldMapTrackingPinButtonTemplate): a
         -- minimap-style gold ring round the pin. The pin is the content and
         -- stays; the ring, the backing and the glow go, and SetActive, which
@@ -467,8 +506,27 @@ P{
                     if S.D(dd).states then dp:States(T.LOOK.button) end
                 end
                 if search then
+                    -- Two anchors, so the height is ours whatever the template
+                    -- or its mixin sets (a Size alone was put back to 20).
                     k:Size(search, MAP.search, MAP.control)
-                    k:Move(search, "BOTTOMLEFT", qm, "TOPLEFT", MAP.gap, inset + 1)
+                    k:Anchors(search, {
+                        { "BOTTOMLEFT", qm, "TOPLEFT", MAP.gap, inset + 1 },
+                        { "TOPLEFT",    qm, "TOPLEFT", MAP.gap, inset + 1 + MAP.control },
+                    })
+                    -- The count (QuestLogCount, shown by Camelot's
+                    -- QuestMapFrameUtils): a 100x20 InputBoxVisual box hung off
+                    -- the search box's top right, its text 5 in from the top
+                    -- right. On the bar: the box between the search and the
+                    -- settings, the count centred on the line, right-aligned.
+                    local count, text = _G.QuestLogCount, _G.QuestLogQuestCount
+                    if count then
+                        k:Fade(count)
+                        k:Anchors(count, {
+                            { "TOPLEFT",     search, "TOPRIGHT", MAP.gap, 0 },
+                            { "BOTTOMRIGHT", dd or search, dd and "BOTTOMLEFT" or "BOTTOMRIGHT", -MAP.gap, 0 },
+                        })
+                        if text then k:Move(text, "RIGHT", count, "RIGHT", 0, 0) end
+                    end
                 end
             end
         end
@@ -1235,8 +1293,9 @@ P{
                 end
             end
         end
+        -- "Level N Class" in the title bar, as the inspect window has it.
         local level = _G.CharacterLevelText
-        if level then k:Label(level, "title", true) end
+        if level and S.TitleInfo then S.TitleInfo(k, f, level) end
 
         local toggle = f.RightPaneToggleButton
         if toggle then
@@ -1692,23 +1751,65 @@ P{
 }
 
 --------------------------------------------------------------------------------
---  InspectFrame (Blizzard_InspectUI, Camelot InspectUI.xml and
---  InspectPaperDollFrame.xml; ButtonFrameTemplate, so the window part gives it
---  our title band)
---
---    LevelTextWrapper  "Level N Class" centred at TOP y=-27, a ResizeLayoutFrame
---    InspectTalents    102x20 at TOP y=-39, under it; ViewButton in the same
---                      place for someone out of range. Both float over the
---                      model, which starts at y=-66.
---    ModeTabs          64x384 off the right edge at y=-30: Character (the
---                      target's portrait) and Guild, LargeSideTabButtonTemplate,
---                      the character window's side tabs.
---
---  Ours: a header band from the title band down to the model, the level on
---  its left and the talents button on its right, the character window's size
---  of side tab, set the same way against the window.
+--  "Level N Class" in the title bar, left of the name. Blizzard draws it in the
+--  window (the character window's PaperDollLevelInfo over the stat pane, the
+--  inspect window's InspectLevelText under the title) and sets it with
+--  SetFormattedText, the class name in its class colour. Ours is a copy on the
+--  title band, kept in step with Blizzard's through hooks on that font string,
+--  which itself is faded. Present whatever pane is open.
 --------------------------------------------------------------------------------
-local INSPECT = { pad = 10, button = 24 }
+local function TitleInfo(k, f, fs)
+    if not (fs and fs.GetText) then return end
+    local d = S.D(f)
+    local band = d.titleBar
+    if not band then return end
+    if not d.titleInfo then
+        local tc = type(f.TitleContainer) == "table" and f.TitleContainer or f
+        local label = S.Ours(tc:CreateFontString(nil, "OVERLAY"))
+        local path = T.FontPath and T.FontPath()
+        if path then label:SetFont(path, 11, "") end
+        label:SetPoint("LEFT", band, "LEFT", 8, 0)
+        label:SetJustifyH("LEFT")
+        label:SetWordWrap(false)
+        d.titleInfo = label
+        local function Copy()
+            local ok, text = pcall(fs.GetText, fs)
+            label:SetText(ok and text or "")
+            label:SetTextColor(S.Colour("textMuted"))
+        end
+        Copy()
+        T.Watch(label, Copy)
+        pcall(hooksecurefunc, fs, "SetFormattedText", Copy)
+        pcall(hooksecurefunc, fs, "SetText", Copy)
+    end
+    fs:SetAlpha(0)
+end
+S.TitleInfo = TitleInfo
+
+--------------------------------------------------------------------------------
+--  InspectFrame (Blizzard_InspectUI, Camelot InspectUI.xml and
+--  InspectPaperDollFrame.xml; ButtonFrameTemplate, 338x424, so the window part
+--  gives it our title band). Laid out as the character window is: three
+--  columns (the left slots, the model, the right slots) and three rows (the
+--  title, the slots and model, the weapons).
+--
+--    InspectFrameInset ButtonFrameTemplate's inset, 4,-60 to -6,26: the slots
+--                      hang off its corners. Its box goes; it moves up under
+--                      our title band, and the window is as much shorter.
+--    InspectModelFrame 231x320 at 52,-66, with Char-Corner / Char-Inner
+--                      border pieces round it and a race backdrop in four
+--                      BackgroundTop/Bot textures (set per inspect). All art:
+--                      the model stands on the window, level with the slots.
+--    LevelTextWrapper  "Level N Class" at TOP y=-27: into the title bar.
+--    InspectTalents    102x20 at TOP y=-39 (ViewButton in its place out of
+--                      range): on the weapons row, after the ranged slot.
+--    ModeTabs          the character window's side tabs.
+--------------------------------------------------------------------------------
+local INSPECT = { lift = 30, gap = 4, button = 24, buttonW = 80, modelX = 48 }
+local INSPECT_ART = { "BorderTopLeft", "BorderTopRight", "BorderBottomLeft", "BorderBottomRight",
+                      "BorderLeft", "BorderRight", "BorderTop", "BorderBottom", "BorderBottom2",
+                      "BackgroundTopLeft", "BackgroundTopRight", "BackgroundBotLeft",
+                      "BackgroundBotRight", "BackgroundOverlay" }
 
 P{
     name  = "InspectFrame",
@@ -1717,6 +1818,7 @@ P{
         local top = (S.TITLE_BAND or 24) + 2
         local pdf = _G.InspectPaperDollFrame
         local model = _G.InspectModelFrame
+        local inset = f.Inset or _G.InspectFrameInset
 
         local tabs = f.ModeTabs
         if tabs then
@@ -1727,21 +1829,31 @@ P{
             end
         end
 
-        if not (pdf and model) then return end
-        local band = Band(pdf, "header", "bottom", function(b)
-            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
-            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
-            b:SetPoint("BOTTOM", model, "TOP", 0, 0)
-        end)
-        local level = pdf.LevelTextWrapper
-        if level then k:Move(level, "LEFT", band, "LEFT", INSPECT.pad, 0) end
-        local text = _G.InspectLevelText
-        if text and text.SetJustifyH then text:SetJustifyH("LEFT") end
+        TitleInfo(k, f, _G.InspectLevelText)
+
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+            k:Anchors(inset, { { "TOPLEFT", f, "TOPLEFT", 4, -(60 - INSPECT.lift) },
+                               { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -6, 26 } })
+            k:Size(f, nil, 424 - INSPECT.lift)
+        end
+        if model then
+            for _, key in ipairs(INSPECT_ART) do
+                local t = _G["InspectModelFrame" .. key]
+                if t then S.StripArt(t) end
+            end
+            if inset then k:Move(model, "TOPLEFT", inset, "TOPLEFT", INSPECT.modelX, -2) end
+        end
+
+        local ranged = _G.InspectRangedSlot
         for _, key in ipairs({ "InspectTalents", "ViewButton" }) do
-            local b = pdf[key]
-            if b then
-                k:Size(b, nil, INSPECT.button)
-                k:Move(b, "RIGHT", band, "RIGHT", -INSPECT.pad, 0)
+            local b = pdf and pdf[key]
+            if b and ranged then
+                k:Size(b, INSPECT.buttonW, INSPECT.button)
+                k:Move(b, "LEFT", ranged, "RIGHT", INSPECT.gap * 3, 0)
             end
         end
     end,
