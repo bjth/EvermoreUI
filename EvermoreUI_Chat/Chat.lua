@@ -228,7 +228,10 @@ function ns.PlaceEditBox(cf)
     ns.ApplyShadow(eb)
     eb:SetTextInsets(G.padX(), G.padX(), 0, 0)
     EditHeaderFont(eb)
-    HeaderShown(eb)
+    -- Only where the focus callbacks bring it back: they are on permanent
+    -- windows alone, and a whisper window's "Tell Name:" left hidden kept
+    -- its width in the insets and pushed the typing across the box.
+    if ns.IsPermanent(cf) then HeaderShown(eb) end
 end
 
 -- With the input on top, our text gives up the strip the box covers, but
