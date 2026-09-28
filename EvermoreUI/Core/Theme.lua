@@ -48,7 +48,7 @@ T.PALETTES = {
         title       = hex("e8c46a"),        -- headings: WoW gold
         accent      = hex("d4924e"),        -- burnished copper
         onAccent    = hex("1c1208"),        -- text on accent fills
-        danger      = hex("e46a55"),        -- brick
+        danger      = hex("e8524a"),        -- warm red (was e46a55, read orange beside the copper)
         success     = hex("93b75c"),        -- moss
         warning     = hex("e6a847"),        -- amber
         -- Data colours (experience bar and anything that charts progress).
@@ -82,7 +82,7 @@ T.PALETTES = {
         title       = hex("ffd772"),
         accent      = hex("eca867"),
         onAccent    = hex("000000"),
-        danger      = hex("ff7d68"),
+        danger      = hex("ff5a4d"),
         success     = hex("a9d070"),
         warning     = hex("ffc15e"),
         xp          = hex("c07d42"),
