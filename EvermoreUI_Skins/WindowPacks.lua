@@ -4822,7 +4822,25 @@ local function CfgCombatPages(k, cbg)
     if types and left then k:Move(left, "TOPLEFT", types, "TOPLEFT", CC.x - 4, -(CC.top - 4)) end
     if types and right then k:Move(right, "TOPLEFT", types, "TOPLEFT", CC.x - 4 + CC.col, -(CC.top - 4)) end
     if misc and right then
-        k:Move(misc, "TOPLEFT", right, "BOTTOMLEFT", 0, -CC.gap)
+        -- Under the right list's last row, not under Blizzard's estimate of
+        -- its height (which counts 24 a row and 0.6 of one per sub-type).
+        local base = right:GetName() .. "Checkbox"
+        local n = right.checkBoxTable and #right.checkBoxTable or 0
+        local lastMain = _G[base .. n]
+        local below, dx = lastMain, -4
+        if lastMain then
+            local m = 0
+            while _G[base .. n .. "_" .. (m + 1)] do m = m + 1 end
+            if m > 0 then
+                below = _G[base .. n .. "_" .. (m % 2 == 1 and m or m - 1)]
+                dx = -(4 + CC.sub)
+            end
+        end
+        if below then
+            k:Move(misc, "TOPLEFT", below, "BOTTOMLEFT", dx, -CC.gap)
+        else
+            k:Move(misc, "TOPLEFT", right, "BOTTOMLEFT", 0, -CC.gap)
+        end
         for _, r in ipairs(S.Regions(misc)) do
             if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == _G.MISCELLANEOUS then
                 -- Over the small boxes' drawn squares (a 20 button, 16 box).
@@ -5140,11 +5158,17 @@ P{
             -- The XML binds OnShow / OnHide to the functions themselves at
             -- load, so a hook on the globals never runs: follow the frame.
             if cs then
-                cs:HookScript("OnShow", function() Ground(true); CombatTabs() end)
+                cs:HookScript("OnShow", function()
+                    Ground(true); CombatTabs()
+                    C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                end)
                 cs:HookScript("OnHide", function() Ground(false) end)
             end
             if type(_G.ChatConfig_UpdateCombatTabs) == "function" then
-                hooksecurefunc("ChatConfig_UpdateCombatTabs", function() CombatTabs() end)
+                hooksecurefunc("ChatConfig_UpdateCombatTabs", function()
+                    CombatTabs()
+                    C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                end)
             end
             if type(_G.ChatConfigCombat_InitButton) == "function" then
                 hooksecurefunc("ChatConfigCombat_InitButton", function(b) CfgCategory(b, true) end)
@@ -5168,6 +5192,15 @@ P{
         -- Tall enough for the longest list we have seen: never cut a list
         -- off at the footer. Grows only, so the window doesn't jump about
         -- between pages.
+        -- The combat pages' controls hang off each other rather than
+        -- filling their containers, so on those pages measure the controls.
+        local function Lowest(frame, depth, low)
+            if depth > 4 or not frame:IsVisible() then return low end
+            local b = S.Num(frame:GetBottom())
+            if b and frame:GetObjectType() == "CheckButton" and (not low or b < low) then low = b end
+            for _, c in ipairs(S.Children(frame)) do low = Lowest(c, depth + 1, low) end
+            return low
+        end
         local function Fit()
             local low
             for box in pairs(cfgBoxes) do
@@ -5175,6 +5208,11 @@ P{
                     local b = S.Num(box:GetBottom())
                     if b and (not low or b < low) then low = b end
                 end
+            end
+            for _, name in ipairs({ "CombatConfigMessageSources", "CombatConfigMessageTypes", "CombatConfigColors",
+                                    "CombatConfigFormatting", "CombatConfigSettings" }) do
+                local page = _G[name]
+                if page and page:IsVisible() then low = Lowest(page, 0, low) end
             end
             local ft = S.Num(foot:GetTop())
             if not (low and ft) then return end
