@@ -56,7 +56,9 @@ EV.Options:RegisterPage{
                T("showRanged", L["Ranged"], L["A bar for bows, guns, crossbows, thrown weapons and wands."]))
         p:Dual(T("showText", L["Time left"]), T("showLabel", L["Weapon label"], L["MH, OH or R at the start of each bar."]))
         p:Dual(T("hideBlizzard", L["Hide Blizzard's swing timer"],
-                 L["Forever has its own swing timer. This switches it off while ours is on, and puts your setting back when ours is switched off."]), nil)
+                 L["Forever has its own swing timer. This switches it off while ours is on, and puts your setting back when ours is switched off."]),
+               T("stopWhenIdle", L["Stop when you stop attacking"],
+                 L["A bar goes as soon as you stop attacking (or your target dies) instead of running out the swing. Start again before that swing would have landed and the bar comes back where it really is."]))
 
         if EV.Swing then
             p:Section(L["On the bar"])

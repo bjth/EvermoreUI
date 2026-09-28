@@ -41,7 +41,8 @@ if EV_BLOCKED then return end
 --  patches.
 --
 --  ALSO KEPT: whether auto attack is on (PLAYER_ENTER_COMBAT and
---  PLAYER_LEAVE_COMBAT are its toggle), the global cooldown from your own
+--  PLAYER_LEAVE_COMBAT are its toggle), whether a ranged attack is
+--  repeating (START_ / STOP_AUTOREPEAT_SPELL), the global cooldown from your own
 --  casts, range per weapon, and your world latency.
 --
 --  Nothing secret is ever compared: every read goes through pcall and a
@@ -96,6 +97,7 @@ end
 E.swings = { [MH] = NewSwing(), [OH] = NewSwing(), [RANGED] = NewSwing() }
 E.inRange = {}                    -- type -> true / false / nil (no check possible)
 E.attacking = false               -- auto attack toggled on
+E.autoRepeat = false              -- a wand, Auto Shot or throw repeating
 E.inCombat = false
 E.gcd = { start = 0, duration = 0, ends = 0 }
 E.lag = 0                         -- world latency, seconds
@@ -123,6 +125,7 @@ end
 --    parry()                    you parried
 --    cast(spellID, gcd)         you cast something (gcd in seconds, 0 = none)
 --    attack(on)                 auto attack switched on or off
+--    autorepeat(on)             Shoot, Auto Shot or Throw started or stopped repeating
 --    combat(on)                 entered or left combat
 --    range(type, inRange)       range for a weapon changed
 --    rule(rule, confirmed)      the accuracy guard judged a swing
@@ -549,6 +552,13 @@ local function ReadAttacking()
     return on and true or false
 end
 
+local function SetAutoRepeat(on)
+    E:Disturb(RANGED)
+    if E.autoRepeat == on then return end
+    E.autoRepeat = on
+    Fire("autorepeat", on)
+end
+
 local function SetAttacking(on)
     E:Disturb()
     if E.attacking == on then return end
@@ -632,6 +642,8 @@ local EVENTS = {
     end,
     PLAYER_ENTER_COMBAT = function() SetAttacking(true) end,
     PLAYER_LEAVE_COMBAT = function() SetAttacking(false) end,
+    START_AUTOREPEAT_SPELL = function() SetAutoRepeat(true) end,
+    STOP_AUTOREPEAT_SPELL = function() SetAutoRepeat(false) end,
     PLAYER_REGEN_DISABLED = function() E.inCombat = true; Fire("combat", true) end,
     PLAYER_REGEN_ENABLED = function() E.inCombat = false; Fire("combat", false); ScanSoon() end,
     PLAYER_DEAD = function() E:Disturb() end,

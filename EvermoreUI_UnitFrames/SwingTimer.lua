@@ -40,6 +40,7 @@ local SW = EV:NewModule("SwingTimer", {
     hideBlizzard = true,       -- switch Blizzard's timer off (its CVar) while ours is on
     parryHaste   = true,       -- the parry rule, once your swings have proven it
     hasteRescale = true,       -- the mid-swing haste rule, likewise
+    stopWhenIdle = true,       -- a bar stops when you stop attacking, not when its swing runs out
     layers       = {},         -- layer key -> on / off; unset means the layer's default
 })
 SW.title = "Swing Timer"
@@ -195,7 +196,7 @@ local function Reset(ctx, r, now)
     local t = r.def.type
     local sw = E:Get(t)
     ctx.type, ctx.now = t, now
-    ctx.swinging = E:IsSwinging(t, now)
+    ctx.swinging = not r.stopped and E:IsSwinging(t, now)
     ctx.progress = ctx.swinging and E:Progress(t, now) or nil
     ctx.remaining = ctx.swinging and E:Remaining(t, now) or 0
     ctx.duration = ctx.swinging and (sw.ends - sw.start) or 0
@@ -441,6 +442,39 @@ local function SetRowRange(r, value)
 end
 
 --------------------------------------------------------------------------------
+--  Stopping. When the target dies, or you stop attacking, no more swings
+--  come, and the one under way would otherwise run on to its end. The game's
+--  swing clock really does keep going (attack again inside it and the first
+--  swing waits), so the engine keeps it; the bar just stops. Attack again
+--  before it would have landed and the bar comes back where the swing is.
+--  Melee goes by auto attack; ranged by Shoot, Auto Shot or Throw repeating.
+--------------------------------------------------------------------------------
+local function Going(swingType)
+    if swingType == E.RANGED then return E.autoRepeat end
+    return E.attacking
+end
+
+local function StopOrResume()
+    if not holder then return end
+    local now, changed = GetTime(), false
+    for _, r in ipairs(rows) do
+        local t = r.def.type
+        if SW.db.stopWhenIdle and not Going(t) then
+            if not r.stopped and E:IsSwinging(t, now) then
+                r.stopped, r.active, changed = true, false, true
+            end
+        elseif r.stopped then
+            r.stopped, changed = false, true
+            if E:IsSwinging(t, now) and Allowed(r.def) then
+                r.active = true
+                ticker:Show()
+            end
+        end
+    end
+    if changed then Layout() end
+end
+
+--------------------------------------------------------------------------------
 --  Blizzard's timer, off through its own CVar while ours is on
 --------------------------------------------------------------------------------
 local CVAR = "showSwingTimer"
@@ -576,6 +610,7 @@ function SW:Refresh()
     for _, r in ipairs(rows) do
         r.outOfRange = E:InRange(r.def.type) == false
     end
+    StopOrResume()
     Layout()
 end
 
@@ -606,6 +641,7 @@ function SW:OnEnable()
         local r = byType[swingType]
         if not (r and Allowed(r.def)) then return end
         if swingType ~= E.MAIN_HAND then canSwing[swingType] = true end
+        r.stopped = false   -- a swing is its own proof you're attacking
         local wasActive = r.active
         r.active = true
         if not wasActive then Layout() end
@@ -618,6 +654,8 @@ function SW:OnEnable()
         if r then SetRowRange(r, value) end
     end)
     E:On("combat", UpdateVisibility)
+    E:On("attack", StopOrResume)
+    E:On("autorepeat", StopOrResume)
     E:On("layers", function() self:Refresh() end)
     E:Start()
 

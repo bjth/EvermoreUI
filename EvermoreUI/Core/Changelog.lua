@@ -11,6 +11,7 @@ EvermoreUI.CHANGELOG = {
                 "**Global cooldown shading**: the part of the swing your global cooldown still covers, so you can see whether there's time for another ability before the swing lands. On by default.",
                 "**Latency zone**: the end of each swing tinted by your latency, the stretch where anything you press arrives after the swing has gone. Off by default.",
                 "**Auto attack off**: the main hand bar says so when you're in combat, within reach of something hostile, and not attacking it.",
+                "**The swing timer stops when you do.** When your target dies or you stop attacking, the bar goes at once instead of running out the swing. Attack again before that swing would have landed and it comes back where the swing really is. Ranged bars follow Shoot, Auto Shot and Throw. Can be switched off on the Swing Timer page.",
             } },
             { title = "Fixes", items = {
                 "Swapping weapons now restarts the swing at the new weapon's speed, as the game does, even in combat when the speed can't be read.",
