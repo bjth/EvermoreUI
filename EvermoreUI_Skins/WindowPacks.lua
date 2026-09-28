@@ -1418,6 +1418,202 @@ P{
     end,
 }
 
+--------------------------------------------------------------------------------
+--  TimeManagerFrame: the clock (Blizzard_TimeManager, Mainline), from the
+--  minimap's time. 220x240 ButtonFrameTemplate, shown with a bare Show by
+--  TimeManager_Toggle, so Discover takes it by name. Its portrait is a globe
+--  (TimeManagerGlobe) with the time on it (TimeManagerFrameTicker, set every
+--  update), and its title a loose font string at TOP x=15 to clear the globe.
+--  TimeManagerStopwatchFrame (160x60 at TOPRIGHT 10,-12) holds "Show
+--  Stopwatch" and a 28px pocket-watch check; the alarm block starts at
+--  12,-65 and the Enabled check sits at the frame's LEFT 12,-45.
+--
+--  Ours: the time in the title bar's left, as level and class are on the
+--  character window; the title through the window's own title; the
+--  stopwatch toggle on a tool bar under the title, an icon in our style,
+--  copper while the stopwatch is shown; the alarm block 6 under the bar,
+--  which keeps it clear of the Enabled check as Blizzard's was.
+--------------------------------------------------------------------------------
+local CLOCK = { tool = 36, pad = 8, gap = 6 }
+
+P{
+    name  = "TimeManagerFrame",
+    addon = "Blizzard_TimeManager",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        if _G.TimeManagerGlobe then S.StripArt(_G.TimeManagerGlobe) end
+
+        -- The title: Blizzard's loose one goes, the window's own takes it.
+        for _, r in ipairs(S.Regions(f)) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" and r ~= _G.TimeManagerFrameTicker then
+                local ok, t = pcall(r.GetText, r)
+                if ok and t == _G.TIMEMANAGER_TITLE then r:SetAlpha(0) end
+            end
+        end
+        if f.SetTitle and _G.TIMEMANAGER_TITLE then f:SetTitle(_G.TIMEMANAGER_TITLE) end
+
+        -- The time, in the title bar on the left.
+        local ticker = _G.TimeManagerFrameTicker
+        if ticker then
+            k:Move(ticker, "LEFT", f, "TOPLEFT", CLOCK.pad + 2, -((S.TITLE_BAND or 24) / 2 + 1))
+            ticker:SetJustifyH("LEFT")
+            k:Label(ticker, "text", true)
+        end
+
+        -- The stopwatch toggle on a tool bar.
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(CLOCK.tool)
+        end)
+        local sw, check = _G.TimeManagerStopwatchFrame, _G.TimeManagerStopwatchCheck
+        if sw then
+            -- The check is 17 in from this frame's right; its right lands
+            -- CLOCK.pad in from ours, on the bar's middle.
+            k:Move(sw, "RIGHT", bar, "RIGHT", 17 - CLOCK.pad, 0)
+        end
+        if check then
+            k:Once(check, "clockCheck", function()
+                for _, get in ipairs({ "GetHighlightTexture", "GetCheckedTexture" }) do
+                    local ok, t = pcall(check[get], check)
+                    if ok and t then S.StripArt(t) end
+                end
+                local okN, icon = pcall(check.GetNormalTexture, check)
+                if not (okN and icon) then return end
+                icon:ClearAllPoints()
+                icon:SetAllPoints(check)
+                EV.Icons:Style(icon, { host = check })
+                local function Sync()
+                    local okC, on = pcall(check.GetChecked, check)
+                    local st = { on = okC and on or false, hover = check:IsMouseOver() or false }
+                    if st.on or st.hover then
+                        local e = T.Resolve(T.LOOK.slot, st).edge
+                        EV.Icons:SetState(icon, e[1], e[2], e[3], e[4])
+                    else
+                        EV.Icons:SetState(icon, nil)
+                    end
+                end
+                check:HookScript("OnEnter", Sync)
+                check:HookScript("OnLeave", Sync)
+                check:HookScript("OnClick", Sync)
+                hooksecurefunc(check, "SetChecked", Sync)
+                Sync()
+            end)
+        end
+
+        local alarm = f.AlarmTimeFrame or _G.TimeManagerAlarmTimeFrame
+        if alarm then k:Move(alarm, "TOPLEFT", f, "TOPLEFT", 12, -(top + CLOCK.tool + CLOCK.gap)) end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  AddonList (Blizzard_AddOnList). 600x550 ButtonFrameTemplate. The
+--  character Dropdown at TOPLEFT 12,-30, "Load out of date" (ForceLoad) at
+--  TOP -80,-27, SearchBox 160x22 at TOPRIGHT -10,-31; the Performance block
+--  (header, CPU figures, an Options_HorizontalDivider) at TOP -65, 25 in from
+--  each side, collapsing when hidden (collapsesLayout); the list under it,
+--  7 in, BOTTOMRIGHT -34,28; Enable All / Disable All (120x22) at the bottom
+--  left and Okay / Cancel (80x22) at the bottom right, on nothing. The rows'
+--  highlight is UI-QuestTitleHighlight, so talkRow already dresses them.
+--
+--  Ours: a tool bar with the dropdown, the check and the search on it, 30
+--  tall; no inner box; the Performance block and the list 12 in, the
+--  divider a hairline; a footer with the four buttons, 24 tall; the list's
+--  scroll bar centred in a 20px gutter.
+--------------------------------------------------------------------------------
+local ADDONS = { tool = 40, control = 30, pad = 12, gap = 6, footer = 36, button = 24,
+                 all = 120, short = 96, gutter = 20, search = 200, drop = 180 }
+
+P{
+    name  = "AddonList",
+    addon = "Blizzard_AddOnList",
+    apply = function(f, k)
+        local A = ADDONS
+        local top = (S.TITLE_BAND or 24) + 2
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(A.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(A.footer)
+        end)
+
+        if f.Dropdown then
+            k:Size(f.Dropdown, A.drop, A.control)
+            k:Move(f.Dropdown, "LEFT", bar, "LEFT", A.pad - 1, 0)
+        end
+        if f.ForceLoad then k:Move(f.ForceLoad, "CENTER", bar, "CENTER", -80, 0) end
+        if f.SearchBox then
+            k:Size(f.SearchBox, A.search, A.control)
+            k:Move(f.SearchBox, "RIGHT", bar, "RIGHT", -(A.pad - 1), 0)
+        end
+
+        local perf = f.Performance
+        if perf then
+            k:Anchors(perf, {
+                { "TOPLEFT",  bar, "BOTTOMLEFT",  A.pad - 1, 0 },
+                { "TOPRIGHT", bar, "BOTTOMRIGHT", -(A.pad - 1), 0 },
+            })
+            local div = perf.Divider
+            if div then
+                S.StripArt(div)
+                k:Once(perf, "addonsRule", function()
+                    local rule = S.Ours(perf:CreateTexture(nil, "ARTWORK"))
+                    EV.Pixel.NoSnap(rule)
+                    rule:SetPoint("LEFT", div, "LEFT"); rule:SetPoint("RIGHT", div, "RIGHT")
+                    rule:SetPoint("BOTTOM", perf, "BOTTOM", 0, 5)
+                    local function Paint()
+                        rule:SetColorTexture(S.Colour("divider"))
+                        rule:SetHeight(EV.Pixel:Line(perf))
+                    end
+                    Paint()
+                    T.Watch(rule, Paint)
+                end)
+            end
+        end
+
+        local box, sbar = f.ScrollBox, f.ScrollBar
+        if box then
+            k:Anchors(box, {
+                { "TOP",         perf or bar, "BOTTOM",     0, -(perf and 0 or A.gap) },
+                { "LEFT",        f,           "LEFT",       A.pad - 1, 0 },
+                { "BOTTOMRIGHT", foot,        "TOPRIGHT",   -A.gutter, A.gap },
+            })
+            if sbar then
+                local w = S.Num(sbar:GetWidth()) or 8
+                local x = math.floor((A.gutter - w) / 2 + 0.5)
+                k:Anchors(sbar, {
+                    { "TOPLEFT",    box, "TOPRIGHT",    x, 0 },
+                    { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, 0 },
+                })
+            end
+        end
+
+        local en, dis, ok, cancel = f.EnableAllButton, f.DisableAllButton, f.OkayButton, f.CancelButton
+        if en then k:Size(en, A.all, A.button); k:Move(en, "LEFT", foot, "LEFT", A.pad - 4, 0) end
+        if dis then k:Size(dis, A.all, A.button); if en then k:Move(dis, "LEFT", en, "RIGHT", A.gap, 0) end end
+        if cancel then k:Size(cancel, A.short, A.button); k:Move(cancel, "RIGHT", foot, "RIGHT", -(A.pad - 4), 0) end
+        if ok then k:Size(ok, A.short, A.button); if cancel then k:Move(ok, "RIGHT", cancel, "LEFT", -A.gap, 0) end end
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",

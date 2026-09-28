@@ -70,6 +70,8 @@ local function Sweep()
     Take("OpacityFrame")
     -- Loot under the mouse shows the loot window with a bare Show.
     Take("LootFrame")
+    -- The clock toggles itself with a bare Show.
+    Take("TimeManagerFrame")
 end
 S.Sweep = Sweep
 
