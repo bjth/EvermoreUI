@@ -21,6 +21,18 @@ EV.WhatsNew = WN
 local MAX_RELEASES = 3
 local max = math.max
 
+--- The community's invite, in one place for everything that offers it (this
+--- window, setup's last page). WoW can't open a browser, so it's offered as
+--- text to copy.
+EV.DISCORD = EV.DISCORD or "https://discord.evermoreui.com"
+
+function WN.CopyDiscord()
+    if EV.UI and EV.UI.ShowCopyText then
+        EV.UI.ShowCopyText(L["EvermoreUI Discord"], EV.DISCORD,
+            L["Paste it into your browser to join: ideas, help and feedback."])
+    end
+end
+
 --- "v0.10.0-beta2" -> { 0, 10, 0 }, or nil for "dev".
 local function Parts(v)
     if type(v) ~= "string" then return nil end
@@ -162,8 +174,11 @@ local function Build()
         EV:OpenOptions()
     end)
     opts:SetPoint("RIGHT", done, "LEFT", -8, 0)
+    -- The Discord, for anyone who wants to join: a copy box with the link.
+    local discord = W.Button(window.body, L["Discord"], 100, WN.CopyDiscord)
+    discord:SetPoint("BOTTOMLEFT", 12, 12)
     local issues = T.Text(window.body, "small", "textMuted")
-    issues:SetPoint("BOTTOMLEFT", 14, 20)
+    issues:SetPoint("LEFT", discord, "RIGHT", 10, 0)
     issues:SetPoint("RIGHT", opts, "LEFT", -10, 0)
     issues:SetWordWrap(false)
     issues:SetText(L["Found a problem? /evui bug"])

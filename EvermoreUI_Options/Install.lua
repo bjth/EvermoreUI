@@ -33,7 +33,7 @@ local WIDTH, HEIGHT = 840, 600
 local RAIL_W = 210
 local FOOT_H = 58
 local HEAD_H = 78
-local DISCORD = "https://discord.evermoreui.com"
+local DISCORD = EV.DISCORD or "https://discord.evermoreui.com"   -- set in Core/WhatsNew.lua
 
 local window, rail, head, scroll, footer
 local railButtons = {}
