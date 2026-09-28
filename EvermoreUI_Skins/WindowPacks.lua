@@ -594,53 +594,6 @@ P{
 }
 
 --------------------------------------------------------------------------------
---  FriendsFrame
---
---  The one window the architecture doc has always used as its example, and
---  the one that shows the restraint: not a single SetPoint in it. Everything
---  here is paint.
---
---  Blizzard keeps the tab header, the battletag row and the status dropdown
---  in the band where the portrait was, which is exactly why we do not
---  reclaim that band. Leave the layout alone.
---------------------------------------------------------------------------------
-P{
-    name  = "FriendsFrame",
-    addon = "Blizzard_FriendsFrame",
-    apply = function(f, k)
-        -- The battle.net portrait is art, not content.
-        local icon = _G.FriendsFrameIcon
-        if icon then S.Mute(icon) end
-
-        local header = f.FriendsTabHeader
-        if header then
-            k:Fade(header)
-            if header.BattlenetFrame then k:Fade(header.BattlenetFrame) end
-        end
-
-        -- The who-list column tabs are WhoFrame-ColumnTabs, a file sheet
-        -- already in S.ORNATE_FILES, so the walk takes those down. What it
-        -- cannot do is give the header row a surface, because nothing about
-        -- those frames says "header".
-        for _, name in ipairs({ "WhoFrameColumnHeader1", "WhoFrameColumnHeader2",
-                                "WhoFrameColumnHeader3", "WhoFrameColumnHeader4" }) do
-            local h = _G[name]
-            if h then
-                k:Fade(h)
-                k:Fill(h, "surface2"):Border(h, "border")
-                if h.GetFontString then
-                    local fs = select(2, pcall(h.GetFontString, h))
-                    if fs then k:Label(fs, "textMuted") end
-                end
-            end
-        end
-
-        local ignore = f.IgnoreListWindow
-        if ignore then k:Panel(ignore, "surfaceSunk") end
-    end,
-}
-
---------------------------------------------------------------------------------
 --  WorldMapFrame
 --
 --  Read out of Blizzard_WorldMap.xml and Blizzard_WorldMap.lua rather than
@@ -5237,5 +5190,159 @@ P{
             local box = _G[name]
             if box and box.checkBoxTable or (box and box.swatchTable) then CfgList(k, box) end
         end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  FriendsFrame (Blizzard_FriendsFrame, Camelot FriendsFrame.xml / .lua), the
+--  Contacts window. A 385x424 ButtonFrameTemplate: under the title
+--  FriendsTabHeader holds the status dropdown, the Battle.net tag
+--  (BattlenetFrame, 190x29, 26 under the title) with ContactsMenuButton (a
+--  32px square with a gold arrow) beside it, and a TabSystem (Friends,
+--  Recent Allies) at 18,-60. The lists sit in the Inset: FriendsListFrame's
+--  ScrollBox from 8,-87, RecentAlliesFrame.List 3 inside the Inset. Add
+--  Friend and Send Message are 134x21 on the bottom corners; the Contacts /
+--  Raid tabs hang below. The ignore list is a second ButtonFrameTemplate
+--  window beside it.
+--
+--  Ours: a tool bar under the title (status left, tag centred, the menu
+--  button right, all 30); the Friends / Recent Allies tabs standing on a rule
+--  under it; the lists straight on the window from that rule to a footer,
+--  scroll bar centred in a gutter; Add Friend and Send Message on the
+--  footer. Rows, dividers, status dots and invite buttons are the contacts
+--  parts'.
+--------------------------------------------------------------------------------
+local FR = { tool = 40, control = 30, pad = 8, gap = 6, tabs = 24, footer = 36, button = 24,
+             wide = 140, gutter = 20 }
+
+P{
+    name  = "FriendsFrame",
+    addon = "Blizzard_FriendsFrame",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        if _G.FriendsFrameIcon then S.Mute(_G.FriendsFrameIcon) end
+
+        -- No box round the lists: the Inset is only their rect.
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(FR.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(FR.footer)
+        end)
+
+        -- The tool bar: status, tag, menu.
+        local header = f.FriendsTabHeader
+        local bn = header and header.BattlenetFrame
+        local status = header and header.StatusDropdown
+        if status then
+            k:Size(status, nil, FR.control)
+            k:Move(status, "LEFT", bar, "LEFT", FR.pad, 0)
+        end
+        if bn then
+            k:Fade(bn)
+            k:Move(bn, "CENTER", bar, "CENTER", 0, 0)
+            local menu = bn.ContactsMenuButton
+            if menu then
+                k:Size(menu, FR.control, FR.control)
+                k:Move(menu, "RIGHT", bar, "RIGHT", -FR.pad, 0)
+                local icon = menu.Icon
+                if icon and icon.SetDesaturated then
+                    icon:SetDesaturated(true)
+                    icon:SetVertexColor(T.RGBA("text"))
+                end
+            end
+            if bn.BroadcastFrame then
+                local bf = bn.BroadcastFrame
+                if bf.Border then k:Mute(bf.Border) end
+                k:Fill(bf, T.LOOK.window.rest.fill)
+                k:Border(bf, T.LOOK.window.rest.edge)
+            end
+        end
+
+        -- Friends / Recent Allies on a rule under the tool bar.
+        local ts = header and header.TabSystem
+        local listTop = top + FR.tool + FR.gap + FR.tabs
+        if ts then
+            k:Move(ts, "BOTTOMLEFT", f, "TOPLEFT", FR.pad, -listTop)
+            for _, tab in ipairs(ts.tabs or {}) do TextTab(k, tab) end
+            local d = S.D(f)
+            if not d.frRule then
+                d.frRule = S.Ours(f:CreateTexture(nil, "BORDER", nil, 1))
+                EV.Pixel.NoSnap(d.frRule)
+                d.frRule:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -listTop)
+                d.frRule:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -listTop)
+                local function Paint()
+                    d.frRule:SetColorTexture(S.Colour("border"))
+                    d.frRule:SetHeight(EV.Pixel:Line(f))
+                end
+                Paint()
+                T.Watch(d.frRule, Paint)
+                -- Rule and tabs only where the tabs are: the Raid page has none.
+                local function Sync() d.frRule:SetShown(header:IsShown()) end
+                header:HookScript("OnShow", Sync)
+                header:HookScript("OnHide", Sync)
+                Sync()
+            end
+        end
+
+        -- The lists, from the rule to the footer, their bars in a gutter.
+        local function Gutter(box, sbar)
+            if not (box and sbar) then return end
+            local w = S.Num(sbar:GetWidth()) or 8
+            local x = math.floor((FR.gutter - w) / 2 + 0.5)
+            k:Anchors(sbar, {
+                { "TOPLEFT",    box, "TOPRIGHT",    x, -FR.gap },
+                { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, FR.gap },
+            })
+        end
+        local fl = _G.FriendsListFrame
+        if fl and fl.ScrollBox then
+            k:Anchors(fl.ScrollBox, {
+                { "TOPLEFT",     f,    "TOPLEFT",  1, -(listTop + 1) },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", -FR.gutter, 0 },
+            })
+            Gutter(fl.ScrollBox, fl.ScrollBar)
+        end
+        local ra = _G.RecentAlliesFrame
+        local list = ra and ra.List
+        if list then
+            k:Anchors(list, {
+                { "TOPLEFT",     f,    "TOPLEFT",  1, -(listTop + 1) },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+            if list.ScrollBox then
+                k:Anchors(list.ScrollBox, {
+                    { "TOPLEFT",     list, "TOPLEFT",     0, 0 },
+                    { "BOTTOMRIGHT", list, "BOTTOMRIGHT", -FR.gutter, 0 },
+                })
+                Gutter(list.ScrollBox, list.ScrollBar)
+            end
+        end
+
+        -- The footer.
+        local add, msg = _G.FriendsFrameAddFriendButton, _G.FriendsFrameSendMessageButton
+        if add then
+            k:Size(add, FR.wide, FR.button)
+            k:Move(add, "LEFT", foot, "LEFT", FR.pad, 0)
+        end
+        if msg then
+            k:Size(msg, FR.wide, FR.button)
+            k:Move(msg, "RIGHT", foot, "RIGHT", -FR.pad, 0)
+        end
+
+        local ignore = f.IgnoreListWindow
+        if ignore then k:Panel(ignore, "surfaceSunk") end
     end,
 }

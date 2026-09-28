@@ -901,6 +901,193 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  0a6. Contacts rows (Blizzard_FriendsFrame Camelot FriendsFrame.xml and
+--      Blizzard_RecentAllies): the friends list and the recent allies list.
+--
+--      friendRow   FriendsListButtonTemplate: a `background` colour texture
+--                  Blizzard tints per status (Battle.net blue, in-game,
+--                  offline grey), a StatusIcon file dot, name and info, the
+--                  UI-QuestLogTitleHighlight hover tinted light blue and
+--                  locked on the chosen friend, a travel-pass invite button.
+--      allyRow     RecentAlliesEntryTemplate: the same idea, the status tint
+--                  on its NormalTexture, the choice by SetHighlightLocked,
+--                  "|" dividers drawn with a line atlas, a TravelPass-Invite
+--                  party button.
+--      friendDivider  the UI-FriendsFrame-OnlineDivider strip between the
+--                  online and offline halves of both lists.
+--
+--      Ours: rows are list items (clear, a wash on hover, copper when
+--      chosen) with a hairline under each; Blizzard's tints and glows go.
+--      The status is our dot (online moss, away amber, busy red, offline
+--      grey) over Blizzard's icon, which stays in place for the layout. The
+--      invite buttons are our small buttons with a plus.
+--------------------------------------------------------------------------------
+local STATUS_TOKEN = {}
+local function StatusTokens()
+    if next(STATUS_TOKEN) then return STATUS_TOKEN end
+    local map = {
+        FRIENDS_TEXTURE_ONLINE = "success", FRIENDS_TEXTURE_AFK = "warning",
+        FRIENDS_TEXTURE_DND = "danger", FRIENDS_TEXTURE_OFFLINE = "textDisabled",
+    }
+    for global, token in pairs(map) do
+        local path = _G[global]
+        if type(path) == "string" then
+            STATUS_TOKEN[path:lower()] = token
+            local id = S.TexID(path)
+            if id then STATUS_TOKEN[id] = token end
+        end
+    end
+    return STATUS_TOKEN
+end
+
+--- Our status dot over one of Blizzard's status icons, following its art
+--- and its visibility.
+function S.StatusDot(icon)
+    if not (icon and icon.GetTexture) then return end
+    local d = S.D(icon)
+    if d.dot then return end
+    local host = icon:GetParent()
+    local dot = S.Ours(host:CreateTexture(nil, "OVERLAY", nil, 2))
+    dot:SetTexture(T.MEDIA .. "circle.png")
+    dot:SetSize(8, 8)
+    dot:SetPoint("CENTER", icon, "CENTER", 0, 0)
+    d.dot = dot
+    local function Sync(_, art)
+        local key = art
+        if key == nil then local ok, t = pcall(icon.GetTexture, icon); key = ok and t or nil end
+        if type(key) == "string" then key = key:lower() end
+        local token = StatusTokens()[key]
+        icon:SetAlpha(token and 0 or 1)
+        dot:SetShown(token ~= nil and icon:IsShown())
+        if token then dot:SetVertexColor(S.Colour(token)) end
+    end
+    hooksecurefunc(icon, "SetTexture", Sync)
+    hooksecurefunc(icon, "Show", function() Sync() end)
+    hooksecurefunc(icon, "Hide", function() dot:Hide() end)
+    hooksecurefunc(icon, "SetShown", function() Sync() end)
+    T.Watch(dot, function() Sync() end)
+    Sync()
+end
+
+--- A small invite button: our button, a plus in its glyph colour.
+function S.InviteButton(b)
+    if not S.Alive(b) then return end
+    local d = S.D(b)
+    local p = S.PainterFor(b)
+    S.claimed[b] = S.claimed[b] or "part"
+    p:Fade()
+    b:SetSize(22, 22)
+    p:Fill(LOOK.button.rest.fill)
+    p:Border(LOOK.button.rest.edge)
+    if not d.plus then
+        local h = T.Solid(b, "OVERLAY", 1, 1, 1, 1, 6)
+        local v = T.Solid(b, "OVERLAY", 1, 1, 1, 1, 6)
+        h:SetSize(10, 2); v:SetSize(2, 10)
+        h:SetPoint("CENTER"); v:SetPoint("CENTER")
+        d.plus = { S.Ours(h), S.Ours(v) }
+    end
+    p:States(LOOK.button, { after = function(r)
+        local c = r.glyph or r.text
+        if c then for _, t in ipairs(d.plus) do t:SetColorTexture(T.C4(c)) end end
+    end })
+end
+
+local function RowRule(b)
+    local d = S.D(b)
+    if d.rowRule then return end
+    d.rowRule = S.Ours(b:CreateTexture(nil, "BORDER", nil, 1))
+    EV.Pixel.NoSnap(d.rowRule)
+    d.rowRule:SetPoint("BOTTOMLEFT"); d.rowRule:SetPoint("BOTTOMRIGHT")
+    local function Paint()
+        d.rowRule:SetColorTexture(S.Colour("divider"))
+        d.rowRule:SetHeight(EV.Pixel:Line(b))
+    end
+    Paint()
+    T.Watch(d.rowRule, Paint)
+end
+
+R{
+    name = "friendRow",
+    type = "Button",
+    keys = { "background", "status", "name", "info", "travelPassButton" },
+    paint = function(b, p)
+        S.Mute(b.background)
+        if b.highlight then S.StripArt(b.highlight) end
+        local d = S.D(b)
+        p:Fill("surface2")
+        p:States(LOOK.listItem, { on = function() return d.locked end })
+        if not d.lockHooked then
+            d.lockHooked = true
+            hooksecurefunc(b, "LockHighlight", function() d.locked = true; if d.Repaint then d.Repaint() end end)
+            hooksecurefunc(b, "UnlockHighlight", function() d.locked = false; if d.Repaint then d.Repaint() end end)
+        end
+        S.StatusDot(b.status)
+        S.InviteButton(b.travelPassButton)
+        RowRule(b)
+    end,
+}
+
+R{
+    name = "allyRow",
+    type = "Button",
+    keys = { "OnlineStatusIcon", "CharacterData", "PartyButton" },
+    paint = function(b, p)
+        if b.NormalTexture then S.Mute(b.NormalTexture) end
+        if b.HighlightTexture then S.StripArt(b.HighlightTexture) end
+        local d = S.D(b)
+        p:Fill("surface2")
+        p:States(LOOK.listItem, { on = function() return d.locked end })
+        if not d.lockHooked and b.SetHighlightLocked then
+            d.lockHooked = true
+            hooksecurefunc(b, "SetHighlightLocked", function(_, locked)
+                d.locked = locked and true or false
+                if d.Repaint then d.Repaint() end
+            end)
+        end
+        local cd = b.CharacterData
+        for _, key in ipairs({ "NameDivider", "LevelDivider" }) do
+            local t = cd and cd[key]
+            if t and t.SetDesaturated then
+                t:SetDesaturated(true)
+                t:SetVertexColor(S.Colour("textMuted"))
+            end
+        end
+        S.StatusDot(b.OnlineStatusIcon)
+        S.InviteButton(b.PartyButton)
+        RowRule(b)
+    end,
+}
+
+R{
+    name = "friendDivider",
+    test = function(f)
+        if f.GetObjectType and f:GetObjectType() == "Button" then return false end
+        for _, r in ipairs(S.Regions(f)) do
+            if S.ArtIsFile(r, "Interface\\FriendsFrame\\UI-FriendsFrame-OnlineDivider") then return true end
+        end
+        return false
+    end,
+    paint = function(f, p)
+        local d = S.D(f)
+        for _, r in ipairs(S.Regions(f)) do
+            if not S.ours[r] and r.GetObjectType and r:GetObjectType() == "Texture" then S.StripArt(r) end
+        end
+        if not d.divRule then
+            d.divRule = S.Ours(f:CreateTexture(nil, "ARTWORK"))
+            EV.Pixel.NoSnap(d.divRule)
+            d.divRule:SetPoint("LEFT", f, "LEFT", 8, 0)
+            d.divRule:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+            local function Paint()
+                d.divRule:SetColorTexture(S.Colour("borderStrong"))
+                d.divRule:SetHeight(EV.Pixel:Line(f))
+            end
+            Paint()
+            T.Watch(d.divRule, Paint)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  0a5. Column header     ColumnDisplayButtonShortTemplate (SharedXML): the
 --      auction house's sortable columns, the who list, the guild roster.
 --      WhoFrame-ColumnTabs caps and middle, the tab-highlight on hover.
