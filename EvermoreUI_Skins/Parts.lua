@@ -463,15 +463,17 @@ R{
 --      source, the grey wash muted (the desaturated icon and grey name say
 --      "unavailable" already). The icon is ours.
 --------------------------------------------------------------------------------
--- Blizzard says "can't afford" only by turning the row's price red
--- (SetMoneyFrameColorByFrame, InitServiceButton), which it does while the
--- price is shown; our edge says it too, from the same comparison.
-local function CantAfford(b)
-    if not (b.money and b.money:IsShown()) or type(GetTrainerServiceCost) ~= "function" then return false end
+-- Not learnable yet: a level, skill or ability you lack, or a price you
+-- can't pay. InitServiceButton works that out as `isAvailable` (the service
+-- is "available" AND affordable, and a profession has a free slot) and sets
+-- it just before its Hide(); Show(). A spell you already know ("used") is
+-- not available either, but nothing is wrong with it, so it stays plain.
+local function Unlearnable(b)
+    if b.isAvailable ~= false or type(GetTrainerServiceInfo) ~= "function" then return false end
     local okI, id = pcall(b.GetID, b)
     if not okI or not id or id == 0 then return false end
-    local ok, cost = pcall(GetTrainerServiceCost, id)
-    return ok and type(cost) == "number" and cost > (GetMoney() or 0) or false
+    local ok, _, kind = pcall(GetTrainerServiceInfo, id)
+    return ok and kind ~= "used"
 end
 
 local function TrainerRowSync(b)
@@ -482,7 +484,7 @@ local function TrainerRowSync(b)
     local st = { on = sel and sel:IsShown() or false, hover = b:IsMouseOver() or false }
     local r = T.Resolve(LOOK.tile, st)
     card.fill:SetColorTexture(T.C4(r.fill))
-    T.SetEdge(card, CantAfford(b) and "danger" or r.edge)
+    T.SetEdge(card, Unlearnable(b) and "danger" or r.edge)
 end
 S.TrainerRowSync = TrainerRowSync   -- the trainer pack repaints after Blizzard selects
 
