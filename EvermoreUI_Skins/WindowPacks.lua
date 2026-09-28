@@ -305,10 +305,14 @@ local function QuestLogDetails(k, bar)
     end
 
     -- Reward buttons are made on demand (QuestInfo_GetRewardButton), after
-    -- the window's walk: dress them each time the rewards are shown.
+    -- the window's walk: dress them each time a quest is displayed. The hook
+    -- is on QuestInfo_Display, which callers reach by its global name.
+    -- QuestInfo_ShowRewards is NOT: the QUEST_TEMPLATE_* tables hold the
+    -- function itself, taken when QuestInfo.lua loaded, so a hook on the
+    -- global never runs.
     k:Once(det, "rewardButtons", function()
-        if type(QuestInfo_ShowRewards) == "function" then
-            hooksecurefunc("QuestInfo_ShowRewards", function()
+        if type(QuestInfo_Display) == "function" then
+            hooksecurefunc("QuestInfo_Display", function()
                 -- The next frame: the buttons are laid out and shown by then.
                 C_Timer.After(0, function()
                     for _, name in ipairs({ "MapQuestInfoRewardsFrame", "QuestInfoRewardsFrame" }) do
