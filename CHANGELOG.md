@@ -1,5 +1,30 @@
 # EvermoreUI
 
+## 0.13.1
+
+A swing timer that keeps up with what actually happens to your swing.
+
+### New
+- **Parry haste and haste mid-swing** on the swing timer. Forever doesn't
+  document either rule, so each one only moves the bar once your own
+  swings have confirmed it twice in a row; until then, and after any swing
+  that goes against it, the bar keeps Blizzard's timing. The Swing Timer
+  page shows where each rule stands, and either can be switched off.
+- **Global cooldown shading**: the part of the swing your global cooldown
+  still covers, so you can see whether there's time for another ability
+  before the swing lands. On by default.
+- **Latency zone**: the end of each swing tinted by your latency, the
+  stretch where anything you press arrives after the swing has gone. Off
+  by default.
+- **Auto attack off**: the main hand bar says so when you're in combat,
+  within reach of something hostile, and not attacking it.
+
+### Fixes
+- Swapping weapons now restarts the swing at the new weapon's speed, as
+  the game does, even in combat when the speed can't be read.
+- The swing timer could stop dimming when your target was out of reach,
+  after hiding Blizzard's own timer switched the range check off.
+
 ## 0.13.0
 
 Built around how Forever plays: a setup that gets you going in a minute,
