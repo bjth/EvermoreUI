@@ -3774,7 +3774,9 @@ local function PaintWindow(f, p)
         -- Blizzard anchors it TOPRIGHT x=-2 y=1 (Camelot's
         -- UIPanelCloseButtonDefaultAnchorsMixin), a pixel above the window;
         -- the maximise button hangs off its left, so it follows.
-        local close = rawget(f, "CloseButton")
+        -- CloseButton on most windows; ClosePanelButton on the flat panels
+        -- (ScrollingFlatPanelTemplate: the loot window).
+        local close = rawget(f, "CloseButton") or rawget(f, "ClosePanelButton")
         if type(close) == "table" and close.GetPoint then
             local ok, pt, rel = pcall(close.GetPoint, close, 1)
             if ok and pt == "TOPRIGHT" and (rel == f or rel == nil) then

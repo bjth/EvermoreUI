@@ -247,20 +247,14 @@ function T.ShowBorder(frame, shown) EV.Pixel:ShowEdges(frame, shown) end
 
 --- Soft drop shadow: stacked black rings outside the frame.
 function T.Shadow(frame, size, strength)
-    size = size or 10
-    strength = strength or T.C.shadow[4]
+    -- No shadow any more (Ben, 28 Sep): the stacked one-pixel rings overlapped
+    -- at every corner and drew a diagonal of darker points there, and the
+    -- frame edge already separates a window from the world. Callers keep
+    -- getting a frame (a few hold on to it), but it draws nothing.
     local holder = CreateFrame("Frame", nil, frame)
     holder.ignoreInLayout = true   -- never content to a LayoutFrame (see Pixel:Edges)
-    holder:SetFrameLevel(math.max(frame:GetFrameLevel() - 1, 0))
-    holder:SetPoint("TOPLEFT", -size, size)
-    holder:SetPoint("BOTTOMRIGHT", size, -size)
     holder:EnableMouse(false)
-    for i = 1, size do
-        local ring = CreateFrame("Frame", nil, holder)
-        ring:SetPoint("TOPLEFT", i - 1, -(i - 1))
-        ring:SetPoint("BOTTOMRIGHT", -(i - 1), i - 1)
-        EV.Pixel:CreateBorder(ring, 1, 0, 0, 0, strength * (i / size) ^ 2 * 0.5)
-    end
+    holder:Hide()
     return holder
 end
 
