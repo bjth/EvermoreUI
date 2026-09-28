@@ -120,6 +120,82 @@ local function Band(host, key, rule, place)
 end
 
 --------------------------------------------------------------------------------
+--  Icon picker pop-ups: IconSelectorPopupFrameTemplate (SharedXML), used by
+--  MacroPopupFrame and GearManagerPopupFrame. A BG texture, a BorderBox
+--  (SelectionFrameTemplate, frameLevel 50, setAllPoints) over everything, the
+--  name field (IconSelectorEditBox, three UI-ClassTrainer-FilterBorder
+--  pieces), the current icon (SelectedIconButton: a slot square, the icon as
+--  its NormalTexture) and the grid (IconSelector, SelectorButtonTemplate
+--  buttons, which selectorButton dresses) under the BorderBox.
+--
+--  The generic window part filled the BorderBox, the top of the stack, and
+--  so covered the grid entirely. The BorderBox keeps no fill; the pop-up
+--  itself carries the surface and the edge. They are children of their
+--  windows, not windows, so the windows' packs call this.
+--------------------------------------------------------------------------------
+local function IconPopup(k, pop)
+    if not S.Alive(pop) then return end
+    local box = pop.BorderBox
+    if box then
+        k:NoFill(box)
+        EV.Pixel:ShowEdges(box, false)
+    end
+    if pop.BG then S.StripArt(pop.BG) end
+    k:Fill(pop, "surface0")
+    k:Border(pop, "border")
+    local edit = box and box.IconSelectorEditBox
+    if edit then
+        for _, key in ipairs({ "IconSelectorPopupNameLeft", "IconSelectorPopupNameMiddle", "IconSelectorPopupNameRight" }) do
+            if edit[key] then S.StripArt(edit[key]) end
+        end
+        k:Fill(edit, "surfaceSunk")
+        k:Border(edit, "borderStrong")
+        if edit.SetTextInsets then edit:SetTextInsets(6, 6, 0, 0) end
+        k:Size(edit, nil, 24)
+    end
+    -- A footer for Okay and Cancel (Blizzard: 78x22 at the bottom right on
+    -- nothing), and the grid ending a gap above it rather than on its line.
+    local foot = Band(pop, "footer", "top", function(b)
+        b:SetPoint("BOTTOMLEFT", pop, "BOTTOMLEFT", 1, 1)
+        b:SetPoint("BOTTOMRIGHT", pop, "BOTTOMRIGHT", -1, 1)
+        b:SetHeight(36)
+    end)
+    local cancel, okay = box and box.CancelButton, box and box.OkayButton
+    if cancel then
+        k:Size(cancel, 96, 24)
+        k:Move(cancel, "RIGHT", foot, "RIGHT", -7, 0)
+    end
+    if okay then
+        k:Size(okay, 96, 24)
+        if cancel then k:Move(okay, "RIGHT", cancel, "LEFT", -6, 0) end
+    end
+    local grid = pop.IconSelector
+    if grid then
+        k:Anchors(grid, {
+            { "TOPLEFT",     pop,  "TOPLEFT",  21, -97 },
+            { "BOTTOMRIGHT", foot, "TOPRIGHT", -10, 6 },
+        })
+    end
+
+    local sel = box and box.SelectedIconArea and box.SelectedIconArea.SelectedIconButton
+    if sel then
+        k:Once(sel, "popupIcon", function()
+            for _, r in ipairs(S.Regions(sel)) do
+                if r ~= sel.Icon and r.GetObjectType and r:GetObjectType() == "Texture" and not S.ours[r] then
+                    S.StripArt(r)
+                end
+            end
+            if sel.Highlight then S.StripArt(sel.Highlight) end
+            if sel.Icon then
+                sel.Icon:ClearAllPoints()
+                sel.Icon:SetAllPoints(sel)
+                EV.Icons:Style(sel.Icon, { host = sel })
+            end
+        end)
+    end
+end
+
+--------------------------------------------------------------------------------
 --  MailFrame
 --
 --  What the generic layer cannot reach here, all confirmed against
@@ -514,53 +590,6 @@ P{
         end
         k:After(f, "Update", function() Layout(true) end)
         Layout(false)
-    end,
-}
-
---------------------------------------------------------------------------------
---  FriendsFrame
---
---  The one window the architecture doc has always used as its example, and
---  the one that shows the restraint: not a single SetPoint in it. Everything
---  here is paint.
---
---  Blizzard keeps the tab header, the battletag row and the status dropdown
---  in the band where the portrait was, which is exactly why we do not
---  reclaim that band. Leave the layout alone.
---------------------------------------------------------------------------------
-P{
-    name  = "FriendsFrame",
-    addon = "Blizzard_FriendsFrame",
-    apply = function(f, k)
-        -- The battle.net portrait is art, not content.
-        local icon = _G.FriendsFrameIcon
-        if icon then S.Mute(icon) end
-
-        local header = f.FriendsTabHeader
-        if header then
-            k:Fade(header)
-            if header.BattlenetFrame then k:Fade(header.BattlenetFrame) end
-        end
-
-        -- The who-list column tabs are WhoFrame-ColumnTabs, a file sheet
-        -- already in S.ORNATE_FILES, so the walk takes those down. What it
-        -- cannot do is give the header row a surface, because nothing about
-        -- those frames says "header".
-        for _, name in ipairs({ "WhoFrameColumnHeader1", "WhoFrameColumnHeader2",
-                                "WhoFrameColumnHeader3", "WhoFrameColumnHeader4" }) do
-            local h = _G[name]
-            if h then
-                k:Fade(h)
-                k:Fill(h, "surface2"):Border(h, "border")
-                if h.GetFontString then
-                    local fs = select(2, pcall(h.GetFontString, h))
-                    if fs then k:Label(fs, "textMuted") end
-                end
-            end
-        end
-
-        local ignore = f.IgnoreListWindow
-        if ignore then k:Panel(ignore, "surfaceSunk") end
     end,
 }
 
@@ -1418,6 +1447,603 @@ P{
     end,
 }
 
+--------------------------------------------------------------------------------
+--  TimeManagerFrame: the clock (Blizzard_TimeManager, Mainline), from the
+--  minimap's time. 220x240 ButtonFrameTemplate, shown with a bare Show by
+--  TimeManager_Toggle, so Discover takes it by name. Its portrait is a globe
+--  (TimeManagerGlobe) with the time on it (TimeManagerFrameTicker, set every
+--  update), and its title a loose font string at TOP x=15 to clear the globe.
+--  TimeManagerStopwatchFrame (160x60 at TOPRIGHT 10,-12) holds "Show
+--  Stopwatch" and a 28px pocket-watch check; the alarm block starts at
+--  12,-65 and the Enabled check sits at the frame's LEFT 12,-45.
+--
+--  Ours: the time in the title bar's left, as level and class are on the
+--  character window; the title through the window's own title; the
+--  stopwatch toggle on a tool bar under the title, an icon in our style,
+--  copper while the stopwatch is shown; the alarm block 6 under the bar,
+--  which keeps it clear of the Enabled check as Blizzard's was.
+--------------------------------------------------------------------------------
+local CLOCK = { tool = 36, pad = 8, gap = 6 }
+
+P{
+    name  = "TimeManagerFrame",
+    addon = "Blizzard_TimeManager",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        if _G.TimeManagerGlobe then S.StripArt(_G.TimeManagerGlobe) end
+
+        -- The title: Blizzard's loose one goes, the window's own takes it.
+        for _, r in ipairs(S.Regions(f)) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" and r ~= _G.TimeManagerFrameTicker then
+                local ok, t = pcall(r.GetText, r)
+                if ok and t == _G.TIMEMANAGER_TITLE then r:SetAlpha(0) end
+            end
+        end
+        if f.SetTitle and _G.TIMEMANAGER_TITLE then f:SetTitle(_G.TIMEMANAGER_TITLE) end
+
+        -- The time, in the title bar on the left.
+        local ticker = _G.TimeManagerFrameTicker
+        if ticker then
+            k:Move(ticker, "LEFT", f, "TOPLEFT", CLOCK.pad + 2, -((S.TITLE_BAND or 24) / 2 + 1))
+            ticker:SetJustifyH("LEFT")
+            k:Label(ticker, "text", true)
+        end
+
+        -- The stopwatch toggle on a tool bar.
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(CLOCK.tool)
+        end)
+        local sw, check = _G.TimeManagerStopwatchFrame, _G.TimeManagerStopwatchCheck
+        if sw then
+            -- The check is 17 in from this frame's right; its right lands
+            -- CLOCK.pad in from ours, on the bar's middle.
+            k:Move(sw, "RIGHT", bar, "RIGHT", 17 - CLOCK.pad, 0)
+        end
+        if check then
+            k:Once(check, "clockCheck", function()
+                for _, get in ipairs({ "GetHighlightTexture", "GetCheckedTexture" }) do
+                    local ok, t = pcall(check[get], check)
+                    if ok and t then S.StripArt(t) end
+                end
+                local okN, icon = pcall(check.GetNormalTexture, check)
+                if not (okN and icon) then return end
+                icon:ClearAllPoints()
+                icon:SetAllPoints(check)
+                EV.Icons:Style(icon, { host = check })
+                local function Sync()
+                    local okC, on = pcall(check.GetChecked, check)
+                    local st = { on = okC and on or false, hover = check:IsMouseOver() or false }
+                    if st.on or st.hover then
+                        local e = T.Resolve(T.LOOK.slot, st).edge
+                        EV.Icons:SetState(icon, e[1], e[2], e[3], e[4])
+                    else
+                        EV.Icons:SetState(icon, nil)
+                    end
+                end
+                check:HookScript("OnEnter", Sync)
+                check:HookScript("OnLeave", Sync)
+                check:HookScript("OnClick", Sync)
+                hooksecurefunc(check, "SetChecked", Sync)
+                Sync()
+            end)
+        end
+
+        local alarm = f.AlarmTimeFrame or _G.TimeManagerAlarmTimeFrame
+        if alarm then k:Move(alarm, "TOPLEFT", f, "TOPLEFT", 12, -(top + CLOCK.tool + CLOCK.gap)) end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  AddonList (Blizzard_AddOnList). 600x550 ButtonFrameTemplate. The
+--  character Dropdown at TOPLEFT 12,-30, "Load out of date" (ForceLoad) at
+--  TOP -80,-27, SearchBox 160x22 at TOPRIGHT -10,-31; the Performance block
+--  (header, CPU figures, an Options_HorizontalDivider) at TOP -65, 25 in from
+--  each side, collapsing when hidden (collapsesLayout); the list under it,
+--  7 in, BOTTOMRIGHT -34,28; Enable All / Disable All (120x22) at the bottom
+--  left and Okay / Cancel (80x22) at the bottom right, on nothing. The rows'
+--  highlight is UI-QuestTitleHighlight, so talkRow already dresses them.
+--
+--  Ours: a tool bar with the dropdown, the check and the search on it, 30
+--  tall; no inner box; the Performance block and the list 12 in, the
+--  divider a hairline; a footer with the four buttons, 24 tall; the list's
+--  scroll bar centred in a 20px gutter.
+--------------------------------------------------------------------------------
+local ADDONS = { tool = 40, control = 30, pad = 12, gap = 6, footer = 36, button = 24,
+                 all = 120, short = 96, gutter = 20, search = 200, drop = 180 }
+
+P{
+    name  = "AddonList",
+    addon = "Blizzard_AddOnList",
+    apply = function(f, k)
+        local A = ADDONS
+        local top = (S.TITLE_BAND or 24) + 2
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(A.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(A.footer)
+        end)
+
+        if f.Dropdown then
+            k:Size(f.Dropdown, A.drop, A.control)
+            k:Move(f.Dropdown, "LEFT", bar, "LEFT", A.pad - 1, 0)
+        end
+        if f.ForceLoad then k:Move(f.ForceLoad, "CENTER", bar, "CENTER", -80, 0) end
+        if f.SearchBox then
+            k:Size(f.SearchBox, A.search, A.control)
+            k:Move(f.SearchBox, "RIGHT", bar, "RIGHT", -(A.pad - 1), 0)
+        end
+
+        local perf = f.Performance
+        if perf then
+            k:Anchors(perf, {
+                { "TOPLEFT",  bar, "BOTTOMLEFT",  A.pad - 1, 0 },
+                { "TOPRIGHT", bar, "BOTTOMRIGHT", -(A.pad - 1), 0 },
+            })
+            local div = perf.Divider
+            if div then
+                S.StripArt(div)
+                k:Once(perf, "addonsRule", function()
+                    local rule = S.Ours(perf:CreateTexture(nil, "ARTWORK"))
+                    EV.Pixel.NoSnap(rule)
+                    rule:SetPoint("LEFT", div, "LEFT"); rule:SetPoint("RIGHT", div, "RIGHT")
+                    rule:SetPoint("BOTTOM", perf, "BOTTOM", 0, 5)
+                    local function Paint()
+                        rule:SetColorTexture(S.Colour("divider"))
+                        rule:SetHeight(EV.Pixel:Line(perf))
+                    end
+                    Paint()
+                    T.Watch(rule, Paint)
+                end)
+            end
+        end
+
+        local box, sbar = f.ScrollBox, f.ScrollBar
+        if box then
+            k:Anchors(box, {
+                { "TOP",         perf or bar, "BOTTOM",     0, -(perf and 0 or A.gap) },
+                { "LEFT",        f,           "LEFT",       A.pad - 1, 0 },
+                { "BOTTOMRIGHT", foot,        "TOPRIGHT",   -A.gutter, A.gap },
+            })
+            if sbar then
+                local w = S.Num(sbar:GetWidth()) or 8
+                local x = math.floor((A.gutter - w) / 2 + 0.5)
+                k:Anchors(sbar, {
+                    { "TOPLEFT",    box, "TOPRIGHT",    x, 0 },
+                    { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, 0 },
+                })
+            end
+        end
+
+        local en, dis, ok, cancel = f.EnableAllButton, f.DisableAllButton, f.OkayButton, f.CancelButton
+        if en then k:Size(en, A.all, A.button); k:Move(en, "LEFT", foot, "LEFT", A.pad - 4, 0) end
+        if dis then k:Size(dis, A.all, A.button); if en then k:Move(dis, "LEFT", en, "RIGHT", A.gap, 0) end end
+        if cancel then k:Size(cancel, A.short, A.button); k:Move(cancel, "RIGHT", foot, "RIGHT", -(A.pad - 4), 0) end
+        if ok then k:Size(ok, A.short, A.button); if cancel then k:Move(ok, "RIGHT", cancel, "LEFT", -A.gap, 0) end end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  MacroFrame (Blizzard_MacroUI). 338x424 ButtonFrameTemplate; its title a
+--  loose font string (CREATE_MACROS) at TOP -5; General / Character tabs
+--  (PanelTopTabButtonTemplate) at TOPLEFT 51,-28 beside the portrait; the
+--  macro grid (MacroSelector, 319x146) at 12,-66; a trainer bar at -210;
+--  the selected macro on a UI-EmptySlot at 5,-218 with Change Name/Icon
+--  (170x22) and Save / Cancel (80x22) beside it; the commands in a
+--  TooltipBackdrop box (322x95 at 6,-289), the character count at BOTTOM
+--  -15,30; Delete / New / Exit (80x22) at the bottom, on nothing.
+--
+--  Ours: the window's own title; the tabs on a tool bar under it; the grid
+--  6 under the bar; the slots (selectorButton) as our wells; the bar and
+--  slot art gone; the commands in a sunk well, 6 clear of a footer, with the
+--  character count on the label's line at the well's right; Delete left and
+--  New / Exit right on the footer; every button 24 tall.
+--------------------------------------------------------------------------------
+local MACRO = { tool = 36, pad = 8, gap = 6, footer = 36, button = 24, short = 96,
+                box = 295, rise = 4, label = 12 }
+
+P{
+    name  = "MacroFrame",
+    addon = "Blizzard_MacroUI",
+    apply = function(f, k)
+        local M = MACRO
+        local top = (S.TITLE_BAND or 24) + 2
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        -- The title: Blizzard's loose one goes, the window's own takes it.
+        for _, r in ipairs(S.Regions(f)) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" then
+                local ok, t = pcall(r.GetText, r)
+                if ok and t == _G.CREATE_MACROS then r:SetAlpha(0) end
+            end
+        end
+        if f.SetTitle and _G.CREATE_MACROS then f:SetTitle(_G.CREATE_MACROS) end
+        k:Art(f, "Interface\\ClassTrainerFrame\\UI-ClassTrainer-HorizontalBar")
+        if _G.MacroFrameSelectedMacroBackground then S.StripArt(_G.MacroFrameSelectedMacroBackground) end
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(M.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(M.footer)
+        end)
+
+        -- The tabs stand on the bar's rule; the second follows the first.
+        local tab1 = _G.MacroFrameTab1
+        if tab1 then k:Move(tab1, "BOTTOMLEFT", bar, "BOTTOMLEFT", M.pad, 0) end
+
+        local grid = f.MacroSelector
+        if grid then k:Move(grid, "TOPLEFT", f, "TOPLEFT", 12, -(top + M.tool + M.gap)) end
+
+        -- The commands: a sunk well, ending M.gap above the footer.
+        local box = _G.MacroFrameTextBackground
+        if box then
+            if box.NineSlice then k:Fade(box.NineSlice) end
+            k:Fade(box)
+            k:Fill(box, "surfaceSunk")
+            k:Border(box, "border")
+            k:Anchors(box, {
+                { "TOPLEFT",     f,    "TOPLEFT",  6, -M.box },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", -(338 - 328), M.gap },
+            })
+            -- The character count on the label's line, straight after the
+            -- label: at the line's right end it sat under Cancel.
+            -- The text scrolls inside the well, following it down.
+            local scroll = _G.MacroFrameScrollFrame
+            if scroll then
+                k:Anchors(scroll, {
+                    { "TOPLEFT",     box, "TOPLEFT",     10, -6 },
+                    { "BOTTOMRIGHT", box, "BOTTOMRIGHT", -26, 6 },
+                })
+            end
+            local count, label = _G.MacroFrameCharLimitText, _G.MacroFrameEnterMacroText
+            -- The label sits on the well rather than on the stripped slot
+            -- art, so the buttons above can be placed clear of it.
+            if label then k:Move(label, "BOTTOMLEFT", box, "TOPLEFT", 2, M.rise) end
+            if count and label then
+                k:Move(count, "LEFT", label, "RIGHT", M.pad, 0)
+                count:SetJustifyH("LEFT")
+                -- Blizzard fixes its height at 10, shorter than our font,
+                -- which truncates the end of the line. Let it size itself.
+                count:SetHeight(0)
+                count:SetWordWrap(false)
+                k:Label(count, "textMuted")
+            end
+        end
+
+        -- Save over Cancel on the right, M.gap apart (Blizzard: 15), and
+        -- Change Name/Icon beside them on their middle line, the selected
+        -- macro's slot to its left on the same line.
+        local save, cancel, edit = _G.MacroSaveButton, _G.MacroCancelButton, _G.MacroEditButton
+        if cancel then
+            k:Size(cancel, M.short, M.button)
+            -- Cancel's foot M.gap clear of the label line above the well.
+            if box then k:Move(cancel, "BOTTOMRIGHT", box, "TOPRIGHT", 0, M.rise + M.label + M.gap) end
+        end
+        if save then
+            k:Size(save, M.short, M.button)
+            if cancel then k:Move(save, "BOTTOM", cancel, "TOP", 0, M.gap) end
+        end
+        if edit then
+            k:Size(edit, 160, M.button)
+            if save then k:Move(edit, "RIGHT", save, "BOTTOMLEFT", -M.pad, -M.gap / 2) end
+            local slot = f.SelectedMacroButton or _G.MacroFrameSelectedMacroButton
+            if slot then k:Move(slot, "RIGHT", edit, "LEFT", -M.pad, 0) end
+        end
+        IconPopup(k, _G.MacroPopupFrame)
+        local del, new, exit = _G.MacroDeleteButton, _G.MacroNewButton, _G.MacroExitButton
+        if del then k:Size(del, M.short, M.button); k:Move(del, "LEFT", foot, "LEFT", M.pad - 1, 0) end
+        if exit then k:Size(exit, M.short, M.button); k:Move(exit, "RIGHT", foot, "RIGHT", -(M.pad - 1), 0) end
+        if new then k:Size(new, M.short, M.button); if exit then k:Move(new, "RIGHT", exit, "LEFT", -M.gap, 0) end end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  CalendarFrame (Blizzard_Calendar, Mainline). A plain 659x624 frame whose
+--  whole look is loose texture sheets on the frame itself: CalendarFrame_*
+--  edges (a 46px top, 12 and 10 px sides, a 9px bottom), a CalendarBackground
+--  banner per weekday, the month and year plates, the selected weekday's
+--  glow. Six rows of seven 91px day buttons hang from the first weekday
+--  banner (CalendarFrame_InitDay), each on a random tile of CalendarBackground
+--  (its NormalTexture) with an ADD highlight Blizzard locks for the selected
+--  day, a DarkFrame of CalendarShadows over other months' days, and
+--  CalendarTodayFrame (an animated glow) re-parented onto today.
+--  CalendarFrame_UpdateDay(index, day, monthOffset, isSelected, _, isToday,
+--  ...) runs for every cell on every update.
+--
+--  Ours: the window surface and edge; the top as a band with the month and
+--  its arrows centred and the filter and close on the right; the weekday
+--  names on a band; each day a flat cell on a frame of ours under its
+--  content, and a grid of hairlines on a layer above it (Ben: a border
+--  round each square); other months dimmed, hover lighter, the selected
+--  day the tile Look's on, today edged in copper on that upper layer. Holiday art and event
+--  text stay: they are content. The grid is centred (Blizzard: 12 in on
+--  the left, 10 on the right).
+--------------------------------------------------------------------------------
+local CAL = { top = 46, pad = 8, filter = 30 }
+local calState = setmetatable({}, { __mode = "k" })   -- day button -> { other, selected, today, hover }
+
+local function CalCell(b)
+    local st = calState[b]
+    local cell = st and st.cell
+    if not cell then return end
+    local r = T.Resolve(T.LOOK.tile, { on = st.selected, hover = st.hover, disabled = st.other })
+    cell.fill:SetColorTexture(T.C4(r.fill))
+    -- Today and the selected day: an edge inside the grid lines, on the
+    -- layer above the day's art, so a holiday's picture can't cover it.
+    if st.today then
+        T.SetEdge(st.mark, { S.Colour("accent") })
+    elseif st.selected then
+        T.SetEdge(st.mark, r.edge)
+    else
+        T.SetEdge(st.mark, nil)
+    end
+end
+
+--- The grid: each cell draws its right and bottom line, the first column its
+--- left one too (the top is the weekday band's rule), on a mouse-transparent
+--- layer above the day's content, so full-cell holiday art can't hide it.
+local function CalGrid(b, st)
+    local name = b:GetName() or ""
+    local index = tonumber(name:match("(%d+)$")) or 0
+    local over = S.Ours(CreateFrame("Frame", nil, b))
+    over:EnableMouse(false)
+    over:SetAllPoints(b)
+    over:SetFrameLevel(b:GetFrameLevel() + 8)
+    local lines = {}
+    local function Line(a1, a2, vertical)
+        local t = S.Ours(over:CreateTexture(nil, "OVERLAY", nil, 6))
+        EV.Pixel.NoSnap(t)
+        t:SetPoint(a1); t:SetPoint(a2)
+        lines[#lines + 1] = { t, vertical }
+    end
+    Line("TOPRIGHT", "BOTTOMRIGHT", true)
+    Line("BOTTOMLEFT", "BOTTOMRIGHT", false)
+    if index % 7 == 1 then Line("TOPLEFT", "BOTTOMLEFT", true) end
+    local function Paint()
+        local px = EV.Pixel:Line(over)
+        for _, l in ipairs(lines) do
+            l[1]:SetColorTexture(S.Colour("border"))
+            if l[2] then l[1]:SetWidth(px) else l[1]:SetHeight(px) end
+        end
+    end
+    Paint()
+    T.Watch(lines[1][1], Paint)
+    -- The mark for today and the selected day, a pixel inside the lines.
+    local mark = S.Ours(CreateFrame("Frame", nil, over))
+    mark:EnableMouse(false)
+    local one = EV.Pixel:One(b)
+    mark:SetPoint("TOPLEFT", over, "TOPLEFT", index % 7 == 1 and one or 0, 0)
+    mark:SetPoint("BOTTOMRIGHT", over, "BOTTOMRIGHT", -one, one)
+    EV.Pixel:Edges(mark, { size = 1 })
+    st.mark = mark
+end
+
+local function CalDay(b)
+    if not S.Alive(b) or calState[b] then return end
+    local st = {}
+    calState[b] = st
+    local okN, n = pcall(b.GetNormalTexture, b)
+    if okN and n then S.StripArt(n) end
+    local okH, h = pcall(b.GetHighlightTexture, b)
+    if okH and h then S.StripArt(h) end
+    local name = b:GetName()
+    local dark = name and _G[name .. "DarkFrame"]
+    if dark then
+        for _, r in ipairs(S.Regions(dark)) do S.StripArt(r) end
+    end
+    local cell = S.Ours(CreateFrame("Frame", nil, b))
+    cell:EnableMouse(false)
+    cell:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
+    cell:SetAllPoints(b)
+    cell.fill = S.Ours(EV.Pixel:Fill(cell, "BACKGROUND", -7))
+    st.cell = cell
+    CalGrid(b, st)
+    b:HookScript("OnEnter", function() st.hover = true; CalCell(b) end)
+    b:HookScript("OnLeave", function() st.hover = false; CalCell(b) end)
+    T.Watch(cell.fill, function() CalCell(b) end)
+    CalCell(b)
+end
+
+--------------------------------------------------------------------------------
+--  The calendar's read-only side panels: CalendarViewHolidayFrame and
+--  CalendarViewRaidFrame. Each is a DialogBorderDarkTemplate with a
+--  DialogHeaderTemplate plate standing over its top edge, a ScrollingFont of
+--  fixed size for the description and, on the holiday one, the holiday's
+--  ornate INFO sheet at 40% behind the text. Blizzard hangs them from the
+--  calendar's top right, 24 down, at a fixed 320 or 150 tall.
+--
+--  Ours: our window with its title band, the name on the band, the close
+--  in its corner, the ornament gone, the text inset by the pad, and the
+--  panel as tall as its text (up to Blizzard's height, past which the text
+--  scrolls as before). It sits a gap clear of the calendar, level with its
+--  top.
+--------------------------------------------------------------------------------
+local CALSIDE = { gap = 6, pad = 16, min = 60 }
+
+local function CalSide(name, closeName)
+    P{
+        name  = name,
+        addon = "Blizzard_Calendar",
+        apply = function(f, k)
+            local W = T.LOOK.window.rest
+            if f.Border then k:Mute(f.Border) end
+            if f.Texture then k:Mute(f.Texture) end
+            k:Fill(f, W.fill)
+            k:Border(f, W.edge)
+            local cal = _G.CalendarFrame
+            if cal then k:Move(f, "TOPLEFT", cal, "TOPRIGHT", CALSIDE.gap, 0) end
+
+            -- The title band the calendar itself wears, so the two read as
+            -- one window and its panel.
+            local top = S.TITLE_BAND or 24
+            local band = Band(f, "title", "bottom", function(b)
+                b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+                b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+                b:SetHeight(top)
+            end)
+            -- Blizzard's plate is 39 tall against our 24, and the generic
+            -- layer dresses it as a pane: its fill and edge hung below the
+            -- band and read as a taller bar. Hide the plate outright and put
+            -- the name on the band; Setup still sets its text there.
+            local header = f.Header
+            if header and band then
+                k:Mute(header)
+                local name = header.Text
+                if name then
+                    if name:GetParent() ~= band then name:SetParent(band) end
+                    k:Move(name, "CENTER", band, "CENTER", 0, 0)
+                    k:Label(name, W.title, true)
+                end
+            end
+            local close = _G[closeName]
+            if close then
+                k:Size(close, top, top)
+                k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1)
+            end
+
+            local sf = f.ScrollingFont
+            if not sf then return end
+            top = top + 1
+            k:Anchors(sf, {
+                { "TOPLEFT",     f, "TOPLEFT",     CALSIDE.pad, -(top + CALSIDE.pad) },
+                { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -CALSIDE.pad, CALSIDE.pad },
+            })
+            local fs = sf.GetFontString and sf:GetFontString()
+            if fs then k:Label(fs, "text") end
+            -- Blizzard's height is the most the panel grows to.
+            local d = S.D(f)
+            d.calMax = d.calMax or f:GetHeight()
+            local function Fit()
+                local str = sf.GetFontString and sf:GetFontString()
+                local h = str and S.Num(str:GetStringHeight())
+                if not h then return end
+                h = math.max(CALSIDE.min, math.min(d.calMax, top + 2 * CALSIDE.pad + math.ceil(h)))
+                if math.abs(f:GetHeight() - h) > 0.5 then k:Size(f, nil, h) end
+            end
+            Fit()
+            k:After(sf, "SetText", function() Fit() end)
+        end,
+    }
+end
+CalSide("CalendarViewHolidayFrame", "CalendarViewHolidayCloseButton")
+CalSide("CalendarViewRaidFrame", "CalendarViewRaidCloseButton")
+
+P{
+    name  = "CalendarFrame",
+    addon = "Blizzard_Calendar",
+    apply = function(f, k)
+        -- The frame's own sheets: edges, banners, plates, the weekday glow.
+        k:Fade(f)
+        k:Fill(f, "surface0")
+        k:Border(f, "border")
+        local today = _G.CalendarTodayFrame
+        if today then
+            for _, r in ipairs(S.Regions(today)) do S.StripArt(r) end
+        end
+
+        -- The top: a band the height Blizzard gave it, the month centred.
+        Band(f, "title", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+            b:SetHeight(CAL.top - 1)
+        end)
+        local close = _G.CalendarCloseButton
+        if close then k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1) end
+        local filter = f.FilterButton
+        if filter then
+            k:Size(filter, nil, CAL.filter)
+            k:Move(filter, "RIGHT", f, "TOPRIGHT", -((S.TITLE_BAND or 24) + CAL.pad), -CAL.top / 2)
+        end
+
+        -- The grid hangs from the left side piece: centre it.
+        local side = _G.CalendarFrameLeftTopTexture
+        if side then k:Move(side, "TOPLEFT", f, "TOPLEFT", -1, -CAL.top) end
+        local w1, w7 = _G.CalendarWeekday1Background, _G.CalendarWeekday7Background
+        if w1 and w7 then
+            Band(f, "weekdays", "bottom", function(b)
+                b:SetPoint("TOPLEFT", w1, "TOPLEFT")
+                b:SetPoint("BOTTOMRIGHT", w7, "BOTTOMRIGHT", -1, 0)
+            end)
+        end
+
+        for i = 1, 42 do CalDay(_G["CalendarDayButton" .. i]) end
+        -- The side panels are the calendar's children, shown with a bare
+        -- Show: adopt them so their own packs run on every opening.
+        if S.Take then
+            S.Take("CalendarViewHolidayFrame")
+            S.Take("CalendarViewRaidFrame")
+        end
+
+        -- The grid runs to within a pixel or two of the bottom edge, while
+        -- the sides get about ten. Grow the frame by the difference so the
+        -- bottom margin matches the sides, measured rather than assumed.
+        local function Fit()
+            local d1, d42 = _G.CalendarDayButton1, _G.CalendarDayButton42
+            if not (d1 and d42) then return end
+            local l, fl = d1:GetLeft(), f:GetLeft()
+            local b, fb = d42:GetBottom(), f:GetBottom()
+            if not (l and fl and b and fb) then return end
+            local want = (l - fl) - (b - fb)
+            if math.abs(want) > 0.5 then k:Size(f, nil, f:GetHeight() + want) end
+        end
+        Fit()
+        k:Hook(f, "OnShow", function() C_Timer.After(0, Fit) end, "calendarFit")
+
+        k:Once(f, "calendarDays", function()
+            if type(_G.CalendarFrame_UpdateDay) == "function" then
+                hooksecurefunc("CalendarFrame_UpdateDay", function(index, _, monthOffset, isSelected, _, isToday)
+                    local b = _G["CalendarDayButton" .. tostring(index)]
+                    if not b then return end
+                    CalDay(b)
+                    local st = calState[b]
+                    st.other = monthOffset ~= 0
+                    st.selected = isSelected and true or false
+                    st.today = isToday and true or false
+                    CalCell(b)
+                end)
+            end
+            if type(_G.CalendarFrame_SetSelectedDay) == "function" then
+                hooksecurefunc("CalendarFrame_SetSelectedDay", function(dayButton)
+                    for b, st in pairs(calState) do
+                        st.selected = (b == dayButton)
+                        CalCell(b)
+                    end
+                end)
+            end
+        end)
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",
@@ -1618,51 +2244,40 @@ P{
 --  top. InsetBg is content here and is put back on every show.
 --
 --  The frame's own art (Bg, TitleBg, the corner and edge pieces) is faded by
---  the walk and nothing claims the frame, so it also gets our surface, a
---  title strip over where TitleBg was (y -1 to -21 in BasicFrameTemplate),
---  a border, and a hairline round the map.
+--  the walk and nothing claims the frame, so it also gets our window surface
+--  and edge, our title bar with the name centred and the close in its
+--  corner, and the map from under the title rule to the border.
 --------------------------------------------------------------------------------
-local TAXI_TITLE_H = 21
-
-local function Hairlines(host, around, token)
-    local e = {}
-    for i = 1, 4 do
-        e[i] = S.Ours(host:CreateTexture(nil, "BORDER", nil, 6))
-        if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e[i]) end
-    end
-    e[1]:SetPoint("BOTTOMLEFT", around, "TOPLEFT");     e[1]:SetPoint("BOTTOMRIGHT", around, "TOPRIGHT")
-    e[2]:SetPoint("TOPLEFT", around, "BOTTOMLEFT");     e[2]:SetPoint("TOPRIGHT", around, "BOTTOMRIGHT")
-    e[3]:SetPoint("TOPRIGHT", around, "TOPLEFT");       e[3]:SetPoint("BOTTOMRIGHT", around, "BOTTOMLEFT")
-    e[4]:SetPoint("TOPLEFT", around, "TOPRIGHT");       e[4]:SetPoint("BOTTOMLEFT", around, "BOTTOMRIGHT")
-    local function Paint()
-        local px = EV.Pixel:Line(host)
-        e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
-        for _, t in ipairs(e) do t:SetColorTexture(T.RGBA(token)) end
-    end
-    Paint()
-    T.Watch(e[1]); e[1].Paint = Paint
-    return e
-end
-
 P{
     name  = "TaxiFrame",
     apply = function(f, k)
         -- The map. Content, never chrome.
         if f.InsetBg then f.InsetBg:SetAlpha(1) end
 
-        k:Fill(f, "surface0")
-        k:Border(f, "borderStrong")
+        local W = T.LOOK.window.rest
+        k:Fill(f, W.fill)
+        k:Border(f, W.edge)
 
-        local d = S.D(f)
-        if not d.taxiDressed then
-            d.taxiDressed = true
-            local strip = S.Ours(f:CreateTexture(nil, "BACKGROUND", nil, 1))
-            strip:SetPoint("TOPLEFT"); strip:SetPoint("TOPRIGHT")
-            strip:SetHeight(TAXI_TITLE_H)
-            local function Paint() strip:SetColorTexture(T.RGBA("titleBar")) end
-            Paint()
-            T.Watch(strip); strip.Paint = Paint
-            if f.InsetBg then Hairlines(f, f.InsetBg, "border") end
+        -- Our title bar, the name centred on it and the close flush in its
+        -- corner, as every other window; the map from under its rule to our
+        -- border (Blizzard: 4 in, 24 down, 6 from the right, 4 up).
+        S.TitleBar(f, S.PainterFor(f))
+        local band = S.D(f).titleBar
+        local title = f.TitleText or (f.TitleContainer and f.TitleContainer.TitleText)
+        if title and band then
+            k:Anchors(title, { { "CENTER", band, "CENTER", 0, 0 } })
+            k:Label(title, W.title, true)
+        end
+        local close = f.CloseButton
+        if close then
+            k:Size(close, S.TITLE_BAND or 24, S.TITLE_BAND or 24)
+            k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1)
+        end
+        if f.InsetBg then
+            k:Anchors(f.InsetBg, {
+                { "TOPLEFT",     f, "TOPLEFT",     1, -((S.TITLE_BAND or 24) + 2) },
+                { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1 },
+            })
         end
     end,
 }
@@ -2637,6 +3252,9 @@ P{
         PaneList(_G.PaperDollFrame and PaperDollFrame.EquipmentManagerPane)
         PaneList(_G.CharacterStatsPaneScrollBox, SIDE_LIST.top)
         PaneList(_G.CharacterStatsPanePetScrollBox, SIDE_LIST.top)
+        -- The equipment set icon picker: the same pop-up as the macros'.
+        IconPopup(k, _G.GearManagerPopupFrame)
+
         -- "Level N Class" in the title bar, as the inspect window has it.
         local level = _G.CharacterLevelText
         if level and S.TitleInfo then S.TitleInfo(k, f, level) end
@@ -3202,6 +3820,1906 @@ P{
                 k:Size(b, INSPECT.buttonW, INSPECT.button)
                 k:Move(b, "LEFT", ranged, "RIGHT", INSPECT.gap * 3, 0)
             end
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  AutoCompleteBox (Blizzard_AutoComplete): the name list under a whisper,
+--  invite or mail recipient as you type. A TooltipBackdropTemplate box with
+--  up to five 120x14 AutoCompleteButtonTemplate rows (text 15 in, the
+--  UIPanelButtonHighlightTexture sheen, the chosen one held with
+--  LockHighlight) from 10 down, and "Press Tab" 15 in and 10 up from the
+--  bottom. AutoComplete_UpdateResults sizes it every keystroke: rows * row
+--  height + 35 tall, the widest name + 30 wide.
+--
+--  Ours: the menu Look (the list a dropdown opens). Rows run edge to edge
+--  from under the top border, 22 tall, the text 10 in; the chosen row is the
+--  list item's on (a copper wash), hover its hover. "Press Tab" sits on a
+--  footer band. The height is set again after Blizzard's, to the rows plus
+--  that band. Shown with a bare Show, so Discover.lua takes it by name.
+--------------------------------------------------------------------------------
+local AC = { row = 22, text = 10, foot = 22, max = 5 }
+
+local acState = setmetatable({}, { __mode = "k" })
+
+local function ACPaint(b)
+    local st = acState[b]
+    if not st then return end
+    local L = T.LOOK.listItem
+    local fill
+    if st.on then fill = L.on.fill
+    elseif st.hover then fill = L.hover.fill end
+    if fill then
+        st.fill:SetColorTexture(S.Colour(fill))
+        st.fill:Show()
+    else
+        st.fill:Hide()
+    end
+end
+
+local function ACRow(k, b)
+    if not S.Alive(b) then return end
+    local h = b.GetHighlightTexture and b:GetHighlightTexture()
+    if h then S.StripArt(h) end
+    local fs = b.GetFontString and b:GetFontString()
+    if fs then k:Move(fs, "LEFT", b, "LEFT", AC.text, 0) end
+    k:Size(b, nil, AC.row)
+    if acState[b] then return end
+    local st = { on = false, hover = false }
+    st.fill = S.Ours(b:CreateTexture(nil, "BACKGROUND", nil, -6))
+    st.fill:SetAllPoints(b)
+    acState[b] = st
+    T.Watch(st.fill, function() ACPaint(b) end)
+    hooksecurefunc(b, "LockHighlight", function() st.on = true; ACPaint(b) end)
+    hooksecurefunc(b, "UnlockHighlight", function() st.on = false; ACPaint(b) end)
+    b:HookScript("OnEnter", function() st.hover = true; ACPaint(b) end)
+    b:HookScript("OnLeave", function() st.hover = false; ACPaint(b) end)
+    ACPaint(b)
+end
+
+local function ACHeight(f)
+    local n = 0
+    for i = 1, AC.max do
+        local b = _G["AutoCompleteButton" .. i]
+        if b and b:IsShown() then n = n + 1 end
+    end
+    if n > 0 then f:SetHeight(n * AC.row + 2 + AC.foot) end
+end
+
+P{
+    name  = "AutoCompleteBox",
+    apply = function(f, k)
+        local slice = f.NineSlice
+        if slice then
+            S.PainterFor(slice):FadeSlice(slice)
+            k:NoFill(slice)
+            EV.Pixel:ShowEdges(slice, false)
+        end
+        local M = T.LOOK.menu.rest
+        k:Fill(f, M.fill)
+        k:Border(f, M.edge)
+
+        local prev
+        for i = 1, AC.max do
+            local b = _G["AutoCompleteButton" .. i]
+            if b then
+                ACRow(k, b)
+                if prev then
+                    k:Anchors(b, { { "TOPLEFT", prev, "BOTTOMLEFT" }, { "TOPRIGHT", prev, "BOTTOMRIGHT" } })
+                else
+                    k:Anchors(b, { { "TOPLEFT", f, "TOPLEFT", 1, -1 }, { "TOPRIGHT", f, "TOPRIGHT", -1, -1 } })
+                end
+                prev = b
+            end
+        end
+
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(AC.foot - 1)
+        end)
+        local tip = _G.AutoCompleteInstructions
+        if tip then
+            k:Move(tip, "LEFT", foot, "LEFT", AC.text - 1, 0)
+            -- Blizzard greys it with an inline colour code, which no text
+            -- colour overrides; set it plain so the muted token shows.
+            if _G.PRESS_TAB then tip:SetText(_G.PRESS_TAB) end
+            k:Label(tip, "textMuted")
+        end
+
+        k:Once(f, "autoCompleteHeight", function()
+            if type(_G.AutoComplete_UpdateResults) == "function" then
+                hooksecurefunc("AutoComplete_UpdateResults", function(self) ACHeight(self) end)
+            end
+        end)
+        ACHeight(f)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  AuctionHouseFrame (Blizzard_AuctionHouseUI, Shared + Mainline family, which
+--  Camelot loads). An 800x538 PortraitFrameTemplate with three display modes
+--  (AuctionHouseFrameDisplayMode), each a set of sub-frames SetDisplayMode
+--  shows:
+--
+--    Buy       SearchBar (618x40 at TOPRIGHT -12,-29: favourites, search box,
+--              filter, Search), CategoriesList (168 wide under it, an
+--              InsetFrameTemplate nine-slice, parchment Background, a
+--              ScrollBox of AuctionCategoryButtonTemplate rows) and
+--              BrowseResultsFrame (an item list to the right). Picking a
+--              result swaps the results for ItemBuyFrame or
+--              CommoditiesBuyFrame (a Back button, an item card, the offers
+--              list, bid and buyout at the bottom).
+--    Sell      ItemSellFrame / CommoditiesSellFrame (363 wide, a
+--              VerticalLayoutFrame of aligned controls on a parchment, a
+--              "Create Auction" tab of three atlases over its top edge) with
+--              ItemSellList / CommoditiesSellList beside it.
+--    Auctions  AuctionsFrame: Auctions / Bids top tabs, a summary list on the
+--              left, the auctions or bids table, Cancel Auction (or bid and
+--              buyout) hanging 22 below the frame.
+--
+--  Every table is an AuctionHouseItemListTemplate: a background texture and
+--  nine-slice, a 19px HeaderContainer, a ScrollBox under it and a
+--  MinimalScrollBar beside the right edge, and a RefreshFrame (the count and a
+--  refresh button) pushed up by per-list offsets to sit on the row above.
+--  The money is a ThinGoldEdge box on an inset under the bottom-left corner.
+--  The mode tabs hang below the window, as Blizzard's bottom tabs do.
+--
+--  Ours: a 40px tool bar under the title in every mode (the search in Buy,
+--  the "Create Auction" heading in Sell, the Auctions / Bids tabs in
+--  Auctions; the refresh on its right where the mode has one) and a footer
+--  band (money left, the mode's action buttons right). Between them nothing
+--  is boxed: the lists sit straight on the window, split by hairlines. Tables
+--  have a header band, rows (ahLine), and the scroll bar centred in a gutter
+--  of their own. Item cards are tile cards.
+--------------------------------------------------------------------------------
+local AH = { tool = 40, control = 30, pad = 8, gap = 6, footer = 36, button = 24,
+             side = 168, sell = 363, gutter = 20, head = 23, headH = 19,
+             short = 96, long = 120, wide = 140, back = 96, card = 72 }
+
+-- An AuctionHouseBackgroundTemplate (or any inset nine-slice) left as a plain
+-- rect: no picture, box, fill or edge.
+local function AHFlat(k, frame)
+    if not S.Alive(frame) then return end
+    if frame.Background then S.StripArt(frame.Background) end
+    local ns = frame.NineSlice
+    if ns then
+        S.PainterFor(ns):FadeSlice(ns)
+        k:NoFill(ns)
+        EV.Pixel:ShowEdges(ns, false)
+    end
+    k:NoFill(frame)
+    EV.Pixel:ShowEdges(frame, false)
+end
+
+-- A hairline of ours down one side of a frame, to split two panes.
+local function AHSeam(host, side)
+    local d = S.D(host)
+    local key = "ahSeam" .. side
+    if d[key] then return d[key] end
+    local t = S.Ours(host:CreateTexture(nil, "BORDER", nil, 2))
+    EV.Pixel.NoSnap(t)
+    local x = side == "RIGHT" and 0 or 0
+    t:SetPoint("TOP" .. side, host, "TOP" .. side, x, 0)
+    t:SetPoint("BOTTOM" .. side, host, "BOTTOM" .. side, x, 0)
+    local function Paint()
+        t:SetColorTexture(S.Colour("divider"))
+        t:SetWidth(EV.Pixel:Line(host))
+    end
+    Paint()
+    T.Watch(t, Paint)
+    d[key] = t
+    return t
+end
+
+-- The refresh control: the button a tool bar control, its gold icon in our
+-- text colour, the count beside it muted.
+local function AHRefresh(k, rf, point, rel, relPoint, x, y)
+    if not S.Alive(rf) then return end
+    k:Move(rf, point, rel, relPoint, x, y)
+    local b = rf.RefreshButton
+    if b then
+        k:Size(b, AH.control, AH.control)
+        local icon = b.Icon
+        if icon and icon.SetDesaturated then
+            icon:SetDesaturated(true)
+            icon:SetVertexColor(T.RGBA("text"))
+        end
+    end
+    if rf.TotalQuantity then k:Label(rf.TotalQuantity, "textMuted") end
+end
+
+-- An item list: a header band across the top, the rows under it to the
+-- gutter, the scroll bar centred in the gutter.
+local function AHList(k, list)
+    if not S.Alive(list) then return end
+    AHFlat(k, list)
+    local head = Band(list, "head", "bottom", function(b)
+        b:SetPoint("TOPLEFT", list, "TOPLEFT", 0, 0)
+        b:SetPoint("TOPRIGHT", list, "TOPRIGHT", 0, 0)
+        b:SetHeight(AH.head)
+    end)
+    local hc = list.HeaderContainer
+    if hc then
+        k:Anchors(hc, {
+            { "TOPLEFT",  head, "TOPLEFT",  AH.pad - 4, -math.floor((AH.head - AH.headH) / 2) },
+            { "TOPRIGHT", head, "TOPRIGHT", -AH.gutter, -math.floor((AH.head - AH.headH) / 2) },
+        })
+    end
+    local box, bar = list.ScrollBox, list.ScrollBar
+    if box then
+        k:Anchors(box, {
+            { "TOPLEFT",     head, "BOTTOMLEFT", 0, -1 },
+            { "BOTTOMRIGHT", list, "BOTTOMRIGHT", -AH.gutter, 0 },
+        })
+        if bar then
+            local w = S.Num(bar:GetWidth()) or 8
+            local x = math.floor((AH.gutter - w) / 2 + 0.5)
+            k:Anchors(bar, {
+                { "TOPLEFT",    box, "TOPRIGHT",    x, -AH.gap },
+                { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, AH.gap },
+            })
+        end
+    end
+    if list.ResultsText then k:Label(list.ResultsText, "textMuted") end
+    -- A list builds its header buttons when its layout is first set, which
+    -- for the sell and auctions tables is after the window's walk: dress
+    -- them each time Blizzard lays the columns out.
+    k:After(list, "UpdateTableBuilderLayout", function(self)
+        local h = self.HeaderContainer
+        if h then S.Walk(h, 0) end
+    end)
+    if hc then S.Walk(hc, 0) end
+end
+
+-- A side list (categories, the auctions summary): rows from the top edge to
+-- the gutter, the scroll bar centred in it, a hairline down the right.
+local function AHSideList(k, list)
+    if not S.Alive(list) then return end
+    AHFlat(k, list)
+    AHSeam(list, "RIGHT")
+    local box, bar = list.ScrollBox, list.ScrollBar
+    -- A little room above the first row and in from the left, the same as
+    -- the gap between two category headers (their boxes stand 2 in from
+    -- their rows). No spacing between rows, so the tree rails run unbroken.
+    local view = box and box.GetView and box:GetView()
+    if view and view.SetPadding and not S.D(list).ahPad then
+        S.D(list).ahPad = true
+        view:SetPadding(AH.gap - 4, AH.gap - 4, AH.gap - 2, 0, 0)
+        -- The list may already hold its rows; lay them out again.
+        if box.FullUpdate then pcall(box.FullUpdate, box, true) end
+    end
+    if box then
+        k:Anchors(box, {
+            { "TOPLEFT",     list, "TOPLEFT",     0, 0 },
+            { "BOTTOMRIGHT", list, "BOTTOMRIGHT", -AH.gutter, 0 },
+        })
+        if bar then
+            local w = S.Num(bar:GetWidth()) or 8
+            local x = math.floor((AH.gutter - w) / 2 + 0.5)
+            k:Anchors(bar, {
+                { "TOPLEFT",    box, "TOPRIGHT",    x, -AH.gap },
+                { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, AH.gap },
+            })
+        end
+    end
+end
+
+-- An item card: the tile Look, the header frame art and the empty slot art
+-- gone (the item button's well shows instead).
+local function AHCard(k, disp)
+    if not S.Alive(disp) then return end
+    AHFlat(k, disp)
+    ClearAtlas(disp, "auctionhouse%-itemheaderframe")
+    local tile = T.LOOK.tile.rest
+    k:Fill(disp, tile.fill)
+    k:Border(disp, tile.edge)
+    local ib = disp.ItemButton
+    if ib and ib.EmptyBackground then S.StripArt(ib.EmptyBackground) end
+end
+
+-- The mode tabs (PanelTabButtonTemplate) hang
+-- under the window: window tab faces open on their top, the chosen one the
+-- window's own surface running up into it, a copper bar along its foot.
+-- PanelTemplates keeps the choice on the window (selectedTab indexes Tabs).
+local AH_TAB = { h = 28, gap = 2 }
+
+local function AHTabState(f, tab)
+    local d = S.D(tab)
+    if not (d.textBox and d.textBox.Paint) then return end
+    local on = false
+    if f.selectedTab then
+        if type(f.Tabs) == "table" and f.Tabs[f.selectedTab] == tab then on = true
+        elseif tab.GetID and tab:GetID() ~= 0 and tab:GetID() == f.selectedTab then on = true end
+    end
+    local hover = tab.IsMouseOver and tab:IsMouseOver() or false
+    d.textBox.Paint(on, hover)
+    local text = tab.Text
+    if text then
+        text:SetTextColor(T.C4(T.Resolve(T.LOOK.tab, { on = on, hover = hover }).text))
+        text:ClearAllPoints()
+        text:SetPoint("CENTER", tab, "CENTER", 0, 0)
+    end
+end
+
+local function AHTab(k, f, tab)
+    if not S.Alive(tab) then return end
+    local d = S.D(tab)
+    k:Fade(tab)
+    if d.fill then d.fill:SetAlpha(0) end
+    d.edgeless = true
+    EV.Pixel:ShowEdges(tab, false)
+    k:Size(tab, nil, AH_TAB.h)
+    if not d.textBox then
+        local box = S.Ours(CreateFrame("Frame", nil, tab))
+        local one = EV.Pixel:One(tab)
+        box:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, one)
+        box:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
+        box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
+        box:EnableMouse(false)
+        box.Paint = S.TabFace(box, "top")
+        local bd = S.D(box)
+        if bd.tabInset then bd.tabInset:Hide() end
+        d.textBox = box
+        T.Watch(box, function() AHTabState(f, tab) end)
+        k:Hook(tab, "OnEnter", function() AHTabState(f, tab) end)
+        k:Hook(tab, "OnLeave", function() AHTabState(f, tab) end)
+    end
+    AHTabState(f, tab)
+end
+
+-- A button sized to our footer kinds.
+local function AHButton(k, b, w)
+    if b then k:Size(b, w, AH.button) end
+end
+
+P{
+    name  = "AuctionHouseFrame",
+    addon = "Blizzard_AuctionHouseUI",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local under = -(top + AH.tool)
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(AH.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(AH.footer)
+        end)
+
+        -- The money: on the footer, left, out of its gold box and inset.
+        if f.MoneyFrameInset then k:Mute(f.MoneyFrameInset) end
+        local mb = f.MoneyFrameBorder
+        if mb then
+            k:Fade(mb)
+            k:NoFill(mb)
+            EV.Pixel:ShowEdges(mb, false)
+            local money = mb.MoneyFrame
+            if money then
+                if money.SetResizeToFit and not S.D(money).fit then
+                    S.D(money).fit = true
+                    money:SetResizeToFit(true)
+                    if money.UpdateWidth then pcall(money.UpdateWidth, money) end
+                end
+                k:Move(money, "LEFT", foot, "LEFT", AH.pad, 0)
+            end
+        end
+
+        -- The mode tabs, flush under the window's bottom edge.
+        local tabs = type(f.Tabs) == "table" and f.Tabs or {}
+        local prev
+        for _, tab in ipairs(tabs) do
+            AHTab(k, f, tab)
+            if prev then
+                k:Move(tab, "TOPLEFT", prev, "TOPRIGHT", AH_TAB.gap, 0)
+            else
+                k:Move(tab, "TOPLEFT", f, "BOTTOMLEFT", AH.pad, 0)
+            end
+            prev = tab
+        end
+        k:Once(f, "ahTabs", function()
+            local function All()
+                for _, tab in ipairs(type(f.Tabs) == "table" and f.Tabs or {}) do AHTabState(f, tab) end
+            end
+            if type(_G.PanelTemplates_SetTab) == "function" then
+                hooksecurefunc("PanelTemplates_SetTab", function(frame) if frame == f then All() end end)
+            end
+            for _, fn in ipairs({ "PanelTemplates_SelectTab", "PanelTemplates_DeselectTab" }) do
+                if type(_G[fn]) == "function" then
+                    hooksecurefunc(fn, function(tab)
+                        if tab and tab.GetParent and tab:GetParent() == f then AHTabState(f, tab) end
+                    end)
+                end
+            end
+        end)
+
+        ------------------------------------------------------------ Buy
+        local sb = f.SearchBar
+        if sb then
+            k:Anchors(sb, {
+                { "TOPLEFT",     bar, "TOPLEFT",     AH.pad, 0 },
+                { "BOTTOMRIGHT", bar, "BOTTOMRIGHT", -AH.pad, 0 },
+            })
+            local fav, box, filter, go = sb.FavoritesSearchButton, sb.SearchBox, sb.FilterButton, sb.SearchButton
+            if fav then
+                k:Size(fav, AH.control, AH.control)
+                k:Move(fav, "LEFT", sb, "LEFT", 0, 0)
+            end
+            if go then
+                k:Size(go, AH.long, AH.control)
+                k:Move(go, "RIGHT", sb, "RIGHT", 0, 0)
+            end
+            if filter then
+                k:Size(filter, nil, AH.control)
+                if go then k:Move(filter, "RIGHT", go, "LEFT", -AH.gap, 0) end
+            end
+            if box and fav and filter then
+                k:Anchors(box, {
+                    { "LEFT",  fav,    "RIGHT", AH.gap + 4, 0 },
+                    { "RIGHT", filter, "LEFT",  -AH.gap, 0 },
+                })
+                k:Size(box, nil, AH.control)
+            end
+        end
+
+        local cats = f.CategoriesList
+        if cats then
+            k:Anchors(cats, {
+                { "TOPLEFT",    f,    "TOPLEFT",    1, under },
+                { "BOTTOMLEFT", foot, "TOPLEFT",    0, 0 },
+            })
+            k:Size(cats, AH.side, nil)
+            AHSideList(k, cats)
+        end
+
+        local results = f.BrowseResultsFrame
+        if results and cats then
+            k:Anchors(results, {
+                { "TOPLEFT",     cats, "TOPRIGHT", 0, 0 },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+            local list = results.ItemList
+            if list then
+                k:Anchors(list, { { "TOPLEFT", results, "TOPLEFT" }, { "BOTTOMRIGHT", results, "BOTTOMRIGHT" } })
+                AHList(k, list)
+            end
+        end
+
+        -- A picked item or commodity: Back and the refresh on the pane's
+        -- first line, the card, the offers.
+        for _, key in ipairs({ "ItemBuyFrame", "CommoditiesBuyFrame" }) do
+            local pane = f[key]
+            if pane and cats then
+                k:Anchors(pane, {
+                    { "TOPLEFT",     cats, "TOPRIGHT", 0, 0 },
+                    { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+                })
+                local back = pane.BackButton
+                if back then
+                    k:Size(back, AH.back, AH.button)
+                    k:Move(back, "TOPLEFT", pane, "TOPLEFT", AH.pad, -AH.gap)
+                end
+            end
+        end
+        local ib = f.ItemBuyFrame
+        if ib then
+            local back = ib.BackButton
+            local disp = ib.ItemDisplay
+            if disp and back then
+                AHCard(k, disp)
+                k:Anchors(disp, {
+                    { "TOPLEFT",  back, "BOTTOMLEFT", 0, -AH.gap },
+                    { "TOPRIGHT", ib,   "TOPRIGHT",   -AH.pad, 0 },
+                })
+                k:Size(disp, nil, AH.card)
+            end
+            -- Bid and buyout on the footer, right.
+            local buyout, bid = ib.BuyoutFrame, ib.BidFrame
+            if buyout then
+                k:Move(buyout, "RIGHT", foot, "RIGHT", -AH.pad, 0)
+                AHButton(k, buyout.BuyoutButton, AH.long)
+            end
+            if bid and buyout then
+                k:Move(bid, "RIGHT", buyout, "LEFT", -AH.pad * 2, 0)
+                AHButton(k, bid.BidButton, AH.long)
+            end
+            local list = ib.ItemList
+            if list and disp then
+                k:Anchors(list, {
+                    { "TOPLEFT",     disp, "BOTTOMLEFT", -AH.pad, -AH.gap },
+                    { "BOTTOMRIGHT", ib,   "BOTTOMRIGHT", 0, 0 },
+                })
+                AHList(k, list)
+                if back then AHRefresh(k, list.RefreshFrame, "RIGHT", ib, "TOPRIGHT", -AH.pad, -(AH.gap + AH.button / 2)) end
+            end
+        end
+        local cb = f.CommoditiesBuyFrame
+        if cb then
+            local back, show, list = cb.BackButton, cb.BuyDisplay, cb.ItemList
+            if show and back then
+                AHFlat(k, show)
+                AHSeam(show, "RIGHT")
+                k:Anchors(show, {
+                    { "TOPLEFT",    back, "BOTTOMLEFT", -AH.pad, -AH.gap },
+                    { "BOTTOMLEFT", cb,   "BOTTOMLEFT", 0, 0 },
+                })
+                AHCard(k, show.ItemDisplay)
+                AHButton(k, show.BuyButton, nil)
+            end
+            if list and show then
+                k:Anchors(list, {
+                    { "TOPLEFT",     show, "TOPRIGHT",   0, 0 },
+                    { "BOTTOMRIGHT", cb,   "BOTTOMRIGHT", 0, 0 },
+                })
+                AHList(k, list)
+                AHRefresh(k, list.RefreshFrame, "RIGHT", cb, "TOPRIGHT", -AH.pad, -(AH.gap + AH.button / 2))
+            end
+        end
+
+        ------------------------------------------------------------ Sell
+        -- The form on the left, its list on the right, one hairline between.
+        local isf, isl = f.ItemSellFrame, f.ItemSellList
+        if isf then
+            k:Anchors(isf, {
+                { "TOPLEFT",    f,    "TOPLEFT", 1, under },
+                { "BOTTOMLEFT", foot, "TOPLEFT", 0, 0 },
+            })
+            k:Size(isf, AH.sell, nil)
+        end
+        if isl and isf then
+            k:Anchors(isl, {
+                { "TOPLEFT",     isf,  "TOPRIGHT", 0, 0 },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+        end
+        for _, key in ipairs({ "ItemSellFrame", "CommoditiesSellFrame" }) do
+            local sf = f[key]
+            if sf then
+                AHFlat(k, sf)
+                AHSeam(sf, "RIGHT")
+                for _, t in ipairs({ "CreateAuctionTabLeft", "CreateAuctionTabMiddle", "CreateAuctionTabRight" }) do
+                    if sf[t] then S.StripArt(sf[t]) end
+                end
+                -- "Create Auction" is the mode's heading, on the tool bar.
+                if sf.CreateAuctionLabel then
+                    k:Move(sf.CreateAuctionLabel, "LEFT", bar, "LEFT", AH.pad + 4, 0)
+                    k:Label(sf.CreateAuctionLabel, "text", true)
+                end
+                AHCard(k, sf.ItemDisplay)
+                AHButton(k, sf.PostButton, nil)
+                local q = sf.QuantityInput
+                if q and q.MaxButton then AHButton(k, q.MaxButton, nil) end
+            end
+        end
+        for _, key in ipairs({ "ItemSellList", "CommoditiesSellList" }) do
+            local list = f[key]
+            if list then
+                AHList(k, list)
+                AHRefresh(k, list.RefreshFrame, "RIGHT", bar, "RIGHT", -AH.pad, 0)
+            end
+        end
+
+        ------------------------------------------------------------ Auctions
+        local af = f.AuctionsFrame
+        if af then
+            k:Anchors(af, {
+                { "TOPLEFT",     f,    "TOPLEFT",  1, under },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+            -- Auctions / Bids stand on the tool bar's rule.
+            local t1 = af.AuctionsTab
+            if t1 then k:Move(t1, "BOTTOMLEFT", bar, "BOTTOMLEFT", AH.pad, 0) end
+            if af.BidsTab and t1 then k:Move(af.BidsTab, "LEFT", t1, "RIGHT", 2, 0) end
+
+            local cancel = af.CancelAuctionButton
+            if cancel then
+                k:Size(cancel, AH.wide, AH.button)
+                k:Move(cancel, "RIGHT", foot, "RIGHT", -AH.pad, 0)
+            end
+            local buyout, bid = af.BuyoutFrame, af.BidFrame
+            if buyout and cancel then
+                k:Move(buyout, "RIGHT", cancel, "RIGHT", 0, 0)
+                AHButton(k, buyout.BuyoutButton, AH.long)
+            end
+            if bid and buyout then
+                k:Move(bid, "RIGHT", buyout, "LEFT", -AH.pad * 2, 0)
+                AHButton(k, bid.BidButton, AH.long)
+            end
+
+            local sum = af.SummaryList
+            if sum then
+                k:Anchors(sum, {
+                    { "TOPLEFT",    af, "TOPLEFT",    0, 0 },
+                    { "BOTTOMLEFT", af, "BOTTOMLEFT", 0, 0 },
+                })
+                k:Size(sum, AH.side, nil)
+                AHSideList(k, sum)
+            end
+            local all = af.AllAuctionsList
+            if all and sum then
+                k:Anchors(all, {
+                    { "TOPLEFT",     sum, "TOPRIGHT",    0, 0 },
+                    { "BOTTOMRIGHT", af,  "BOTTOMRIGHT", 0, 0 },
+                })
+            end
+            local disp = af.ItemDisplay
+            if disp and sum then
+                AHCard(k, disp)
+                k:Anchors(disp, {
+                    { "TOPLEFT",  sum, "TOPRIGHT", AH.pad, -AH.gap },
+                    { "TOPRIGHT", af,  "TOPRIGHT", -AH.pad, -AH.gap },
+                })
+                k:Size(disp, nil, AH.card)
+            end
+            local il = af.ItemList
+            if il and disp and sum then
+                k:Anchors(il, {
+                    { "TOPLEFT",     disp, "BOTTOMLEFT", -AH.pad, -AH.gap },
+                    { "BOTTOMRIGHT", af,   "BOTTOMRIGHT", 0, 0 },
+                })
+            end
+            for _, key in ipairs({ "AllAuctionsList", "BidsList", "ItemList", "CommoditiesList" }) do
+                local list = af[key]
+                if list then
+                    AHList(k, list)
+                    AHRefresh(k, list.RefreshFrame, "RIGHT", bar, "RIGHT", -AH.pad, 0)
+                end
+            end
+        end
+
+        ------------------------------------------------------------ Dialogs
+        local dlg = f.BuyDialog
+        if dlg then
+            if dlg.Border then k:Mute(dlg.Border) end
+            k:Fill(dlg, T.LOOK.window.rest.fill)
+            k:Border(dlg, T.LOOK.window.rest.edge)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  ChatConfigFrame (Blizzard_ChatFrame, Mainline ChatConfigFrame.xml / .lua,
+--  which Camelot loads). A 745x605 dialog: DialogBorderTemplate and a
+--  DialogHeaderTemplate title; the chat windows as ChatWindowTab buttons
+--  (pooled by ChatTabManager, re-acquired on every show, the choice shown by
+--  FCFTab_UpdateColors) over ChatConfigCategoryFrame, a TooltipBackdrop box
+--  12 in holding ConfigCategoryButtonTemplate rows (16 tall, a blue-tinted
+--  UI-Listbox-Highlight2 locked on the open one by ChatConfigCategory_OnClick);
+--  ChatConfigBackgroundFrame, another box, to its right, the open panel on it.
+--  Each panel's lists are built on show by ChatConfig_CreateCheckboxes /
+--  _CreateTieredCheckboxes / _CreateColorSwatches into a box with a header
+--  (ChatConfigBoxWithHeaderTemplate): one TooltipBorderBackdrop row per entry,
+--  a 24px UI-CheckBox check and label, a colour swatch, and on the channel
+--  rows a UI-GroupLoot-Pass leave button. Defaults / Reset Positions (or the
+--  combat log's or text to speech's defaults) and Okay sit on the bottom
+--  edge, 11 in and 12 up.
+--
+--  Ours: a tool bar under the title with the chat window tabs standing on its
+--  rule as window tab faces; a footer with the defaults left and Okay right;
+--  the category list flat as list items, a hairline between it and the
+--  panel; each list a sunk well, its rows unboxed with a hairline under each;
+--  the leave button our close glyph. Lists built after the walk are dressed
+--  as Blizzard builds them.
+--------------------------------------------------------------------------------
+-- list: the widest list's box (Blizzard's 550 rows plus the 8 it pads a
+-- box by), which sets the window's width; head: room above a box for its
+-- heading; inset: a box's own padding round its rows (4).
+local CFG = { tool = 40, footer = 36, button = 24, pad = 8, gap = 6, side = 136,
+              row = 22, tab = 28, short = 96, text = 10, list = 558, head = 26, inset = 4,
+              filters = 85 }
+
+local cfgBoxes = setmetatable({}, { __mode = "k" })
+
+local function CfgTabState(tab)
+    local d = S.D(tab)
+    if not (d.textBox and d.textBox.Paint) then return end
+    local on = d.cfgOn and true or false
+    local hover = tab.IsMouseOver and tab:IsMouseOver() or false
+    d.textBox.Paint(on, hover)
+    local text = tab.Text
+    if text then
+        text:SetTextColor(T.C4(T.Resolve(T.LOOK.tab, { on = on, hover = hover }).text))
+        text:ClearAllPoints()
+        text:SetPoint("CENTER", tab, "CENTER", 0, 0)
+    end
+end
+
+local function CfgTab(k, tab)
+    if not S.Alive(tab) then return end
+    local d = S.D(tab)
+    k:Fade(tab)
+    if d.fill then d.fill:SetAlpha(0) end
+    d.edgeless = true
+    EV.Pixel:ShowEdges(tab, false)
+    k:Size(tab, nil, CFG.tab)
+    if not d.textBox then
+        local box = S.Ours(CreateFrame("Frame", nil, tab))
+        box:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        box:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, -EV.Pixel:One(tab))
+        box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
+        box:EnableMouse(false)
+        box.Paint = S.TabFace(box, "bottom")
+        local bd = S.D(box)
+        if bd.tabInset then bd.tabInset:Hide() end
+        d.textBox = box
+        T.Watch(box, function() CfgTabState(tab) end)
+        tab:HookScript("OnEnter", function() CfgTabState(tab) end)
+        tab:HookScript("OnLeave", function() CfgTabState(tab) end)
+    end
+    CfgTabState(tab)
+end
+
+-- A category row: a list item, copper while its panel is open (Blizzard's
+-- LockHighlight), its blue highlight art gone.
+local function CfgCategory(b, keepHeight)
+    if not S.Alive(b) then return end
+    local d = S.D(b)
+    local hi = b.Highlight or (b.GetHighlightTexture and b:GetHighlightTexture())
+    if hi then S.StripArt(hi) end
+    if not keepHeight then b:SetHeight(CFG.row) end
+    local text = b.NormalText
+    if text then
+        text:ClearAllPoints()
+        text:SetPoint("LEFT", b, "LEFT", CFG.text, 0)
+    end
+    local p = S.PainterFor(b)
+    p:Fill("surface2")
+    if not d.cfgHooked then
+        d.cfgHooked = true
+        local function Sync() if d.Repaint then d.Repaint() end end
+        hooksecurefunc(b, "LockHighlight", function() d.cfgOn = true; Sync() end)
+        hooksecurefunc(b, "UnlockHighlight", function() d.cfgOn = false; Sync() end)
+    end
+    p:States(T.LOOK.listItem, { on = function() return d.cfgOn end })
+end
+
+-- A backdrop box (TooltipBackdropTemplate and its border-only sibling) left
+-- as a plain rect: its nine-slice faded, no fill, no edge.
+local function CfgFlat(k, box)
+    if not S.Alive(box) then return end
+    local ns = box.NineSlice
+    if ns then
+        S.PainterFor(ns):FadeSlice(ns)
+        k:NoFill(ns)
+        EV.Pixel:ShowEdges(ns, false)
+    end
+    k:NoFill(box)
+    EV.Pixel:ShowEdges(box, false)
+end
+
+-- A list Blizzard has just built: the box plain, each row unboxed with
+-- a hairline under it, the leave buttons our close glyph, and the whole
+-- thing walked so its check boxes and swatches are dressed.
+local function CfgList(k, box)
+    if not S.Alive(box) then return end
+    CfgFlat(k, box)
+    cfgBoxes[box] = true
+    local title = box.header or _G[(box:GetName() or "") .. "Title"]
+    if title then
+        k:Label(title, "title", true)
+        -- Over the rows' first column, not the box's padded edge: the
+        -- check box's left side (a row 4 in, its check 5 in, the drawn box
+        -- 4 inside that), or a swatch row's label (7 in).
+        local x = box.checkBoxTable and (CFG.inset + 5 + 4) or (CFG.inset + 7)
+        k:Move(title, "BOTTOMLEFT", box, "TOPLEFT", x, 2)
+    end
+    for _, row in ipairs(S.Children(box)) do
+        if row.CheckButton or row.ColorSwatch or (row.GetName and row:GetName() and row:GetName():find("Swatch%d+$")) then
+            CfgFlat(k, row)
+            local d = S.D(row)
+            if not d.cfgRule then
+                d.cfgRule = S.Ours(row:CreateTexture(nil, "BORDER", nil, 1))
+                EV.Pixel.NoSnap(d.cfgRule)
+                d.cfgRule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 1, 0)
+                d.cfgRule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 0)
+                local function Paint()
+                    d.cfgRule:SetColorTexture(S.Colour("divider"))
+                    d.cfgRule:SetHeight(EV.Pixel:Line(row))
+                end
+                Paint()
+                T.Watch(d.cfgRule, Paint)
+            end
+            local leave = rawget(row, "CloseChannel")
+            if leave and not S.D(leave).cfgLeave then
+                S.D(leave).cfgLeave = true
+                S.claimed[leave] = S.claimed[leave] or "pack"
+                local lp = S.PainterFor(leave)
+                lp:Fade()
+                S.Blank(leave)
+                lp:Fill("surface2")
+                lp:Glyph("close", 8, "textMuted")
+                lp:States(T.LOOK.close)
+                k:Size(leave, 16, 16)
+            end
+        end
+    end
+    S.Walk(box, 0)
+end
+
+--------------------------------------------------------------------------------
+--  The combat log's five pages, laid out on one grid. Blizzard places each
+--  with its own offsets (x 10, 11, 13, 15, 25, 27 from four different
+--  frames, one page hung from the bottom); ours all hang from the panel's
+--  top-left under the tab rule: the first control 30 down, headings 2 above
+--  what they head, a check box's drawn square 17 in (its button 13), the
+--  second column half the page across, sub-options 20 in under their
+--  parent, columns of sub-options 110 apart, labels 4 clear of their box.
+--------------------------------------------------------------------------------
+local CC = { x = 13, top = 30, col = 285, sub = 20, subCol = 110, label = 4, block = 28, gap = 26 }
+
+-- A check button's label, 4 clear of it and on its centre line (Blizzard
+-- sets 0 or -2 across and 2 up).
+local function CfgCheckLabel(cb)
+    if not (cb and cb.GetName) then return end
+    local fs = cb.Text or _G[(cb:GetName() or "") .. "Text"]
+    if fs and fs.SetPoint then
+        fs:ClearAllPoints()
+        fs:SetPoint("LEFT", cb, "RIGHT", CC.label, 0)
+    end
+end
+
+-- A heading in the title colour, 2 above what it heads, over its glyph.
+local function CfgHeading(k, fs, over, x)
+    if not fs then return end
+    k:Label(fs, "title", true)
+    fs:ClearAllPoints()
+    fs:SetPoint("BOTTOMLEFT", over, "TOPLEFT", x or 0, 2)
+end
+
+-- A bordered row box of Blizzard's (ChatConfigBorderBoxTemplate) as one of
+-- our rows: unboxed, a hairline under it.
+local function CfgRowBox(k, row)
+    if not S.Alive(row) then return end
+    CfgFlat(k, row)
+    local d = S.D(row)
+    if d.cfgRule then return end
+    d.cfgRule = S.Ours(row:CreateTexture(nil, "BORDER", nil, 1))
+    EV.Pixel.NoSnap(d.cfgRule)
+    d.cfgRule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 1, 0)
+    d.cfgRule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 0)
+    local function Paint()
+        d.cfgRule:SetColorTexture(S.Colour("divider"))
+        d.cfgRule:SetHeight(EV.Pixel:Line(row))
+    end
+    Paint()
+    T.Watch(d.cfgRule, Paint)
+end
+
+-- Message Types' tiered lists: a check per type with its sub-types in two
+-- columns under it. The containers are positioned by the caller.
+local function CfgTiered(frame, columns)
+    if not (frame and frame.checkBoxTable) then return end
+    local base = frame:GetName() .. "Checkbox"
+    for i = 1, #frame.checkBoxTable do
+        local cb = _G[base .. i]
+        if cb then
+            CfgCheckLabel(cb)
+            local fs = cb.Text or _G[base .. i .. "Text"]
+            if fs and not columns then
+                local path, size = fs:GetFont()
+                if path then fs:SetFont(T.FontBoldPath and T.FontBoldPath() or path, size, "") end
+            end
+            -- The misc list's columns: every other box beside its pair.
+            if columns and i % columns == 0 then
+                cb:ClearAllPoints()
+                cb:SetPoint("TOPLEFT", _G[base .. (i - 1)], "TOPLEFT", CC.subCol, 0)
+            end
+            local k2 = 1
+            while _G[base .. i .. "_" .. k2] do
+                local sub = _G[base .. i .. "_" .. k2]
+                CfgCheckLabel(sub)
+                sub:ClearAllPoints()
+                if k2 == 1 then
+                    sub:SetPoint("TOPLEFT", cb, "BOTTOMLEFT", CC.sub, 0)
+                elseif k2 % 2 == 0 then
+                    sub:SetPoint("TOPLEFT", _G[base .. i .. "_" .. (k2 - 1)], "TOPLEFT", CC.subCol, 0)
+                else
+                    sub:SetPoint("TOPLEFT", _G[base .. i .. "_" .. (k2 - 2)], "BOTTOMLEFT", 0, 0)
+                end
+                k2 = k2 + 1
+            end
+        end
+    end
+end
+
+-- The example lines at the top of Colors and Formatting, as a block under
+-- its heading.
+local function CfgExample(k, page, prefix)
+    local s1, s2, title = _G[prefix .. "ExampleString1"], _G[prefix .. "ExampleString2"], _G[prefix .. "ExampleTitle"]
+    if not s1 then return end
+    s1:ClearAllPoints()
+    s1:SetPoint("TOPLEFT", page, "TOPLEFT", CC.x + 4, -CC.top)
+    if title then CfgHeading(k, title, s1, 0) end
+    return s2 or s1
+end
+
+local function CfgCombatPages(k, cbg)
+    if not cbg then return end
+    -- Every page from the panel's top-left.
+    for _, name in ipairs({ "CombatConfigMessageSources", "CombatConfigMessageTypes", "CombatConfigColors",
+                            "CombatConfigFormatting", "CombatConfigSettings" }) do
+        local page = _G[name]
+        if page then k:Move(page, "TOPLEFT", cbg, "TOPLEFT", 0, 0) end
+    end
+
+    -- Message Sources: two lists side by side.
+    local src = _G.CombatConfigMessageSources
+    local by, to = _G.CombatConfigMessageSourcesDoneBy, _G.CombatConfigMessageSourcesDoneTo
+    if src and by then k:Move(by, "TOPLEFT", src, "TOPLEFT", CC.x - 5 - CFG.inset, -CC.top) end
+    if src and to then k:Move(to, "TOPLEFT", src, "TOPLEFT", CC.x - 5 - CFG.inset + CC.col, -CC.top) end
+    for _, box in ipairs({ by, to }) do
+        if box and box.checkBoxTable then
+            for i = 1, #box.checkBoxTable do
+                local row = _G[box:GetName() .. "Checkbox" .. i]
+                if row and row.CheckButton then CfgCheckLabel(row.CheckButton) end
+            end
+        end
+    end
+
+    -- Message Types: two columns of tiered lists, the misc list under the
+    -- right one.
+    local types = _G.CombatConfigMessageTypes
+    local left, right, misc = _G.CombatConfigMessageTypesLeft, _G.CombatConfigMessageTypesRight, _G.CombatConfigMessageTypesMisc
+    if types and left then k:Move(left, "TOPLEFT", types, "TOPLEFT", CC.x - 4, -(CC.top - 4)) end
+    if types and right then k:Move(right, "TOPLEFT", types, "TOPLEFT", CC.x - 4 + CC.col, -(CC.top - 4)) end
+    if misc and right then
+        -- Under the right list's last row, not under Blizzard's estimate of
+        -- its height (which counts 24 a row and 0.6 of one per sub-type).
+        local base = right:GetName() .. "Checkbox"
+        local n = right.checkBoxTable and #right.checkBoxTable or 0
+        local lastMain = _G[base .. n]
+        local below, dx = lastMain, -4
+        if lastMain then
+            local m = 0
+            while _G[base .. n .. "_" .. (m + 1)] do m = m + 1 end
+            if m > 0 then
+                below = _G[base .. n .. "_" .. (m % 2 == 1 and m or m - 1)]
+                dx = -(4 + CC.sub)
+            end
+        end
+        if below then
+            k:Move(misc, "TOPLEFT", below, "BOTTOMLEFT", dx, -CC.gap)
+        else
+            k:Move(misc, "TOPLEFT", right, "BOTTOMLEFT", 0, -CC.gap)
+        end
+        for _, r in ipairs(S.Regions(misc)) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == _G.MISCELLANEOUS then
+                -- Over the small boxes' drawn squares (a 20 button, 16 box).
+                CfgHeading(k, r, misc, 4 + 2)
+            end
+        end
+    end
+    CfgTiered(left)
+    CfgTiered(right)
+    CfgTiered(misc, 2)
+
+    -- Colors: the example, then unit colours and highlighting on the left,
+    -- the colourise options on the right.
+    local colors = _G.CombatConfigColors
+    if colors then
+        CfgExample(k, colors, "CombatConfigColors")
+        local unit = _G.CombatConfigColorsUnitColors
+        local listTop = CC.top + CC.block + CC.gap + 12
+        if unit then k:Move(unit, "TOPLEFT", colors, "TOPLEFT", CC.x - 5 - CFG.inset + 2, -listTop) end
+        local hl = _G.CombatConfigColorsHighlighting
+        if hl and unit then
+            CfgFlat(k, hl)
+            -- Its checks sit 6 in and draw their square 4 inside that: one
+            -- pixel further in than the colour list, to land on 17.
+            k:Move(hl, "TOPLEFT", unit, "BOTTOMLEFT", 1, -CC.gap)
+            local line, ability = _G.CombatConfigColorsHighlightingLine, _G.CombatConfigColorsHighlightingAbility
+            local dmg, school = _G.CombatConfigColorsHighlightingDamage, _G.CombatConfigColorsHighlightingSchool
+            for _, cb in ipairs({ line, ability, dmg, school }) do CfgCheckLabel(cb) end
+            if ability and line then ability:ClearAllPoints(); ability:SetPoint("TOPLEFT", line, "TOPLEFT", CC.subCol, 0) end
+            if school and dmg then school:ClearAllPoints(); school:SetPoint("TOPLEFT", dmg, "TOPLEFT", CC.subCol, 0) end
+            if dmg and line then dmg:ClearAllPoints(); dmg:SetPoint("TOPLEFT", line, "BOTTOMLEFT", 0, 0) end
+            CfgHeading(k, _G.CombatConfigColorsHighlightingTitle, hl, 6 + 4)
+        end
+        local cz = _G.CombatConfigColorsColorize
+        if cz then
+            k:Move(cz, "TOPLEFT", colors, "TOPLEFT", CC.x - 7 + CC.col, -listTop)
+            for _, key in ipairs({ "UnitName", "SpellNames", "DamageNumber", "DamageSchool", "EntireLine" }) do
+                local row = _G["CombatConfigColorsColorize" .. key]
+                if row then
+                    CfgRowBox(k, row)
+                    CfgCheckLabel(_G["CombatConfigColorsColorize" .. key .. "Check"])
+                    CfgCheckLabel(_G["CombatConfigColorsColorize" .. key .. "SchoolColoring"])
+                end
+            end
+            local first = _G.CombatConfigColorsColorizeUnitName
+            if first then
+                for _, r in ipairs(S.Regions(first)) do
+                    if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == _G.COLORIZE then
+                        CfgHeading(k, r, first, 7 + 4)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Formatting: the example, then the options as one indented list.
+    local fmt = _G.CombatConfigFormatting
+    if fmt then
+        local last = CfgExample(k, fmt, "CombatConfigFormatting")
+        local ts = _G.CombatConfigFormattingShowTimeStamp
+        if ts and last then
+            ts:ClearAllPoints()
+            ts:SetPoint("TOPLEFT", last, "BOTTOMLEFT", -4, -CC.gap)
+        end
+        for _, key in ipairs({ "ShowTimeStamp", "ShowBraces", "UnitNames", "SpellNames", "ItemNames", "FullText" }) do
+            CfgCheckLabel(_G["CombatConfigFormatting" .. key])
+        end
+        local braces, unit = _G.CombatConfigFormattingShowBraces, _G.CombatConfigFormattingUnitNames
+        if braces and ts then braces:ClearAllPoints(); braces:SetPoint("TOPLEFT", ts, "BOTTOMLEFT", 0, -CFG.gap) end
+        if unit and braces then unit:ClearAllPoints(); unit:SetPoint("TOPLEFT", braces, "BOTTOMLEFT", CC.sub, 0) end
+        local spell, item = _G.CombatConfigFormattingSpellNames, _G.CombatConfigFormattingItemNames
+        if spell and unit then spell:ClearAllPoints(); spell:SetPoint("TOPLEFT", unit, "BOTTOMLEFT", 0, 0) end
+        if item and spell then item:ClearAllPoints(); item:SetPoint("TOPLEFT", spell, "BOTTOMLEFT", 0, 0) end
+        local full = _G.CombatConfigFormattingFullText
+        if full and item then full:ClearAllPoints(); full:SetPoint("TOPLEFT", item, "BOTTOMLEFT", -CC.sub, -CFG.gap) end
+    end
+
+    -- Settings: the filter's name and Save on one line, the quick button
+    -- and where it shows under it.
+    local set = _G.CombatConfigSettings
+    if set then
+        local name, save = _G.CombatConfigSettingsNameEditBox, _G.CombatConfigSettingsSaveButton
+        if name then
+            k:Size(name, 200, CFG.button)
+            k:Move(name, "TOPLEFT", set, "TOPLEFT", CC.x + 4, -CC.top)
+            for _, r in ipairs(S.Regions(name)) do
+                if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == _G.FILTER_NAME then
+                    CfgHeading(k, r, name, 0)
+                end
+            end
+        end
+        if save and name then
+            k:Size(save, CFG.short, CFG.button)
+            k:Move(save, "LEFT", name, "RIGHT", CFG.gap, 0)
+        end
+        local quick = _G.CombatConfigSettingsShowQuickButton
+        if quick and name then
+            CfgCheckLabel(quick)
+            quick:ClearAllPoints()
+            quick:SetPoint("TOPLEFT", name, "BOTTOMLEFT", -4, -CC.gap + 6)
+        end
+        local solo, party, raid = _G.CombatConfigSettingsSolo, _G.CombatConfigSettingsParty, _G.CombatConfigSettingsRaid
+        for _, cb in ipairs({ solo, party, raid }) do CfgCheckLabel(cb) end
+        if solo and quick then solo:ClearAllPoints(); solo:SetPoint("TOPLEFT", quick, "BOTTOMLEFT", CC.sub, 0) end
+        if party and solo then party:ClearAllPoints(); party:SetPoint("TOPLEFT", solo, "TOPLEFT", CC.subCol, 0) end
+        if raid and party then raid:ClearAllPoints(); raid:SetPoint("TOPLEFT", party, "TOPLEFT", CC.subCol, 0) end
+    end
+end
+
+P{
+    name  = "ChatConfigFrame",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local under = -(top + CFG.tool)
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(CFG.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(CFG.footer)
+        end)
+
+        -- The chat windows' tabs on the tool bar's rule.
+        local mgr = f.ChatTabManager
+        if mgr then
+            k:Move(mgr, "BOTTOMLEFT", bar, "BOTTOMLEFT", CFG.pad, -1)
+            local function Tabs()
+                if not (mgr.tabPool and mgr.tabPool.EnumerateActive) then return end
+                -- The pool hands its tabs back in no particular order; lay
+                -- them out by chat window number, as Blizzard's chain does.
+                local list = {}
+                for tab in mgr.tabPool:EnumerateActive() do list[#list + 1] = tab end
+                table.sort(list, function(a, b) return (a:GetID() or 0) < (b:GetID() or 0) end)
+                local prev
+                for _, tab in ipairs(list) do
+                    CfgTab(k, tab)
+                    tab:ClearAllPoints()
+                    if prev then
+                        tab:SetPoint("LEFT", prev, "RIGHT", 2, 0)
+                    else
+                        tab:SetPoint("BOTTOMLEFT", mgr, "TOPLEFT", 0, 0)
+                    end
+                    prev = tab
+                end
+            end
+            Tabs()
+            k:After(mgr, "UpdateTabDisplay", Tabs)
+            k:Once(f, "cfgTabColours", function()
+                if type(_G.FCFTab_UpdateColors) == "function" then
+                    hooksecurefunc("FCFTab_UpdateColors", function(tab, selected)
+                        if tab and tab.GetParent and tab:GetParent() == mgr then
+                            S.D(tab).cfgOn = selected and true or false
+                            CfgTabState(tab)
+                        end
+                    end)
+                end
+            end)
+        end
+
+        -- The categories, flat down the left.
+        local cats = _G.ChatConfigCategoryFrame
+        if cats then
+            CfgFlat(k, cats)
+            AHSeam(cats, "RIGHT")
+            k:Anchors(cats, {
+                { "TOPLEFT",     f,    "TOPLEFT", 1, under },
+                { "BOTTOMRIGHT", foot, "TOPLEFT", CFG.side, 0 },
+            })
+            for i = 1, 7 do
+                local b = _G["ChatConfigCategoryFrameButton" .. i]
+                if b then CfgCategory(b) end
+            end
+            for _, i in ipairs({ 1, 5 }) do
+                local b = _G["ChatConfigCategoryFrameButton" .. i]
+                if b then
+                    k:Anchors(b, {
+                        { "TOPLEFT",  cats, "TOPLEFT",  CFG.gap - 2, -CFG.gap },
+                        { "TOPRIGHT", cats, "TOPRIGHT", -CFG.gap, -CFG.gap },
+                    })
+                end
+            end
+        end
+
+        -- The panel's ground, and the combat log's, to the right of it.
+        for _, name in ipairs({ "ChatConfigBackgroundFrame", "ChatConfigCombatSettings" }) do
+            local bg = _G[name]
+            if bg and cats then
+                CfgFlat(k, bg)
+                k:Anchors(bg, {
+                    { "TOPLEFT",     cats, "TOPRIGHT", 0, 0 },
+                    { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+                })
+            end
+        end
+
+        -- The footer: defaults left, Okay right.
+        local def, redock = f.DefaultButton, f.RedockButton
+        for _, b in ipairs({ def, redock, _G.CombatLogDefaultButton, _G.TextToSpeechDefaultButton,
+                             _G.ChatConfigFrameOkayButton, _G.ChatConfigFrameCancelButton }) do
+            if b then k:Size(b, nil, CFG.button) end
+        end
+        if def then k:Move(def, "LEFT", foot, "LEFT", CFG.pad, 0) end
+        if redock and def then k:Move(redock, "LEFT", def, "RIGHT", CFG.gap, 0) end
+        for _, b in ipairs({ _G.CombatLogDefaultButton, _G.TextToSpeechDefaultButton }) do
+            if b then k:Move(b, "LEFT", foot, "LEFT", CFG.pad, 0) end
+        end
+        local okay, cancel = _G.ChatConfigFrameOkayButton, _G.ChatConfigFrameCancelButton
+        if okay then
+            k:Size(okay, CFG.short, CFG.button)
+            k:Move(okay, "RIGHT", foot, "RIGHT", -CFG.pad, 0)
+        end
+        if cancel and okay then
+            k:Size(cancel, CFG.short, CFG.button)
+            k:Move(cancel, "RIGHT", okay, "LEFT", -CFG.gap, 0)
+        end
+
+        ------------------------------------------------------------ Combat log
+        -- Its page is the filter list (85 tall), a row under it of the
+        -- move arrows and Copy / Add / Delete, then five tabs standing on
+        -- the panel, which Blizzard pushes 135 down on show. Ours: the list
+        -- flat with list-item rows, the row's buttons ours at 24, the tabs
+        -- window tab faces on a hairline across the page.
+        local cs = _G.ChatConfigCombatSettings
+        local filters = cs and cs.Filters
+        local cbg = _G.ChatConfigBackgroundFrame
+        local tabTop = CFG.gap + CFG.filters + CFG.gap + CFG.button + CFG.gap + CFG.tab
+        if filters then
+            CfgFlat(k, filters)
+            k:Anchors(filters, {
+                { "TOPLEFT",     cs, "TOPLEFT",  CFG.pad - CFG.inset, -CFG.gap },
+                { "BOTTOMRIGHT", cs, "TOPRIGHT", -CFG.pad, -(CFG.gap + CFG.filters) },
+            })
+            local del = _G.ChatConfigCombatSettingsFiltersDeleteButton
+            local add = _G.ChatConfigCombatSettingsFiltersAddFilterButton
+            local copy = _G.ChatConfigCombatSettingsFiltersCopyFilterButton
+            if del then
+                k:Size(del, CFG.short, CFG.button)
+                k:Move(del, "TOPRIGHT", filters, "BOTTOMRIGHT", 0, -CFG.gap)
+            end
+            if add and del then
+                k:Size(add, CFG.short, CFG.button)
+                k:Move(add, "RIGHT", del, "LEFT", -CFG.gap, 0)
+            end
+            if copy and add then
+                k:Size(copy, CFG.short, CFG.button)
+                k:Move(copy, "RIGHT", add, "LEFT", -CFG.gap, 0)
+            end
+            local up, down = _G.ChatConfigMoveFilterUpButton, _G.ChatConfigMoveFilterDownButton
+            for _, pair in ipairs({ { up, "up" }, { down, "down" } }) do
+                local b = pair[1]
+                if b then
+                    OverlayButton(k, b, pair[2])
+                    k:Size(b, CFG.button, CFG.button)
+                    b:SetHitRectInsets(0, 0, 0, 0)
+                end
+            end
+            if up then k:Move(up, "TOPLEFT", filters, "BOTTOMLEFT", CFG.inset, -CFG.gap) end
+            if down and up then k:Move(down, "LEFT", up, "RIGHT", CFG.gap, 0) end
+        end
+        if cs then
+            -- The page's rule the tabs stand on.
+            local d = S.D(cs)
+            if not d.cfgRule then
+                d.cfgRule = S.Ours(cs:CreateTexture(nil, "BORDER", nil, 1))
+                EV.Pixel.NoSnap(d.cfgRule)
+                d.cfgRule:SetPoint("TOPLEFT", cs, "TOPLEFT", 0, -tabTop)
+                d.cfgRule:SetPoint("TOPRIGHT", cs, "TOPRIGHT", 0, -tabTop)
+                local function Paint()
+                    d.cfgRule:SetColorTexture(S.Colour("divider"))
+                    d.cfgRule:SetHeight(EV.Pixel:Line(cs))
+                end
+                Paint()
+                T.Watch(d.cfgRule, Paint)
+            end
+        end
+        -- The chosen tab is the one whose page is showing; Blizzard says so
+        -- only through the pages' visibility and the labels' colour.
+        local function CombatTabs()
+            local prev
+            for i, info in ipairs(_G.COMBAT_CONFIG_TABS or {}) do
+                local tab = _G["CombatConfigTab" .. i]
+                if tab then
+                    CfgTab(k, tab)
+                    tab:SetAlpha(1)
+                    local page = info.frame and _G[info.frame]
+                    S.D(tab).cfgOn = page and page:IsShown() and true or false
+                    CfgTabState(tab)
+                    tab:ClearAllPoints()
+                    if prev then
+                        tab:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", 2, 0)
+                    elseif cs then
+                        tab:SetPoint("BOTTOMLEFT", cs, "TOPLEFT", CFG.pad, -tabTop)
+                    end
+                    prev = tab
+                end
+            end
+        end
+        CombatTabs()
+        -- Blizzard moves the panel down for the combat page on every show
+        -- and back on hide; ours is the same, from our own top.
+        local function Ground(combat)
+            if cbg and cats then
+                k:Anchors(cbg, {
+                    { "TOPLEFT",     cats, "TOPRIGHT", 0, combat and -tabTop or 0 },
+                    { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+                })
+            end
+        end
+        Ground(cs and cs:IsShown())
+        k:Once(f, "cfgCombat", function()
+            -- The XML binds OnShow / OnHide to the functions themselves at
+            -- load, so a hook on the globals never runs: follow the frame.
+            if cs then
+                cs:HookScript("OnShow", function()
+                    Ground(true); CombatTabs()
+                    C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                end)
+                cs:HookScript("OnHide", function() Ground(false) end)
+            end
+            if type(_G.ChatConfig_UpdateCombatTabs) == "function" then
+                hooksecurefunc("ChatConfig_UpdateCombatTabs", function()
+                    CombatTabs()
+                    C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                end)
+            end
+            if type(_G.ChatConfigCombat_InitButton) == "function" then
+                hooksecurefunc("ChatConfigCombat_InitButton", function(b) CfgCategory(b, true) end)
+            end
+        end)
+
+        CfgCombatPages(k, cbg)
+
+        -- As wide as the widest list with a pad each side of it.
+        k:Size(f, 1 + CFG.side + CFG.pad - CFG.inset + CFG.list + CFG.pad + 1, nil)
+
+        -- The first box of each page a pad in from the categories' hairline
+        -- (its rows start at the box's inset), its heading above it.
+        for _, name in ipairs({ "ChatConfigChatSettingsLeft", "ChatConfigChannelSettingsLeft",
+                                "ChatConfigOtherSettingsCombat", "ChatConfigTextToSpeechChannelSettingsLeft",
+                                "CombatConfigMessageSourcesDoneBy" }) do
+            local box = _G[name]
+            if box then k:Move(box, "TOPLEFT", box:GetParent(), "TOPLEFT", CFG.pad - CFG.inset, -CFG.head) end
+        end
+
+        -- Tall enough for the longest list we have seen: never cut a list
+        -- off at the footer. Grows only, so the window doesn't jump about
+        -- between pages.
+        -- The combat pages' controls hang off each other rather than
+        -- filling their containers, so on those pages measure the controls.
+        local function Lowest(frame, depth, low)
+            if depth > 4 or not frame:IsVisible() then return low end
+            local b = S.Num(frame:GetBottom())
+            if b and frame:GetObjectType() == "CheckButton" and (not low or b < low) then low = b end
+            for _, c in ipairs(S.Children(frame)) do low = Lowest(c, depth + 1, low) end
+            return low
+        end
+        local function Fit()
+            local low
+            for box in pairs(cfgBoxes) do
+                if box:IsVisible() then
+                    local b = S.Num(box:GetBottom())
+                    if b and (not low or b < low) then low = b end
+                end
+            end
+            for _, name in ipairs({ "CombatConfigMessageSources", "CombatConfigMessageTypes", "CombatConfigColors",
+                                    "CombatConfigFormatting", "CombatConfigSettings" }) do
+                local page = _G[name]
+                if page and page:IsVisible() then low = Lowest(page, 0, low) end
+            end
+            local ft = S.Num(foot:GetTop())
+            if not (low and ft) then return end
+            local need = (ft + CFG.pad) - low
+            if need > 0.5 then k:Size(f, nil, f:GetHeight() + need) end
+        end
+        S.D(f).cfgFit = Fit
+
+        -- Lists, as Blizzard builds them.
+        k:Once(f, "cfgLists", function()
+            for _, fn in ipairs({ "ChatConfig_CreateCheckboxes", "ChatConfig_CreateTieredCheckboxes",
+                                  "ChatConfig_CreateColorSwatches" }) do
+                if type(_G[fn]) == "function" then
+                    hooksecurefunc(fn, function(box)
+                        CfgList(k, box)
+                        C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                    end)
+                end
+            end
+            if type(_G.ChatConfigCategory_OnClick) == "function" then
+                hooksecurefunc("ChatConfigCategory_OnClick", function()
+                    C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                end)
+            end
+        end)
+        C_Timer.After(0, Fit)
+        for _, name in ipairs({ "ChatConfigChatSettingsLeft", "ChatConfigChannelSettingsLeft",
+                                "ChatConfigOtherSettingsCombat", "ChatConfigOtherSettingsPVP",
+                                "ChatConfigOtherSettingsAdditionalColors", "ChatConfigOtherSettingsSystem",
+                                "ChatConfigOtherSettingsCreature", "ChatConfigTextToSpeechChannelSettingsLeft",
+                                "CombatConfigMessageSourcesDoneBy", "CombatConfigMessageSourcesDoneTo",
+                                "CombatConfigColorsUnitColors" }) do
+            local box = _G[name]
+            if box and box.checkBoxTable or (box and box.swatchTable) then CfgList(k, box) end
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  FriendsFrame (Blizzard_FriendsFrame, Camelot FriendsFrame.xml / .lua), the
+--  Contacts window. A 385x424 ButtonFrameTemplate: under the title
+--  FriendsTabHeader holds the status dropdown, the Battle.net tag
+--  (BattlenetFrame, 190x29, 26 under the title) with ContactsMenuButton (a
+--  32px square with a gold arrow) beside it, and a TabSystem (Friends,
+--  Recent Allies) at 18,-60. The lists sit in the Inset: FriendsListFrame's
+--  ScrollBox from 8,-87, RecentAlliesFrame.List 3 inside the Inset. Add
+--  Friend and Send Message are 134x21 on the bottom corners; the Contacts /
+--  Raid tabs hang below. The ignore list is a second ButtonFrameTemplate
+--  window beside it.
+--
+--  Ours: a tool bar under the title (status left, tag centred, the menu
+--  button right, all 30); the Friends / Recent Allies tabs standing on a rule
+--  under it; the lists straight on the window from that rule to a footer,
+--  scroll bar centred in a gutter; Add Friend and Send Message on the
+--  footer. Rows, dividers, status dots and invite buttons are the contacts
+--  parts'.
+--------------------------------------------------------------------------------
+local FR = { tool = 40, control = 30, pad = 8, gap = 6, tabs = 24, footer = 36, button = 24,
+             wide = 140, gutter = 20 }
+
+--------------------------------------------------------------------------------
+--  The Raid tab (Blizzard_RaidFrame Mainline RaidFrame.xml, and
+--  Blizzard_RaidUI, loaded on demand in a raid): RaidFrame is re-parented
+--  into the contacts window (ClaimRaidFrame) and fills it. Its controls:
+--  the All Assist check at 58,-23, the role counts centred 25 down, Raid
+--  Info at the top right, Convert to Raid 5 up from the bottom right. In a
+--  raid, eight RaidGroup frames (162x80, a UI-RaidFrame-GroupOutline
+--  picture, a "Group N" label above) each hold five slots and the members
+--  as secure RaidGroupButtons (UI-RaidFrame-GroupButton art); sixteen
+--  RaidClassButtons count classes down the right on SpellBook-SkillLineTab
+--  plates. RaidInfoFrame, the saved instances, opens beside the window.
+--
+--  Ours, written from the source (the tab can't be seen outside a raid):
+--  the controls on the window's tool bar and footer, each group a sunk well
+--  with its label as a heading, members as rows (surface, lighter on hover),
+--  empty slots clear with their text muted, the class plates gone and the
+--  class icons in our icon style; the saved instances panel as our window.
+--  Nothing here moves a secure button.
+--------------------------------------------------------------------------------
+local raidDressed = setmetatable({}, { __mode = "k" })
+
+local function FrRaidInfo(k)
+    local rf = _G.RaidInfoFrame
+    if not rf or raidDressed[rf] then return end
+    raidDressed[rf] = true
+    local W = T.LOOK.window.rest
+    if rf.Border then k:Mute(rf.Border) end
+    k:Fill(rf, W.fill)
+    k:Border(rf, W.edge)
+    for _, n in ipairs({ "RaidInfoDetailHeader", "RaidInfoDetailFooter" }) do
+        if _G[n] then S.StripArt(_G[n]) end
+    end
+    k:Art(rf, "Interface\\FriendsFrame\\WhoFrame-ColumnTabs")
+    local band = Band(rf, "title", "bottom", function(b)
+        b:SetPoint("TOPLEFT", rf, "TOPLEFT", 1, -1)
+        b:SetPoint("TOPRIGHT", rf, "TOPRIGHT", -1, -1)
+        b:SetHeight(S.TITLE_BAND or 24)
+    end)
+    local header = rf.Header
+    if header then
+        k:Mute(header)
+        local name = header.Text
+        if name then
+            if name:GetParent() ~= band then name:SetParent(band) end
+            k:Move(name, "CENTER", band, "CENTER", 0, 0)
+            k:Label(name, W.title, true)
+        end
+    end
+    local close = _G.RaidInfoCloseButton
+    if close then
+        k:Size(close, S.TITLE_BAND or 24, S.TITLE_BAND or 24)
+        k:Move(close, "TOPRIGHT", rf, "TOPRIGHT", -1, -1)
+    end
+    for _, n in ipairs({ "RaidInfoInstanceLabel", "RaidInfoIDLabel" }) do
+        local l = _G[n]
+        if l and l.text then k:Label(l.text, "textMuted") end
+    end
+    for _, n in ipairs({ "RaidInfoExtendButton", "RaidInfoCancelButton" }) do
+        if _G[n] then k:Size(_G[n], nil, FR.button) end
+    end
+    local owner = rf:GetParent()
+    if owner then k:Move(rf, "TOPLEFT", owner, "TOPRIGHT", FR.gap, 0) end
+end
+
+local function FrRaid(k, f, bar, foot)
+    local raid = _G.RaidFrame
+    if not raid then return end
+    -- Controls onto the window's bars while the window holds the raid page.
+    if raid:GetParent() == f then
+        local assist = _G.RaidFrameAllAssistCheckButton
+        if assist then k:Move(assist, "LEFT", bar, "LEFT", FR.pad, 0) end
+        if raid.RoleCount then k:Move(raid.RoleCount, "CENTER", bar, "CENTER", 0, 0) end
+        local info = _G.RaidFrameRaidInfoButton
+        if info then
+            k:Size(info, 96, FR.control)
+            k:Move(info, "RIGHT", bar, "RIGHT", -FR.pad, 0)
+        end
+        local convert = _G.RaidFrameConvertToRaidButton
+        if convert then
+            k:Size(convert, FR.wide, FR.button)
+            k:Move(convert, "RIGHT", foot, "RIGHT", -FR.pad, 0)
+        end
+    end
+    FrRaidInfo(k)
+
+    -- The groups, once Blizzard_RaidUI has built them.
+    for g = 1, 8 do
+        local group = _G["RaidGroup" .. g]
+        if group and not raidDressed[group] then
+            raidDressed[group] = true
+            for _, r in ipairs(S.Regions(group)) do
+                if S.ArtIsFile(r, "Interface\\RaidFrame\\UI-RaidFrame-GroupOutline") then S.StripArt(r) end
+            end
+            local gp = S.PainterFor(group)
+            gp:Fill("surfaceSunk")
+            gp:Border("border")
+            local label = _G["RaidGroup" .. g .. "Label"]
+            local fs = label and label.GetFontString and label:GetFontString()
+            if fs then k:Label(fs, "title", true) end
+            for s = 1, 5 do
+                local slot = _G["RaidGroup" .. g .. "Slot" .. s]
+                if slot then
+                    local h = slot.GetHighlightTexture and slot:GetHighlightTexture()
+                    if h then S.StripArt(h) end
+                    for _, r in ipairs(S.Regions(slot)) do
+                        if r.GetObjectType and r:GetObjectType() == "FontString" then k:Label(r, "textDisabled") end
+                    end
+                end
+            end
+        end
+    end
+    local ROW = { rest = { fill = "surface2" }, hover = { fill = "surface3" } }
+    for i = 1, 40 do
+        local b = _G["RaidGroupButton" .. i]
+        if b and not raidDressed[b] then
+            raidDressed[b] = true
+            for _, g in ipairs({ "GetNormalTexture", "GetHighlightTexture" }) do
+                local t = b[g] and b[g](b)
+                if t then S.StripArt(t) end
+            end
+            local p = S.PainterFor(b)
+            p:Fill("surface2")
+            p:States(ROW)
+        end
+    end
+    for i = 1, 16 do
+        local b = _G["RaidClassButton" .. i]
+        if b and not raidDressed[b] then
+            raidDressed[b] = true
+            for _, r in ipairs(S.Regions(b)) do
+                if S.ArtIsFile(r, "Interface\\SpellBook\\SpellBook-SkillLineTab") then S.StripArt(r) end
+            end
+            local h = b.GetHighlightTexture and b:GetHighlightTexture()
+            if h then S.StripArt(h) end
+            local icon = _G["RaidClassButton" .. i .. "IconTexture"]
+            if icon then EV.Icons:Style(icon, { host = b, keepCoords = true }) end
+        end
+    end
+end
+
+P{
+    name  = "FriendsFrame",
+    addon = "Blizzard_FriendsFrame",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        if _G.FriendsFrameIcon then S.Mute(_G.FriendsFrameIcon) end
+
+        -- No box round the lists: the Inset is only their rect.
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(FR.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(FR.footer)
+        end)
+
+        -- The tool bar: status, tag, menu.
+        local header = f.FriendsTabHeader
+        local bn = header and header.BattlenetFrame
+        local status = header and header.StatusDropdown
+        if status then
+            k:Size(status, nil, FR.control)
+            k:Move(status, "LEFT", bar, "LEFT", FR.pad, 0)
+            -- Blizzard shows the status as a 16px icon in the text, sat on
+            -- the baseline. Ours: the status dot, centred in the room left
+            -- of the chevron.
+            local d = S.D(status)
+            local text = status.Text
+            if text and not d.dot then
+                local dot = S.Ours(status:CreateTexture(nil, "OVERLAY", nil, 3))
+                dot:SetTexture(T.MEDIA .. "circle.png")
+                dot:SetSize(8, 8)
+                dot:SetPoint("CENTER", status, "LEFT", 16, 0)
+                d.dot = dot
+                local function Sync()
+                    local token = S.StatusToken and S.StatusToken(header.bnStatus) or nil
+                    text:SetAlpha(token and 0 or 1)
+                    dot:SetShown(token ~= nil)
+                    if token then dot:SetVertexColor(S.Colour(token)) end
+                end
+                hooksecurefunc(text, "SetText", Sync)
+                T.Watch(dot, Sync)
+                Sync()
+            end
+        end
+        if bn then
+            k:Fade(bn)
+            k:Move(bn, "CENTER", bar, "CENTER", 0, 0)
+            local menu = bn.ContactsMenuButton
+            if menu then
+                -- Our button with our chevron, not Blizzard's gold arrow.
+                OverlayButton(k, menu, "down")
+                k:Size(menu, FR.control, FR.control)
+                k:Move(menu, "RIGHT", bar, "RIGHT", -FR.pad, 0)
+            end
+            -- Click the tag to copy it.
+            local d = S.D(bn)
+            if bn.Tag and not d.copy then
+                local b = S.Ours(CreateFrame("Button", nil, bn))
+                b:SetAllPoints(bn.Tag)
+                b:SetScript("OnClick", function()
+                    local _, tag = BNGetInfo()
+                    if tag and EV.UI and EV.UI.ShowCopyText then
+                        EV.UI.ShowCopyText(EV.L["BattleTag"], tag, EV.L["Send it to anyone who wants to add you."])
+                    end
+                end)
+                b:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                    GameTooltip:SetText(EV.L["Click to copy your BattleTag"], 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                b:SetScript("OnLeave", GameTooltip_Hide)
+                d.copy = b
+            end
+            if bn.BroadcastFrame then
+                local bf = bn.BroadcastFrame
+                if bf.Border then k:Mute(bf.Border) end
+                k:Fill(bf, T.LOOK.window.rest.fill)
+                k:Border(bf, T.LOOK.window.rest.edge)
+            end
+        end
+
+        -- Friends / Recent Allies on a rule under the tool bar.
+        local ts = header and header.TabSystem
+        local listTop = top + FR.tool + FR.gap + FR.tabs
+        if ts then
+            k:Move(ts, "BOTTOMLEFT", f, "TOPLEFT", FR.pad, -listTop)
+            for _, tab in ipairs(ts.tabs or {}) do TextTab(k, tab) end
+            local d = S.D(f)
+            if not d.frRule then
+                d.frRule = S.Ours(f:CreateTexture(nil, "BORDER", nil, 1))
+                EV.Pixel.NoSnap(d.frRule)
+                d.frRule:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -listTop)
+                d.frRule:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -listTop)
+                local function Paint()
+                    d.frRule:SetColorTexture(S.Colour("border"))
+                    d.frRule:SetHeight(EV.Pixel:Line(f))
+                end
+                Paint()
+                T.Watch(d.frRule, Paint)
+                -- Rule and tabs only where the tabs are: the Raid page has none.
+                local function Sync() d.frRule:SetShown(header:IsShown()) end
+                header:HookScript("OnShow", Sync)
+                header:HookScript("OnHide", Sync)
+                Sync()
+            end
+        end
+
+        -- The lists, from the rule to the footer, their bars in a gutter.
+        local function Gutter(box, sbar)
+            if not (box and sbar) then return end
+            local w = S.Num(sbar:GetWidth()) or 8
+            local x = math.floor((FR.gutter - w) / 2 + 0.5)
+            k:Anchors(sbar, {
+                { "TOPLEFT",    box, "TOPRIGHT",    x, -FR.gap },
+                { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, FR.gap },
+            })
+        end
+        local fl = _G.FriendsListFrame
+        if fl and fl.ScrollBox then
+            k:Anchors(fl.ScrollBox, {
+                { "TOPLEFT",     f,    "TOPLEFT",  1, -(listTop + 1) },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", -FR.gutter, 0 },
+            })
+            Gutter(fl.ScrollBox, fl.ScrollBar)
+        end
+        local ra = _G.RecentAlliesFrame
+        local list = ra and ra.List
+        if list then
+            k:Anchors(list, {
+                { "TOPLEFT",     f,    "TOPLEFT",  1, -(listTop + 1) },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+            if list.ScrollBox then
+                k:Anchors(list.ScrollBox, {
+                    { "TOPLEFT",     list, "TOPLEFT",     0, 0 },
+                    { "BOTTOMRIGHT", list, "BOTTOMRIGHT", -FR.gutter, 0 },
+                })
+                Gutter(list.ScrollBox, list.ScrollBar)
+            end
+        end
+
+        -- The footer.
+        local add, msg = _G.FriendsFrameAddFriendButton, _G.FriendsFrameSendMessageButton
+        if add then
+            k:Size(add, FR.wide, FR.button)
+            k:Move(add, "LEFT", foot, "LEFT", FR.pad, 0)
+        end
+        if msg then
+            k:Size(msg, FR.wide, FR.button)
+            k:Move(msg, "RIGHT", foot, "RIGHT", -FR.pad, 0)
+        end
+
+        local ignore = f.IgnoreListWindow
+        if ignore then k:Panel(ignore, "surfaceSunk") end
+
+        -- Contacts / Raid (/ Quick Join) as window tab faces under the
+        -- window, laid out over whichever are showing.
+        local function Tabs()
+            local prev
+            for _, name in ipairs({ "FriendsFrameTab1", "FriendsFrameTab3", "FriendsFrameTab4" }) do
+                local tab = _G[name]
+                if tab then
+                    AHTab(k, f, tab)
+                    if tab:IsShown() then
+                        tab:ClearAllPoints()
+                        if prev then
+                            tab:SetPoint("TOPLEFT", prev, "TOPRIGHT", AH_TAB.gap, 0)
+                        else
+                            tab:SetPoint("TOPLEFT", f, "BOTTOMLEFT", FR.pad, 0)
+                        end
+                        prev = tab
+                    end
+                end
+            end
+        end
+        Tabs()
+        k:Once(f, "frTabs", function()
+            if type(_G.PanelTemplates_SetTab) == "function" then
+                hooksecurefunc("PanelTemplates_SetTab", function(frame)
+                    if frame == f then
+                        for _, name in ipairs({ "FriendsFrameTab1", "FriendsFrameTab3", "FriendsFrameTab4" }) do
+                            if _G[name] then AHTabState(f, _G[name]) end
+                        end
+                    end
+                end)
+            end
+            if type(_G.FriendsFrame_UpdateQuickJoinTab) == "function" then
+                hooksecurefunc("FriendsFrame_UpdateQuickJoinTab", Tabs)
+            end
+            local raid = _G.RaidFrame
+            if raid then
+                raid:HookScript("OnShow", function()
+                    C_Timer.After(0, function() FrRaid(k, f, bar, foot) end)
+                end)
+            end
+        end)
+        if _G.RaidFrame and _G.RaidFrame:IsShown() then FrRaid(k, f, bar, foot) end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  AddFriendFrame and BattleNetInviteFrame (Blizzard_AddFriend). Dialogs,
+--  shown with a bare Show, that size themselves (ResizeLayoutFrame, user
+--  scaled): a DialogBorderTemplate, a close button hung on the top-right
+--  corner, the yellow info button, and AddFriendButtonTemplate buttons on
+--  UI-DialogBox-Button art (which the dialogButton part dresses once the
+--  walk reaches them). Their own layout is left alone: it sizes the frame.
+--
+--  Ours: the window's surface and edge in place of the border, the close
+--  our size in the corner, the button that goes ahead in the primary Look,
+--  the info button in our muted text colour.
+--------------------------------------------------------------------------------
+local function DialogPrimary(b)
+    if not S.Alive(b) then return end
+    local fs = b.Text or (b.GetFontString and b:GetFontString())
+    S.PainterFor(b):States(T.LOOK.buttonPrimary, { label = fs })
+end
+
+local function FriendDialog(f, k)
+    local W = T.LOOK.window.rest
+    if f.Border then k:Mute(f.Border) end
+    k:Fill(f, W.fill)
+    k:Border(f, W.edge)
+    local close = f.CloseButton
+    if close then
+        k:Size(close, S.TITLE_BAND or 24, S.TITLE_BAND or 24)
+        k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1)
+    end
+end
+
+P{
+    name  = "AddFriendFrame",
+    apply = function(f, k)
+        FriendDialog(f, k)
+        local entry, info = f.EntryFrame, f.InfoFrame
+        local box = entry and entry.EditBoxContainer
+        DialogPrimary((box and box.AcceptButton) or (entry and entry.AcceptButton) or _G.AddFriendEntryFrameAcceptButton)
+        if info then DialogPrimary(info.OkayButton) end
+        -- Our input box is drawn on the edit box's own rect, but Blizzard
+        -- keeps the text and its "Enter: ..." prompt on its old end caps,
+        -- which hung 5 outside it: bring both in to the input's padding.
+        local eb = _G.AddFriendNameEditBox
+        if eb then
+            eb:SetTextInsets(6, 6, 0, 0)
+            local fill = _G.AddFriendNameEditBoxFill
+            if fill then k:Move(fill, "LEFT", eb, "LEFT", 6, 0) end
+        end
+        local ib = _G.AddFriendEntryFrameInfoButton
+        local t = ib and ib.GetNormalTexture and ib:GetNormalTexture()
+        if t and t.SetDesaturated then
+            t:SetDesaturated(true)
+            t:SetVertexColor(T.RGBA("textMuted"))
+        end
+    end,
+}
+
+P{
+    name  = "BattleNetInviteFrame",
+    apply = function(f, k)
+        FriendDialog(f, k)
+        DialogPrimary(f.SendButton)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  FriendsFriendsFrame (Blizzard_FriendsFrame Mainline FriendsFriendsFrame.xml):
+--  "Friends of <name>". A user-scaled dialog: DialogBorderTemplate, the title
+--  left-aligned 26 in and 20 down, the Everyone / Mutual dropdown under it,
+--  the list in a TooltipBackdrop box 24 in from each side, Send Request and
+--  Close 30 in and 24 up.
+--
+--  Ours: our window with the title centred on a title bar, the dropdown on a
+--  tool bar, the list straight on the window between the bars with its
+--  scroll bar in a gutter, Send Request (primary) and Close on a footer.
+--------------------------------------------------------------------------------
+local FOF = { tool = 40, control = 30, pad = 8, footer = 36, button = 24, long = 120, gutter = 20, gap = 6 }
+
+P{
+    name  = "FriendsFriendsFrame",
+    apply = function(f, k)
+        local W = T.LOOK.window.rest
+        if f.Border then k:Mute(f.Border) end
+        k:Fill(f, W.fill)
+        k:Border(f, W.edge)
+        local TB = S.TITLE_BAND or 24
+
+        local title = Band(f, "title", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+            b:SetHeight(TB)
+        end)
+        if f.Title then
+            k:Anchors(f.Title, {
+                { "LEFT",  title, "LEFT",  FOF.pad, 0 },
+                { "RIGHT", title, "RIGHT", -FOF.pad, 0 },
+            })
+            f.Title:SetJustifyH("CENTER")
+            k:Label(f.Title, W.title, true)
+        end
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -(TB + 2))
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -(TB + 2))
+            b:SetHeight(FOF.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(FOF.footer)
+        end)
+
+        local dd = f.FriendsDropdown
+        if dd then
+            k:Size(dd, nil, FOF.control)
+            k:Move(dd, "LEFT", bar, "LEFT", FOF.pad, 0)
+        end
+
+        local border = f.ScrollFrameBorder
+        if border then
+            CfgFlat(k, border)
+            k:Anchors(border, {
+                { "TOPLEFT",     bar,  "BOTTOMLEFT", 0, -1 },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT",   0, 0 },
+            })
+            local box, sbar = f.ScrollBox, f.ScrollBar
+            if box then
+                k:Anchors(box, {
+                    { "TOPLEFT",     border, "TOPLEFT",     0, 0 },
+                    { "BOTTOMRIGHT", border, "BOTTOMRIGHT", -FOF.gutter, 0 },
+                })
+                if sbar then
+                    local w = S.Num(sbar:GetWidth()) or 8
+                    local x = math.floor((FOF.gutter - w) / 2 + 0.5)
+                    k:Anchors(sbar, {
+                        { "TOPLEFT",    box, "TOPRIGHT",    x, -FOF.gap },
+                        { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, FOF.gap },
+                    })
+                end
+            end
+        end
+
+        local send, close = f.SendRequestButton, f.CloseButton
+        if send then
+            k:Size(send, FOF.long, FOF.button)
+            k:Move(send, "LEFT", foot, "LEFT", FOF.pad, 0)
+            DialogPrimary(send)
+        end
+        if close then
+            k:Size(close, FOF.long, FOF.button)
+            k:Move(close, "RIGHT", foot, "RIGHT", -FOF.pad, 0)
         end
     end,
 }

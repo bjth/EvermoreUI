@@ -70,6 +70,14 @@ local function Sweep()
     Take("OpacityFrame")
     -- Loot under the mouse shows the loot window with a bare Show.
     Take("LootFrame")
+    -- The clock toggles itself with a bare Show.
+    Take("TimeManagerFrame")
+    -- Name completion under a whisper or recipient box, a bare Show.
+    Take("AutoCompleteBox")
+    -- The add friend and Battle.net invite dialogs, bare Shows too.
+    Take("AddFriendFrame")
+    Take("BattleNetInviteFrame")
+    Take("FriendsFriendsFrame")
 end
 S.Sweep = Sweep
 
