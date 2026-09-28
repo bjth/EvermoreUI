@@ -150,23 +150,150 @@ end
 --      colour. So the pack recolours it to our divider token, which is what
 --      it was always for: a hairline between rows.
 --------------------------------------------------------------------------------
+--
+--  Rebuilt to the window standard (28 Sep), from Blizzard_MailFrame's
+--  MailFrame.xml / .lua:
+--
+--    Window        ButtonFrameTemplate; MailFrameTab_OnClick re-anchors the
+--                  Inset's top per tab (-58 inbox, -80 send). The Inset goes
+--                  invisible (no double border), so its moving is harmless.
+--    Inbox         seven MailItemTemplate rows (305x45) from 13,-70, each a
+--                  37px CheckButton icon on a gold (unread) or grey (read)
+--                  UI-EmptySlot square, sender and subject beside it, the
+--                  expiry at the top right; Prev / Next (32px page buttons)
+--                  and Open All (120x24) at the bottom, the page text under
+--                  Open All. InboxFrame:Update shows each row's button only
+--                  while it holds a letter, and greys a read letter's text
+--                  and icon itself.
+--    Send          To / Subject / Postage at the top, the body in
+--                  SendMailScrollFrame (296x257 at 8,-83), sixteen attachment
+--                  slots, the money row (SendMailMoneyButton at BOTTOMLEFT
+--                  15,37), and at the bottom your money in a ThinGoldEdge box
+--                  on an inset and Send / Cancel (80x22) at the right.
+--
+--  Ours: inbox letters as edge-to-edge rows under the title (loot's rows),
+--  with a rule and hover only while the row holds a letter, copper while it
+--  is the open one, the slot square gone (the text and icon already say read
+--  or unread); a footer band on each tab: Prev, the page, Open All beside
+--  Next on the inbox; your money, Send and Cancel on send. The body keeps a
+--  sunk well of its own.
+--------------------------------------------------------------------------------
+local MAIL = { row = 45, pad = 8, gap = 6, footer = 36, button = 24, short = 96, open = 120 }
+
+local function MailRowSync(row)
+    local d = S.D(row)
+    if not d.mailFill then return end
+    local b = row.Button or _G[row:GetName() .. "Button"]
+    local has = b and b:IsShown() or false
+    local okC, checked = pcall(b.GetChecked, b)
+    local st = { hover = has and b:IsMouseOver() or false, on = has and okC and checked or false }
+    local r = T.Resolve(T.LOOK.listItem, st)
+    d.mailFill:SetColorTexture(T.C4(r.fill))
+    d.mailFill:SetShown(has)
+    d.mailRule:SetShown(has and d.mailIndex ~= 1)
+end
+
+local function MailRow(row, i)
+    if not S.Alive(row) then return end
+    local d = S.D(row)
+    d.mailIndex = i
+    if d.mailFill then return end
+    -- The row's own art: two MailItemBorder pieces and a bare brown rule.
+    for _, r in ipairs(S.Regions(row)) do
+        if r.GetObjectType and r:GetObjectType() == "Texture" and not S.ours[r] then S.Mute(r) end
+    end
+    d.mailFill = S.Ours(EV.Pixel:Fill(row, "BACKGROUND", -7))
+    d.mailRule = S.Ours(row:CreateTexture(nil, "BORDER", nil, 1))
+    EV.Pixel.NoSnap(d.mailRule)
+    d.mailRule:SetPoint("TOPLEFT"); d.mailRule:SetPoint("TOPRIGHT")
+    local function Paint()
+        d.mailRule:SetColorTexture(S.Colour("divider"))
+        d.mailRule:SetHeight(EV.Pixel:Line(row))
+        MailRowSync(row)
+    end
+    Paint()
+    T.Watch(d.mailFill, Paint)
+    local b = row.Button or _G[row:GetName() .. "Button"]
+    if b then
+        local slot = _G[row:GetName() .. "ButtonSlot"]
+        if slot then S.StripArt(slot) end
+        for _, get in ipairs({ "GetHighlightTexture", "GetCheckedTexture" }) do
+            local ok, t = pcall(b[get], b)
+            if ok and t then S.StripArt(t) end
+        end
+        local function Sync() MailRowSync(row) end
+        b:HookScript("OnEnter", Sync)
+        b:HookScript("OnLeave", Sync)
+        b:HookScript("OnShow", Sync)
+        b:HookScript("OnHide", Sync)
+        hooksecurefunc(b, "SetChecked", Sync)
+    end
+end
+
+local function MailFooter(host, f)
+    return Band(host, "footer", "top", function(b)
+        b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+        b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+        b:SetHeight(MAIL.footer)
+    end)
+end
+
 P{
     name  = "MailFrame",
     addon = "Blizzard_MailFrame",
     apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+
+        -- Inbox.
         local inbox = f.InboxFrame or InboxFrame
         if inbox then
             k:Art(inbox, "Interface\\MailFrame\\UI-MailFrameBG")
+            local rows = _G.INBOXITEMS_TO_DISPLAY or 7
+            for i = 1, rows do
+                local row = _G["MailItem" .. i]
+                if row then
+                    MailRow(row, i)
+                    k:Anchors(row, {
+                        { "TOPLEFT",  f, "TOPLEFT",  1, -(top + (i - 1) * MAIL.row) },
+                        { "TOPRIGHT", f, "TOPRIGHT", -1, -(top + (i - 1) * MAIL.row) },
+                    })
+                    row:SetHeight(MAIL.row)
+                    MailRowSync(row)
+                end
+            end
+            local foot = MailFooter(inbox, f)
+            local prev, nxt, all = inbox.PrevPageButton, inbox.NextPageButton, inbox.OpenAllMail
+            if prev then k:Move(prev, "LEFT", foot, "LEFT", MAIL.pad - 1, 0) end
+            if nxt then k:Move(nxt, "RIGHT", foot, "RIGHT", -(MAIL.pad - 1), 0) end
+            if all then
+                k:Size(all, MAIL.open, MAIL.button)
+                if nxt then k:Move(all, "RIGHT", nxt, "LEFT", -MAIL.gap, 0)
+                else k:Move(all, "RIGHT", foot, "RIGHT", -MAIL.pad, 0) end
+            end
+            local page = _G.InboxCurrentPage
+            if page and prev then
+                k:Move(page, "LEFT", prev, "RIGHT", MAIL.gap, 0)
+                page:SetJustifyH("LEFT")
+            end
+            k:After(inbox, "Update", function()
+                for i = 1, rows do
+                    local row = _G["MailItem" .. i]
+                    if row then MailRowSync(row) end
+                end
+            end)
         end
 
-        -- Inbox rows. INBOXITEMS_TO_DISPLAY is 7; read it rather than assume.
-        for i = 1, (_G.INBOXITEMS_TO_DISPLAY or 7) do
-            local row = _G["MailItem" .. i]
-            if row then Rule(row) end
-        end
-
+        -- Send.
         local send = f.SendMail or SendMailFrame
         if send then
+            k:Art(send, "Interface\\ClassTrainerFrame\\UI-ClassTrainer-HorizontalBar")
             -- Stationery: no atlas, no file in the XML. Fade by position.
             for _, name in ipairs({ "SendStationeryBackgroundLeft",
                                     "SendStationeryBackgroundRight" }) do
@@ -181,6 +308,44 @@ P{
                     k:Fill(slot, "surfaceSunk"):Border(slot, "border")
                 end
             end
+            -- The body: its own sunk well, round the text and its scroll bar.
+            local body = _G.SendMailScrollFrame
+            if body then
+                k:Once(send, "mailBody", function()
+                    local well = S.Ours(CreateFrame("Frame", nil, send))
+                    well:EnableMouse(false)
+                    well:SetFrameLevel(math.max(0, body:GetFrameLevel() - 1))
+                    well:SetPoint("TOPLEFT", body, "TOPLEFT", -2, 2)
+                    well:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", -2, -2)
+                    well:SetPoint("RIGHT", f, "RIGHT", -MAIL.pad, 0)
+                    local fill = S.Ours(EV.Pixel:Fill(well, "BACKGROUND", -7))
+                    EV.Pixel:Edges(well, { size = 1 })
+                    local function Paint()
+                        fill:SetColorTexture(S.Colour("surfaceSunk"))
+                        EV.Pixel:SetEdgeColor(well, S.Colour("border"))
+                    end
+                    Paint()
+                    T.Watch(fill, Paint)
+                end)
+            end
+            local foot = MailFooter(send, f)
+            for _, n in ipairs({ "SendMailMoneyInset", "SendMailMoneyBg" }) do
+                if _G[n] then k:Mute(_G[n]) end
+            end
+            local money = _G.SendMailMoneyFrame
+            if money then k:Move(money, "LEFT", foot, "LEFT", MAIL.pad, 0) end
+            local cancel, go = _G.SendMailCancelButton, _G.SendMailMailButton
+            if cancel then
+                k:Size(cancel, MAIL.short, MAIL.button)
+                k:Move(cancel, "RIGHT", foot, "RIGHT", -(MAIL.pad - 1), 0)
+            end
+            if go then
+                k:Size(go, MAIL.short, MAIL.button)
+                if cancel then k:Move(go, "RIGHT", cancel, "LEFT", -MAIL.gap, 0) end
+            end
+            -- The money row stood on the footer's line; a gap above it.
+            local row = _G.SendMailMoneyButton
+            if row then k:Move(row, "BOTTOMLEFT", send, "BOTTOMLEFT", 15, MAIL.footer + 1 + MAIL.gap) end
         end
     end,
 }
