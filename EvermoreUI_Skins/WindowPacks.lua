@@ -1962,7 +1962,12 @@ local function CalSide(name, closeName)
             if header and band then
                 k:Fade(header)
                 k:Move(header, "CENTER", band, "CENTER", 0, 0)
-                if header.Text then k:Label(header.Text, W.title, true) end
+                -- Blizzard pins the name 13 down a 39 tall plate; centre
+                -- the name itself on the band, not the plate.
+                if header.Text then
+                    k:Move(header.Text, "CENTER", band, "CENTER", 0, 0)
+                    k:Label(header.Text, W.title, true)
+                end
             end
             local close = _G[closeName]
             if close then
