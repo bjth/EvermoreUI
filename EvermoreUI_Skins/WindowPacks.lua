@@ -1935,7 +1935,7 @@ end
 --  scrolls as before). It sits a gap clear of the calendar, level with its
 --  top.
 --------------------------------------------------------------------------------
-local CALSIDE = { gap = 6, pad = 10, min = 60 }
+local CALSIDE = { gap = 6, pad = 16, min = 60 }
 
 local function CalSide(name, closeName)
     P{
@@ -1950,8 +1950,14 @@ local function CalSide(name, closeName)
             local cal = _G.CalendarFrame
             if cal then k:Move(f, "TOPLEFT", cal, "TOPRIGHT", CALSIDE.gap, 0) end
 
-            S.TitleBar(f, S.PainterFor(f))
-            local band = S.D(f).titleBar
+            -- The title band the calendar itself wears, so the two read as
+            -- one window and its panel.
+            local top = S.TITLE_BAND or 24
+            local band = Band(f, "title", "bottom", function(b)
+                b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+                b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+                b:SetHeight(top)
+            end)
             local header = f.Header
             if header and band then
                 k:Fade(header)
@@ -1959,11 +1965,14 @@ local function CalSide(name, closeName)
                 if header.Text then k:Label(header.Text, W.title, true) end
             end
             local close = _G[closeName]
-            if close then k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1) end
+            if close then
+                k:Size(close, top, top)
+                k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1)
+            end
 
             local sf = f.ScrollingFont
             if not sf then return end
-            local top = (S.TITLE_BAND or 24) + 1
+            top = top + 1
             k:Anchors(sf, {
                 { "TOPLEFT",     f, "TOPLEFT",     CALSIDE.pad, -(top + CALSIDE.pad) },
                 { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -CALSIDE.pad, CALSIDE.pad },
