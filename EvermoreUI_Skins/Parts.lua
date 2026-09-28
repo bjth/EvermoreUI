@@ -2384,6 +2384,44 @@ R{
 --                    title. Ours: a raised panel, the title in gold over a rule,
 --                    labels muted and values plain, the meter in a well.
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--  9s. Reward item        SmallItemButtonTemplate (134x30, the quest log's
+--     rewards: a 30px icon and a QuestItemBorder box for the name) and
+--     LargeItemButtonTemplate (the quest window's: UI-QuestItemNameFrame).
+--     Items, money, experience and reputation all use one or the other. The
+--     name box was a dark, gold-edged plate per reward. Ours: no plate, the
+--     icon in the suite's style, the name beside it; the icon's edge takes the
+--     colour Blizzard gives the name (the item's quality), resting when it is
+--     plain white.
+--------------------------------------------------------------------------------
+R{
+    name = "rewardItem",
+    type = "Button",
+    keys = { "Icon", "NameFrame", "Name" },
+    paint = function(b, p)
+        S.StripArt(b.NameFrame)
+        if b.IconBorder then S.StripArt(b.IconBorder) end
+        local icon = b.Icon
+        EV.Icons:Style(icon, { host = b })
+        local name = b.Name
+        if not name then return end
+        local function Edge(_, r, g, bl)
+            if type(r) ~= "number" then
+                local ok
+                ok, r, g, bl = pcall(name.GetTextColor, name)
+                if not ok then return end
+            end
+            if r and g and bl and not (r > 0.95 and g > 0.95 and bl > 0.95) then
+                EV.Icons:SetState(icon, r, g, bl, 1)
+            else
+                EV.Icons:SetState(icon, nil)
+            end
+        end
+        pcall(hooksecurefunc, name, "SetTextColor", Edge)
+        Edge()
+    end,
+}
+
 local CARD_ART = { "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame",
                    "CritFrame", "QualityStripe" }
 
