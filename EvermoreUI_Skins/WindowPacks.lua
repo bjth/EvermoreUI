@@ -648,7 +648,7 @@ P{
 --      take the right), no gold box, no insets, no inner box.
 --------------------------------------------------------------------------------
 local MERCH = { pad = 12, gap = 6, tool = 40, control = 30, footer = 36, actions = 52,
-                button = 36, icon = 4, buyback = 140, pager = 32 }
+                button = 36, icon = 4, buyback = 140, pager = 32, pair = 2 }
 local MERCH_ACTIONS = { "MerchantRepairItemButton", "MerchantRepairAllButton",
                         "MerchantGuildBankRepairButton", "MerchantSellAllJunkButton" }
 local MERCH_HIDE = { "MerchantMoneyInset", "MerchantMoneyBg",
@@ -679,28 +679,6 @@ local function MerchantCard(item)
     S.StripArt(item.SlotTexture or (name and _G[name .. "SlotTexture"]))
     local plate = name and _G[name .. "NameFrame"]
     if plate then S.StripArt(plate) end
-    -- The text beside the icon, inside the card. Blizzard hangs the price
-    -- (and UpdateMerchantInfo the alternative currency, on every update)
-    -- from the plate's BOTTOMLEFT +31 (+25 for the buyback item), and the
-    -- plate from the slot art: the price landed about 45 down a 44px card.
-    -- The plate is invisible now but still the anchor, so it is moved to
-    -- where those offsets put the price 5 above the card's bottom.
-    local x = MERCH.icon + 37 + 6
-    local back = item == _G.MerchantBuyBackItem
-    local lift, nudge = back and 25 or 31, back and 0 or 2      -- the XML's own offsets
-    if plate then
-        plate:ClearAllPoints()
-        plate:SetPoint("BOTTOMLEFT", item, "BOTTOMLEFT", x - nudge, 5 - lift)
-    end
-    local label = item.Name or (name and _G[name .. "Name"])
-    if label then
-        label:ClearAllPoints()
-        label:SetPoint("TOPLEFT", item, "TOPLEFT", x, -5)
-        label:SetPoint("RIGHT", item, "RIGHT", -4, 0)
-        label:SetHeight(16)
-        label:SetJustifyV("TOP")
-        label:SetWordWrap(false)
-    end
     d.merchFill = S.Ours(EV.Pixel:Fill(item, "BACKGROUND", -7))
     EV.Pixel:Edges(item, { size = 1 })
     local b = item.ItemButton
@@ -716,9 +694,51 @@ local function MerchantCard(item)
     T.Watch(d.merchFill, function() MerchantCardSync(item) end)
 end
 
+--- The name and the price as one group, centred on the card: the name ends
+--- MERCH.pair above the middle, the price starts MERCH.pair below it; with no
+--- price the name is centred alone.
+---
+--- Blizzard hangs the price (and UpdateMerchantInfo the alternative currency,
+--- on every update) from the name plate's BOTTOMLEFT: +2,+31 on the grid,
+--- +0,+25 on the buyback item. The plate is invisible now but still the
+--- anchor, so it is placed where those offsets put the price's top on the
+--- line below the middle, from the price's own height.
+local function MerchantText(item)
+    local name = item:GetName()
+    if not name then return end
+    local x = MERCH.icon + 37 + 6
+    local back = item == _G.MerchantBuyBackItem
+    local lift, nudge = back and 25 or 31, back and 0 or 2
+    local money, alt = _G[name .. "MoneyFrame"], _G[name .. "AltCurrencyFrame"]
+    local priced = (money and money:IsShown()) or (alt and alt:IsShown())
+    local plate = _G[name .. "NameFrame"]
+    local h = S.Num(money and money:GetHeight()) or 13
+    local mid = (S.Num(item:GetHeight()) or 44) / 2
+    if plate then
+        plate:ClearAllPoints()
+        plate:SetPoint("BOTTOMLEFT", item, "BOTTOMLEFT", x - nudge, (mid - MERCH.pair - h) - lift)
+    end
+    local label = item.Name or _G[name .. "Name"]
+    if label then
+        label:ClearAllPoints()
+        label:SetWordWrap(false)
+        label:SetHeight(14)
+        if priced then
+            label:SetPoint("BOTTOMLEFT", item, "LEFT", x, MERCH.pair)
+            label:SetPoint("RIGHT", item, "RIGHT", -4, 0)
+            label:SetJustifyV("BOTTOM")
+        else
+            label:SetPoint("LEFT", item, "LEFT", x, 0)
+            label:SetPoint("RIGHT", item, "RIGHT", -4, 0)
+            label:SetJustifyV("MIDDLE")
+        end
+    end
+end
+
 local function SetMerchantState(item, state)
     MerchantCard(item)
     S.D(item).merchState = state
+    MerchantText(item)
     local icon = MerchIcon(item.ItemButton)
     if icon and icon.SetVertexColor and state ~= "empty" then
         -- Blizzard's red (or grey) tint on the art goes: the card says it.
