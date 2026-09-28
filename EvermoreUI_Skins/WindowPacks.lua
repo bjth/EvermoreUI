@@ -329,6 +329,10 @@ local function QuestLogDetails(k)
     end
 end
 
+-- TITLE_CANVAS_SPACER_FRAME_HEIGHT (Blizzard_WorldMap.lua: the map's top),
+-- our title band plus its rule, and the tool bar's contents.
+local MAP = { spacer = 67, top = (S.TITLE_BAND or 24) + 2, control = 30, gap = 6, search = 190 }
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",
@@ -370,9 +374,11 @@ P{
             local bar, sp = f.NavBar, spacer
             if not (bar and sp) then return end
             local rightX = (WorldMapConstants and WorldMapConstants.NAVBAR_X_OFFSET) or -4
+            -- On the tool bar, the control height, centred (see below).
+            local inset = math.floor((MAP.spacer - MAP.top - 1 - MAP.control) / 2)
             k:Anchors(bar, {
-                { "TOPLEFT",     sp, "TOPLEFT",      8, -25 },
-                { "BOTTOMRIGHT", sp, "BOTTOMRIGHT", rightX,  9 },
+                { "TOPLEFT",     sp, "TOPLEFT",     8, -(MAP.top + inset) },
+                { "BOTTOMRIGHT", sp, "BOTTOMRIGHT", rightX, MAP.spacer - (MAP.top + inset + MAP.control) },
             })
         end
         SeatNavBar()
@@ -414,18 +420,58 @@ P{
             end
         end
 
-        -- The row under the title (the nav bar on the left, the quest log's
-        -- search, count and settings on the right) sits on a tool bar: from
-        -- our title band down to the map's top, TitleCanvasSpacerFrame's
-        -- bottom, across the whole window.
+        -- The row under the title sits on a tool bar, and everything on it is
+        -- one height on one centre line: the nav bar and the tracking options
+        -- button on the left, the quest log's search, count and settings on
+        -- the right. Blizzard's numbers (Blizzard_WorldMap.lua):
+        --   TITLE_CANVAS_SPACER_FRAME_HEIGHT 67, the map's top
+        --   NavBar      TOPLEFT spacer +8 -25, BOTTOMRIGHT spacer -50 +9
+        --   options     LEFT of the nav bar's right +10 -2 (Camelot)
+        --   QuestMapFrame  TOPRIGHT -3 -25 (AttachQuestLog), so the log began
+        --               above the map's top, inside the row; its search box
+        --               hangs 7 over the list (BOTTOMLEFT on its TOPLEFT) and
+        --               its settings button 25 over it.
+        -- Ours: the bar from our title band to the map's top, its rule on the
+        -- map's last pixel row; the log starts under it, level with the map,
+        -- and its controls move up onto the bar.
+        local bar
         if spacer then
-            Band(f, "toolbar", "bottom", function(b)
-                b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -((S.TITLE_BAND or 24) + 2))
-                b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -((S.TITLE_BAND or 24) + 2))
-                b:SetPoint("BOTTOM", spacer, "BOTTOM", 0, 0)
+            bar = Band(f, "toolbar", "bottom", function(b)
+                b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -MAP.top)
+                b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -MAP.top)
+                b:SetHeight(MAP.spacer - MAP.top - 1)
             end)
         end
+        local inset = math.floor((MAP.spacer - MAP.top - 1 - MAP.control) / 2)
+        local nav = f.NavBar
+        local opts = f.WorldMapTrackingOptionsButton
+        if opts and nav then
+            k:Size(opts, MAP.control, MAP.control)
+            k:Move(opts, "LEFT", nav, "RIGHT", MAP.gap, 0)
+        end
 
+        local qm = _G.QuestMapFrame
+        if qm and bar then
+            k:Anchors(qm, { { "TOPRIGHT", bar, "BOTTOMRIGHT", -2, -1 },
+                            { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -3, 3 } })
+            local qf = qm.QuestsFrame
+            local sf = qf and qf.ScrollFrame
+            if sf then
+                k:Anchors(sf, { { "TOPLEFT", qf, "TOPLEFT", 0, -MAP.gap },
+                                { "BOTTOMRIGHT", qf, "BOTTOMRIGHT", 0, 0 } })
+                local search, dd = sf.SearchBox, sf.SettingsDropdown
+                if dd then
+                    k:Size(dd, MAP.control, MAP.control)
+                    k:Move(dd, "BOTTOMRIGHT", qm, "TOPRIGHT", -MAP.gap, inset + 1)
+                    local dp = S.PainterFor(dd)
+                    if S.D(dd).states then dp:States(T.LOOK.button) end
+                end
+                if search then
+                    k:Size(search, MAP.search, MAP.control)
+                    k:Move(search, "BOTTOMLEFT", qm, "TOPLEFT", MAP.gap, inset + 1)
+                end
+            end
+        end
         QuestLogDetails(k)
     end,
 }
