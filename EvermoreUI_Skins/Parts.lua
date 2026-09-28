@@ -484,7 +484,8 @@ local function TrainerRowSync(b)
     local st = { on = sel and sel:IsShown() or false, hover = b:IsMouseOver() or false }
     local r = T.Resolve(LOOK.tile, st)
     card.fill:SetColorTexture(T.C4(r.fill))
-    T.SetEdge(card, Unlearnable(b) and "danger" or r.edge)
+    -- SetEdge takes a colour, not a token: resolve it.
+    T.SetEdge(card, Unlearnable(b) and { S.Colour("danger") } or r.edge)
 end
 S.TrainerRowSync = TrainerRowSync   -- the trainer pack repaints after Blizzard selects
 
