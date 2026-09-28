@@ -351,6 +351,115 @@ P{
 }
 
 --------------------------------------------------------------------------------
+--  OpenMailFrame: reading a letter (same file). ButtonFrameTemplate beside
+--  the mail window; From / Subject and Report Spam at the top; the letter in
+--  OpenMailScrollFrame (8,-84) on stationery (OpenStationeryBackground*, set
+--  per letter in Lua), or an auction invoice on the same stationery with its
+--  sum line (UI-MailFrame-InvoiceLine); the attachments below it; Reply,
+--  Delete and Close (82/82/80 x 22) at the bottom right.
+--
+--  OpenMailMixin:Update lays the bottom out from the window's bottom edge on
+--  every letter: attachments from 31 up (28 + 3), the body shortened to
+--  meet them. Our footer is 36, so after Update the attachments, their
+--  label and the rule are lifted MAIL.lift and the body is shortened by the
+--  same. Blizzard re-sets all of them from their base every time, so the
+--  lift never accumulates.
+--------------------------------------------------------------------------------
+MAIL.lift = MAIL.footer + 1 + MAIL.gap - 31
+
+P{
+    name  = "OpenMailFrame",
+    addon = "Blizzard_MailFrame",
+    apply = function(f, k)
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        k:Art(f, "Interface\\ClassTrainerFrame\\UI-ClassTrainer-HorizontalBar")
+        for _, name in ipairs({ "OpenStationeryBackgroundLeft", "OpenStationeryBackgroundRight" }) do
+            local r = _G[name]
+            if r then S.Mute(r) end
+        end
+        -- The invoice's sum line: a file texture; a hairline where it was.
+        local sum = _G.OpenMailArithmeticLine
+        if sum then
+            S.StripArt(sum)
+            k:Once(sum, "mailSum", function()
+                local line = S.Ours(sum:GetParent():CreateTexture(nil, "ARTWORK"))
+                EV.Pixel.NoSnap(line)
+                line:SetPoint("CENTER", sum, "CENTER", 0, 0)
+                line:SetSize(200, 1)
+                local function Paint()
+                    line:SetColorTexture(S.Colour("divider"))
+                    line:SetHeight(EV.Pixel:Line(line:GetParent()))
+                end
+                Paint()
+                T.Watch(line, Paint)
+            end)
+        end
+
+        -- The letter: a sunk well round the text and its scroll bar.
+        local body = _G.OpenMailScrollFrame
+        if body then
+            k:Once(f, "mailBody", function()
+                local well = S.Ours(CreateFrame("Frame", nil, f))
+                well:EnableMouse(false)
+                well:SetFrameLevel(math.max(0, body:GetFrameLevel() - 1))
+                well:SetPoint("TOPLEFT", body, "TOPLEFT", -2, 2)
+                well:SetPoint("BOTTOMLEFT", body, "BOTTOMLEFT", -2, -2)
+                well:SetPoint("RIGHT", f, "RIGHT", -MAIL.pad, 0)
+                local fill = S.Ours(EV.Pixel:Fill(well, "BACKGROUND", -7))
+                EV.Pixel:Edges(well, { size = 1 })
+                local function Paint()
+                    fill:SetColorTexture(S.Colour("surfaceSunk"))
+                    EV.Pixel:SetEdgeColor(well, S.Colour("border"))
+                end
+                Paint()
+                T.Watch(fill, Paint)
+            end)
+        end
+
+        -- The footer: Reply, Delete, Close on the right.
+        local foot = MailFooter(f, f)
+        local close, del, reply = _G.OpenMailCancelButton, _G.OpenMailDeleteButton, _G.OpenMailReplyButton
+        if close then
+            k:Size(close, MAIL.short, MAIL.button)
+            k:Move(close, "RIGHT", foot, "RIGHT", -(MAIL.pad - 1), 0)
+        end
+        if del then
+            k:Size(del, MAIL.short, MAIL.button)
+            if close then k:Move(del, "RIGHT", close, "LEFT", -MAIL.gap, 0) end
+        end
+        if reply then
+            k:Size(reply, MAIL.short, MAIL.button)
+            if del then k:Move(reply, "RIGHT", del, "LEFT", -MAIL.gap, 0) end
+        end
+
+        local function Lift(region)
+            if not (region and region.GetPoint) then return end
+            local ok, pt, rel, rp, x, y = pcall(region.GetPoint, region, 1)
+            if ok and pt and rel == f and rp == "BOTTOMLEFT" then
+                region:SetPoint(pt, rel, rp, x, (y or 0) + MAIL.lift)
+            end
+        end
+        k:After(f, "Update", function()
+            for _, b in ipairs(f.activeAttachmentButtons or {}) do Lift(b) end
+            Lift(_G.OpenMailAttachmentText)
+            if body then
+                local h = S.Num(body:GetHeight())
+                if h then
+                    body:SetHeight(h - MAIL.lift)
+                    if _G.OpenMailScrollChildFrame then _G.OpenMailScrollChildFrame:SetHeight(h - MAIL.lift) end
+                end
+            end
+        end)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  FriendsFrame
 --
 --  The one window the architecture doc has always used as its example, and
