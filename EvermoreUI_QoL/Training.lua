@@ -339,17 +339,19 @@ end
 local function BuildButton()
     if button or not ClassTrainerFrame or not (EV.UI and EV.UI.Button) then return end
     button = EV.UI.Button(ClassTrainerFrame, L["Train all"], 120, TrainAll)
-    -- Between the money box and Train, matching Train's height. The money
-    -- text sits up to 8px past its box, hence the gap on the left.
+    -- Between the money and Train, matching Train's height, GAP clear of
+    -- both. Measured from the money frame itself (it is sized to what it
+    -- shows), not Blizzard's money border, which a skin may take away.
+    local GAP = 6
     local train = ClassTrainerFrame.TrainButton or ClassTrainerTrainButton
-    local moneyBg = ClassTrainerFrameMoneyBg
+    local money = ClassTrainerFrame.money
     if train then
         button:ClearAllPoints()
-        button:SetPoint("TOPRIGHT", train, "TOPLEFT", -2, 0)
-        button:SetPoint("BOTTOMRIGHT", train, "BOTTOMLEFT", -2, 0)
+        button:SetPoint("TOPRIGHT", train, "TOPLEFT", -GAP, 0)
+        button:SetPoint("BOTTOMRIGHT", train, "BOTTOMLEFT", -GAP, 0)
         button._fit = function()
-            local l, r = moneyBg and moneyBg:GetRight(), train:GetLeft()
-            if l and r then button:SetWidth(math.max(70, math.min(140, r - l - 14))) end
+            local l, r = money and money:GetRight(), train:GetLeft()
+            if l and r then button:SetWidth(math.max(70, math.min(140, r - l - 2 * GAP))) end
         end
     else
         button:SetPoint("BOTTOMRIGHT", ClassTrainerFrame, "BOTTOMRIGHT", -110, 4)

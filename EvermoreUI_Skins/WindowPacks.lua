@@ -481,6 +481,113 @@ P{
     end,
 }
 
+--------------------------------------------------------------------------------
+--  ClassTrainerFrame (Blizzard_TrainerUI, Mainline, plus the Camelot file,
+--  which only turns categories on).
+--
+--  Blizzard's geometry:
+--
+--    Window            ButtonFrameTemplate; BG (the TrainerTextures sheet)
+--                      stretched round the list, MoneyBg (UI-MoneyFrame-Border)
+--                      at BOTTOMLEFT 5,-9 with the money frame on it.
+--    Tool row          ClassTrainerStatusBar 130x18 at 64,-35 (trade skill
+--                      trainers only), FilterDropdown at TOPRIGHT -13,-35,
+--                      100 wide (OnLoad).
+--    List              ScrollBox 302 wide at the Inset's TOPLEFT 5,-5, its
+--                      MinimalScrollBar 5 to the right; with a trade skill
+--                      step, skillStepButton (316x40) at the inset's top and
+--                      the list in bottomInset under it. ClassTrainerFrame_
+--                      Update clears and re-anchors the list and the Inset on
+--                      every refresh, so both are seated again after it.
+--    Train             MagicButtonTemplate at BOTTOMRIGHT; our Train all
+--                      (EvermoreUI_QoL) hangs off its left at its height.
+--
+--  Ours: a tool bar under the title with the rank bar on the left and the
+--  filter on the right, a footer with the money on the left and Train on the
+--  right, no inner boxes (the double border again), the list between the
+--  two with the scroll bar centred in a gutter. The rows are trainerRow.
+--------------------------------------------------------------------------------
+local TRAIN = { tool = 40, control = 30, pad = 8, gap = 6, footer = 36, button = 24,
+                train = 96, gutter = 20, step = 40 }
+
+P{
+    name  = "ClassTrainerFrame",
+    addon = "Blizzard_TrainerUI",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(TRAIN.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(TRAIN.footer)
+        end)
+
+        if f.BG then S.StripArt(f.BG) end
+        if _G.ClassTrainerFrameMoneyBg then S.StripArt(_G.ClassTrainerFrameMoneyBg) end
+        for _, inset in ipairs({ f.Inset, f.bottomInset }) do
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+
+        -- The tool bar: rank on the left, filter on the right.
+        if f.FilterDropdown then
+            k:Size(f.FilterDropdown, nil, TRAIN.control)
+            k:Move(f.FilterDropdown, "RIGHT", bar, "RIGHT", -(TRAIN.pad - 1), 0)
+        end
+        local rank = _G.ClassTrainerStatusBar
+        if rank then k:Move(rank, "LEFT", bar, "LEFT", TRAIN.pad + 1, 0) end
+
+        -- The footer: what you have on the left, Train on the right.
+        local train = f.TrainButton or _G.ClassTrainerTrainButton
+        if train then
+            k:Size(train, TRAIN.train, TRAIN.button)
+            k:Move(train, "RIGHT", foot, "RIGHT", -(TRAIN.pad - 1), 0)
+        end
+        for _, m in ipairs({ f.money, f.trainingPoints }) do
+            k:Move(m, "LEFT", foot, "LEFT", TRAIN.pad + 1, 0)
+        end
+
+        -- The list, between the bars, after every refresh.
+        local function SeatList()
+            local box, sbar, step = f.ScrollBox, f.ScrollBar, f.skillStepButton
+            if not box then return end
+            local above, y = bar, -TRAIN.gap
+            if step and step:IsShown() then
+                k:Anchors(step, {
+                    { "TOPLEFT",  bar, "BOTTOMLEFT",  TRAIN.pad - 1, -TRAIN.gap },
+                    { "TOPRIGHT", bar, "BOTTOMRIGHT", -TRAIN.gutter, -TRAIN.gap },
+                })
+                step:SetHeight(TRAIN.step)
+                above = step
+            end
+            k:Anchors(box, {
+                { "TOPLEFT",     above, "BOTTOMLEFT", above == bar and TRAIN.pad - 1 or 0, y },
+                { "BOTTOMRIGHT", foot,  "TOPRIGHT",   -TRAIN.gutter, TRAIN.gap },
+            })
+            if sbar then
+                local w = S.Num(sbar:GetWidth()) or 8
+                local x = math.floor((TRAIN.gutter - w) / 2 + 0.5)
+                k:Anchors(sbar, {
+                    { "TOPLEFT",    box, "TOPRIGHT",    x, 0 },
+                    { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, 0 },
+                })
+            end
+        end
+        SeatList()
+        k:Once(f, "trainerList", function()
+            if type(_G.ClassTrainerFrame_Update) == "function" then
+                hooksecurefunc("ClassTrainerFrame_Update", SeatList)
+            end
+        end)
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",

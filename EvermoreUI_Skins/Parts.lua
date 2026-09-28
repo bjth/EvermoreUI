@@ -450,6 +450,65 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  0a. Trainer row        ClassTrainerSkillButtonTemplate (Blizzard_TrainerUI)
+--      298x47 rows stacked with no spacing: the TrainerTextures sheet as the
+--      normal, highlight and selected (ADD) art, a grey MOD wash (disabledBG)
+--      on what you can't learn yet, a 36px icon at LEFT 6. Its keys are
+--      unique to the template, and it goes first so nothing generic gets it.
+--
+--      A tile card like a spell in the spellbook, drawn on a frame of ours a
+--      pixel inside the row top and bottom so stacked cards keep a hairline
+--      of window between them. On while Blizzard shows selectedTex (its own
+--      record of the selected service); the sheet art is cleared at the
+--      source, the grey wash muted (the desaturated icon and grey name say
+--      "unavailable" already). The icon is ours.
+--------------------------------------------------------------------------------
+local function TrainerRowSync(b)
+    local d = S.D(b)
+    local card = d.trainerCard
+    if not card then return end
+    local sel = b.selectedTex
+    local st = { on = sel and sel:IsShown() or false, hover = b:IsMouseOver() or false }
+    local r = T.Resolve(LOOK.tile, st)
+    card.fill:SetColorTexture(T.C4(r.fill))
+    T.SetEdge(card, r.edge)
+end
+
+R{
+    name = "trainerRow",
+    type = "Button",
+    keys = { "icon", "subText", "nameSubText", "selectedTex", "disabledBG" },
+    paint = function(b, p)
+        local d = S.D(b)
+        for _, get in ipairs({ "GetNormalTexture", "GetHighlightTexture", "GetPushedTexture" }) do
+            local ok, t = pcall(b[get], b)
+            if ok and t then S.StripArt(t) end
+        end
+        S.StripArt(b.selectedTex)
+        S.Mute(b.disabledBG)
+        if not d.trainerCard then
+            local card = S.Ours(CreateFrame("Frame", nil, b))
+            card:EnableMouse(false)
+            card:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
+            local one = EV.Pixel:One(b)
+            card:SetPoint("TOPLEFT", b, "TOPLEFT", 0, -one)
+            card:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, one)
+            card.fill = S.Ours(EV.Pixel:Fill(card, "BACKGROUND", -7))
+            EV.Pixel:Edges(card, { size = 1 })
+            d.trainerCard = card
+            local function Sync() TrainerRowSync(b) end
+            T.Watch(card.fill, Sync)
+            b:HookScript("OnEnter", Sync)
+            b:HookScript("OnLeave", Sync)
+            hooksecurefunc(b.selectedTex, "Show", Sync)
+            hooksecurefunc(b.selectedTex, "Hide", Sync)
+        end
+        EV.Icons:Style(b.icon, { host = b })
+        TrainerRowSync(b)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  0b. Slider             UISliderTemplate and friends
 --      Also claimed before `window` could have it. A slider has a NineSlice
 --      (its track is one), so the old fingerprint painted sliders as windows:
