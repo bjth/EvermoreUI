@@ -252,6 +252,83 @@ P{
 --
 --  What is left is this window's own art.
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--  The quest log's details page (QuestMapFrame.DetailsFrame, Mainline
+--  QuestMapFrame.xml, 308 wide beside the map). Blizzard's pieces:
+--
+--    BackFrame         307x52 at the top: questlog-reward-top-frame (a brown
+--                      plank) behind a 90x22 Back button at LEFT x=11 y=4.
+--    ScrollFrame       the text, from y=-43.
+--    RewardsFrame      in RewardsFrameContainer (clipped, 100 tall, 23 up from
+--                      the bottom): questlog-reward-header-top, a tiled middle
+--                      and a bottom, with "Rewards" in QuestFont_Huge at y=-22.
+--    Abandon, Share, Track  105/103/105 x22 along the bottom edge, touching,
+--                      with UI-Frame-BtnDivMiddle dividers hung off Share.
+--
+--  Ours: a header band with Back on it, the rewards panel as a band of ours
+--  with its heading in the kit's title, and a footer with the three buttons
+--  spaced evenly across it.
+--------------------------------------------------------------------------------
+local QLOG = { head = 40, foot = 26, pad = 8, gap = 6, button = 24, small = 22 }
+
+local function QuestLogDetails(k)
+    local qm = _G.QuestMapFrame
+    local det = qm and qm.DetailsFrame
+    if not det then return end
+    if det.Bg then S.StripArt(det.Bg) end
+
+    local back = det.BackFrame
+    if back then
+        k:Fade(back)
+        local head = Band(det, "head", "bottom", function(b)
+            b:SetPoint("TOPLEFT", det, "TOPLEFT", 0, 0)
+            b:SetPoint("TOPRIGHT", det, "TOPRIGHT", 0, 0)
+            b:SetHeight(QLOG.head)
+        end)
+        local btn = back.BackButton
+        if btn then
+            k:Size(btn, nil, QLOG.button)
+            k:Move(btn, "LEFT", head, "LEFT", QLOG.pad, 0)
+        end
+    end
+
+    local rc = det.RewardsFrameContainer
+    local rf = rc and rc.RewardsFrame
+    if rf then
+        for _, key in ipairs({ "Top", "Background", "Bottom" }) do
+            if rf[key] then S.StripArt(rf[key]) end
+        end
+        Band(rc, "rewards", "top", function(b) b:SetAllPoints(rc) end)
+        if rf.Label then
+            k:Label(rf.Label, "title", true)
+            k:Move(rf.Label, "TOPLEFT", rf, "TOPLEFT", QLOG.pad, -QLOG.pad)
+        end
+    end
+
+    local ab, sh, tr = det.AbandonButton, det.ShareButton, det.TrackButton
+    if ab and sh and tr then
+        local foot = Band(det, "foot", "top", function(b)
+            -- Where Blizzard's buttons were: 2 below the page, up to the
+            -- rewards panel 23 above it.
+            b:SetPoint("BOTTOMLEFT", det, "BOTTOMLEFT", 0, -3)
+            b:SetPoint("BOTTOMRIGHT", det, "BOTTOMRIGHT", 0, -3)
+            b:SetHeight(QLOG.foot)
+        end)
+        -- The dividers hang off Share's sides.
+        for _, r in ipairs(S.Regions(sh)) do
+            if r.GetObjectType and r:GetObjectType() == "Texture" and not S.ours[r]
+               and S.ArtIs(r, "ui%-frame%-btndiv") then
+                S.StripArt(r)
+            end
+        end
+        local w = (det:GetWidth() - 2 * QLOG.pad - 2 * QLOG.gap) / 3
+        for i, b in ipairs({ ab, sh, tr }) do
+            k:Size(b, w, QLOG.small)
+            k:Move(b, "LEFT", foot, "LEFT", QLOG.pad + (i - 1) * (w + QLOG.gap), 0)
+        end
+    end
+end
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",
@@ -336,6 +413,20 @@ P{
                 k:After(pin, "SetActive", function() if d.Repaint then d.Repaint() end end)
             end
         end
+
+        -- The row under the title (the nav bar on the left, the quest log's
+        -- search, count and settings on the right) sits on a tool bar: from
+        -- our title band down to the map's top, TitleCanvasSpacerFrame's
+        -- bottom, across the whole window.
+        if spacer then
+            Band(f, "toolbar", "bottom", function(b)
+                b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -((S.TITLE_BAND or 24) + 2))
+                b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -((S.TITLE_BAND or 24) + 2))
+                b:SetPoint("BOTTOM", spacer, "BOTTOM", 0, 0)
+            end)
+        end
+
+        QuestLogDetails(k)
     end,
 }
 
@@ -1550,6 +1641,62 @@ P{
                 T.Watch(rule, Paint)
             end)
             if header.DefaultsButton then k:Size(header.DefaultsButton, nil, SET.control) end
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  InspectFrame (Blizzard_InspectUI, Camelot InspectUI.xml and
+--  InspectPaperDollFrame.xml; ButtonFrameTemplate, so the window part gives it
+--  our title band)
+--
+--    LevelTextWrapper  "Level N Class" centred at TOP y=-27, a ResizeLayoutFrame
+--    InspectTalents    102x20 at TOP y=-39, under it; ViewButton in the same
+--                      place for someone out of range. Both float over the
+--                      model, which starts at y=-66.
+--    ModeTabs          64x384 off the right edge at y=-30: Character (the
+--                      target's portrait) and Guild, LargeSideTabButtonTemplate,
+--                      the character window's side tabs.
+--
+--  Ours: a header band from the title band down to the model, the level on
+--  its left and the talents button on its right, the character window's size
+--  of side tab, set the same way against the window.
+--------------------------------------------------------------------------------
+local INSPECT = { pad = 10, button = 24 }
+
+P{
+    name  = "InspectFrame",
+    addon = "Blizzard_InspectUI",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local pdf = _G.InspectPaperDollFrame
+        local model = _G.InspectModelFrame
+
+        local tabs = f.ModeTabs
+        if tabs then
+            k:Move(tabs, "TOPLEFT", f, "TOPRIGHT", T.LOOK.sideTab.gap, -(top + 6))
+            for _, tab in ipairs(tabs.Tabs or {}) do
+                S.Walk(tab, 0)
+                ModeTab(k, tab)
+            end
+        end
+
+        if not (pdf and model) then return end
+        local band = Band(pdf, "header", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetPoint("BOTTOM", model, "TOP", 0, 0)
+        end)
+        local level = pdf.LevelTextWrapper
+        if level then k:Move(level, "LEFT", band, "LEFT", INSPECT.pad, 0) end
+        local text = _G.InspectLevelText
+        if text and text.SetJustifyH then text:SetJustifyH("LEFT") end
+        for _, key in ipairs({ "InspectTalents", "ViewButton" }) do
+            local b = pdf[key]
+            if b then
+                k:Size(b, nil, INSPECT.button)
+                k:Move(b, "RIGHT", band, "RIGHT", -INSPECT.pad, 0)
+            end
         end
     end,
 }
