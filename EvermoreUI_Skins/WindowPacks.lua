@@ -379,38 +379,78 @@ end
 
 
 --------------------------------------------------------------------------------
---  QuestFrame: talking to a quest giver (Mainline QuestFrame.xml and
---  QuestFrameTemplates.xml, which this client loads).
+--  Talking to NPCs: QuestFrame and GossipFrame (Mainline QuestFrame.xml,
+--  QuestFrameTemplates.xml and GossipFrame.xml, which this client loads).
 --
---  Blizzard's geometry:
+--  The two are the same window. Blizzard's geometry:
 --
---    QuestFrame        338x496, ButtonFrameTemplate: Inset TOPLEFT 4,-60,
---                      BOTTOMRIGHT -6,26.
---    Four panels       Detail, Progress, Reward, Greeting
---                      (QuestFramePanelTemplate), each with one
---                      QuestScrollFrameTemplate: 300x403 at the window's
---                      TOPLEFT 5,-65, its scroll bar 9 to the right. The 65
---                      is room for the 60px portrait, which we hide: it was
---                      the empty space above the quest text.
+--    Window            338x496, ButtonFrameTemplate: Inset TOPLEFT 4,-60,
+--                      BOTTOMRIGHT -6,26, an edged box of its own inside the
+--                      window's edge.
+--    Lists             300 wide, 403 tall, at the window's TOPLEFT 5,-65
+--                      (the quest frame's four QuestScrollFrameTemplates, scroll
+--                      bar 9 to the right) or the greeting panel's 8,-65
+--                      (gossip's WowScrollBoxList, MinimalScrollBar 6 to the
+--                      right). The 65 is room for the 60px portrait, which we
+--                      hide: it was the empty space above the text.
 --    Buttons           22 tall at the window's bottom, y=4, x=6 from either
---                      side: Accept 77 and Decline 78 (detail), Complete
---                      Quest 120 (reward), Continue 120 and Cancel 78
---                      (progress), Goodbye 78 (greeting). Nothing under
+--                      side: Accept 77, Decline 78, Complete Quest 120,
+--                      Continue 120, Cancel 78, Goodbye 78. Nothing under
 --                      them, and their tops met the inset's border at 26.
 --
---  None of it is re-anchored by Blizzard's Lua (only the greeting's rows,
---  inside the scroll child), so it is seated once:
+--  None of it is re-anchored by Blizzard's Lua (only the rows inside the
+--  lists), so it is seated once:
 --
 --    * a footer band the width of the window, the buttons on it, one height,
 --      centred on it, one width per kind of button;
---    * the inset from under the title band to the footer, with the same gap
---      above and below;
---    * each scroll frame from the inset's top to its bottom, its width kept
---      (the text inside is laid out to Blizzard's 300).
+--    * no inner box (Ben: the double border wastes space): the inset keeps
+--      its job as the content rect, from the title rule to the footer, with
+--      its art, fill and edge gone;
+--    * each list from the content's top to its bottom, TALK.pad in, its
+--      width kept (the text inside is laid out to Blizzard's 300).
 --------------------------------------------------------------------------------
-local QUEST = { footer = 36, button = 24, pad = 6, gap = 6, short = 96, long = 120, inset = 4 }
-local QUEST_SCROLLS = { "QuestDetailScrollFrame", "QuestRewardScrollFrame",
-                        "QuestProgressScrollFrame", "QuestGreetingScrollFrame" }
+local TALK = { footer = 36, button = 24, pad = 8, short = 96, long = 120 }
+
+local function TalkWindow(f, k, lists, buttons)
+    local foot = Band(f, "footer", "top", function(b)
+        b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+        b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+        b:SetHeight(TALK.footer)
+    end)
+
+    for name, how in pairs(buttons) do
+        local b = type(name) == "table" and name or _G[name]
+        if b then
+            k:Size(b, TALK[how[2]], TALK.button)
+            if how[1] == "left" then
+                k:Move(b, "LEFT", foot, "LEFT", TALK.pad, 0)
+            else
+                k:Move(b, "RIGHT", foot, "RIGHT", -TALK.pad, 0)
+            end
+        end
+    end
+
+    local inset = f.Inset
+    if not inset then return end
+    k:Fade(inset)
+    if inset.NineSlice then k:Fade(inset.NineSlice) end
+    k:NoFill(inset)
+    EV.Pixel:ShowEdges(inset, false)
+    k:Anchors(inset, {
+        { "TOPLEFT",     f,    "TOPLEFT",  1, -((S.TITLE_BAND or 24) + 2) },
+        { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+    })
+    for _, list in ipairs(lists) do
+        local l = type(list) == "table" and list or _G[list]
+        if l then
+            k:Anchors(l, {
+                { "TOPLEFT",    inset, "TOPLEFT",    TALK.pad, -TALK.pad },
+                { "BOTTOMLEFT", inset, "BOTTOMLEFT", TALK.pad, TALK.pad },
+            })
+        end
+    end
+end
+
 -- name -> side, width
 local QUEST_BUTTONS = {
     QuestFrameAcceptButton          = { "left",  "short" },
@@ -420,45 +460,24 @@ local QUEST_BUTTONS = {
     QuestFrameGoodbyeButton         = { "right", "short" },
     QuestFrameGreetingGoodbyeButton = { "right", "short" },
 }
+local QUEST_SCROLLS = { "QuestDetailScrollFrame", "QuestRewardScrollFrame",
+                        "QuestProgressScrollFrame", "QuestGreetingScrollFrame" }
 
 P{
     name  = "QuestFrame",
     apply = function(f, k)
-        local foot = Band(f, "footer", "top", function(b)
-            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
-            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
-            b:SetHeight(QUEST.footer)
-        end)
+        TalkWindow(f, k, QUEST_SCROLLS, QUEST_BUTTONS)
+    end,
+}
 
-        for name, how in pairs(QUEST_BUTTONS) do
-            local b = _G[name]
-            if b then
-                k:Size(b, QUEST[how[2]], QUEST.button)
-                if how[1] == "left" then
-                    k:Move(b, "LEFT", foot, "LEFT", QUEST.pad + 2, 0)
-                else
-                    k:Move(b, "RIGHT", foot, "RIGHT", -(QUEST.pad + 2), 0)
-                end
-            end
-        end
-
-        local inset = f.Inset
-        if inset then
-            local top = (S.TITLE_BAND or 24) + 2 + QUEST.gap
-            k:Anchors(inset, {
-                { "TOPLEFT",     f,    "TOPLEFT",  QUEST.pad, -top },
-                { "BOTTOMRIGHT", foot, "TOPRIGHT", -(QUEST.pad - 1), QUEST.gap },
-            })
-            for _, name in ipairs(QUEST_SCROLLS) do
-                local sf = _G[name]
-                if sf then
-                    k:Anchors(sf, {
-                        { "TOPLEFT",    inset, "TOPLEFT",    QUEST.inset, -QUEST.inset },
-                        { "BOTTOMLEFT", inset, "BOTTOMLEFT", QUEST.inset, QUEST.inset },
-                    })
-                end
-            end
-        end
+P{
+    name  = "GossipFrame",
+    apply = function(f, k)
+        local panel = f.GreetingPanel
+        if not panel then return end
+        local buttons = {}
+        if panel.GoodbyeButton then buttons[panel.GoodbyeButton] = { "right", "short" } end
+        TalkWindow(f, k, { panel.ScrollBox }, buttons)
     end,
 }
 

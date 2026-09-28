@@ -1742,6 +1742,30 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  9f2. Talk rows         GossipTitleButtonArtTemplate (gossip options, and the
+--     quest giver's greeting list): a 300x16 line of QuestFontLeft with its
+--     icon on the left and UI-QuestTitleHighlight in ADD as the hover. That
+--     file is their fingerprint; nothing else uses it. The glow goes and the
+--     row takes the list item Look's hover, a flat fill; the text is
+--     Blizzard's, which the fonts pass already handles.
+--------------------------------------------------------------------------------
+R{
+    name = "talkRow",
+    type = "Button",
+    test = function(b)
+        if not b.GetHighlightTexture then return false end
+        local ok, h = pcall(b.GetHighlightTexture, b)
+        return ok and h and S.ArtIsFile(h, "Interface\\QuestFrame\\UI-QuestTitleHighlight") or false
+    end,
+    paint = function(b, p)
+        local ok, h = pcall(b.GetHighlightTexture, b)
+        if ok and h then S.StripArt(h) end
+        p:Fill("surface2")     -- the Look repaints it: clear at rest
+        p:States(LOOK.listItem)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  9g. Item button        anything built on ItemButtonTemplate
 --     The paper doll's slots, inspect, loot, the merchant, mail, quest
 --     rewards. Blizzard's slot frame (the normal texture, and the paper
