@@ -4138,6 +4138,16 @@ local function AHSideList(k, list)
     AHFlat(k, list)
     AHSeam(list, "RIGHT")
     local box, bar = list.ScrollBox, list.ScrollBar
+    -- A little room above the first row and in from the left, the same as
+    -- the gap between two category headers (their boxes stand 2 in from
+    -- their rows). No spacing between rows, so the tree rails run unbroken.
+    local view = box and box.GetView and box:GetView()
+    if view and view.SetPadding and not S.D(list).ahPad then
+        S.D(list).ahPad = true
+        view:SetPadding(AH.gap - 4, AH.gap - 4, AH.gap - 2, 0, 0)
+        -- The list may already hold its rows; lay them out again.
+        if box.FullUpdate then pcall(box.FullUpdate, box, true) end
+    end
     if box then
         k:Anchors(box, {
             { "TOPLEFT",     list, "TOPLEFT",     0, 0 },

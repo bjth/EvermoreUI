@@ -781,6 +781,10 @@ R{
 --- all; a category opens when it is picked (its sub-categories are inserted
 --- under it), so "open" is the row's own selection. Categories and
 --- sub-categories can open; the third level cannot.
+-- inset: a header box's gap from its row's top and bottom (so stacked
+-- headers stand apart); rail: the step between tree rails.
+local AH_CAT = { inset = 2, rail = 10 }
+
 function S.AHCategorySync(b)
     local d = S.D(b)
     if d.Repaint then d.Repaint() end
@@ -810,8 +814,8 @@ function S.AHCategorySync(b)
     local header = b.type == "category"
     if header and not d.ahBox then
         local box = S.Ours(CreateFrame("Frame", nil, b))
-        box:SetPoint("TOPLEFT", b, "TOPLEFT", 0, -1)
-        box:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 1)
+        box:SetPoint("TOPLEFT", b, "TOPLEFT", 0, -AH_CAT.inset)
+        box:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, AH_CAT.inset)
         box:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
         box:EnableMouse(false)
         local bp = S.PainterFor(box)
@@ -829,7 +833,35 @@ function S.AHCategorySync(b)
     end
     -- The list item's own wash is for the rows under a header only.
     if d.fill then d.fill:SetAlpha(header and 0 or 1) end
-    if header and b.Text then b.Text:SetTextColor(S.Colour(over and "text" or "title")) end
+
+    -- Under a header, a tree: a hairline rail down the left for each level
+    -- the row is nested at, running unbroken from row to row, so a glance
+    -- down the list says which header a row belongs to. Sub-categories read
+    -- in the text colour; the third level is muted until hovered or picked.
+    local level = (b.type == "subCategory" and 1) or (b.type == "subSubCategory" and 2) or 0
+    d.ahRails = d.ahRails or {}
+    for i = 1, 2 do
+        local r = d.ahRails[i]
+        if i <= level and not r then
+            r = S.Ours(b:CreateTexture(nil, "BORDER", nil, 1))
+            EV.Pixel.NoSnap(r)
+            r:SetPoint("TOPLEFT", b, "TOPLEFT", AH_CAT.rail * i, 0)
+            r:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", AH_CAT.rail * i, 0)
+            d.ahRails[i] = r
+        end
+        if r then
+            r:SetShown(i <= level)
+            r:SetColorTexture(S.Colour("divider"))
+            r:SetWidth(EV.Pixel:Line(b))
+        end
+    end
+    if b.Text then
+        local token
+        if header then token = over and "text" or "title"
+        elseif level == 1 then token = "text"
+        else token = (over or open) and "text" or "textMuted" end
+        b.Text:SetTextColor(S.Colour(token))
+    end
 
     if kids and not d.ahChev then
         d.ahChev = S.Ours(T.Chevron(b, 4))
