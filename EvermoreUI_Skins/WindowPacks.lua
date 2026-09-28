@@ -409,7 +409,7 @@ end
 --    * each list from the content's top to its bottom, TALK.pad in, its
 --      width kept (the text inside is laid out to Blizzard's 300).
 --------------------------------------------------------------------------------
-local TALK = { footer = 36, button = 24, pad = 8, short = 96, long = 120 }
+local TALK = { footer = 36, button = 24, pad = 8, short = 96, long = 120, gutter = 21 }
 
 local function TalkWindow(f, k, lists, buttons)
     local foot = Band(f, "footer", "top", function(b)
@@ -440,12 +440,18 @@ local function TalkWindow(f, k, lists, buttons)
         { "TOPLEFT",     f,    "TOPLEFT",  1, -((S.TITLE_BAND or 24) + 2) },
         { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
     })
+    -- The lists run to TALK.gutter from the right, not Blizzard's fixed 300:
+    -- a scroll frame clips what it holds, and a row of two item cards (the
+    -- quest's required items and rewards, 147 wide from x=7) ends at about
+    -- 303, so the right-hand card lost its right edge. The text inside is
+    -- still laid out to 300 by Blizzard; the scroll bar keeps its offset
+    -- from the list's right (9, or 6 for gossip) and lands in the gutter.
     for _, list in ipairs(lists) do
         local l = type(list) == "table" and list or _G[list]
         if l then
             k:Anchors(l, {
-                { "TOPLEFT",    inset, "TOPLEFT",    TALK.pad, -TALK.pad },
-                { "BOTTOMLEFT", inset, "BOTTOMLEFT", TALK.pad, TALK.pad },
+                { "TOPLEFT",     inset, "TOPLEFT",     TALK.pad, -TALK.pad },
+                { "BOTTOMRIGHT", inset, "BOTTOMRIGHT", -TALK.gutter, TALK.pad },
             })
         end
     end
