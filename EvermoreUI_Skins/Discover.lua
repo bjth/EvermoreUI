@@ -74,6 +74,9 @@ local function Sweep()
     Take("TimeManagerFrame")
     -- Name completion under a whisper or recipient box, a bare Show.
     Take("AutoCompleteBox")
+    -- The add friend and Battle.net invite dialogs, bare Shows too.
+    Take("AddFriendFrame")
+    Take("BattleNetInviteFrame")
 end
 S.Sweep = Sweep
 

@@ -5570,3 +5570,58 @@ P{
         if _G.RaidFrame and _G.RaidFrame:IsShown() then FrRaid(k, f, bar, foot) end
     end,
 }
+
+--------------------------------------------------------------------------------
+--  AddFriendFrame and BattleNetInviteFrame (Blizzard_AddFriend). Dialogs,
+--  shown with a bare Show, that size themselves (ResizeLayoutFrame, user
+--  scaled): a DialogBorderTemplate, a close button hung on the top-right
+--  corner, the yellow info button, and AddFriendButtonTemplate buttons on
+--  UI-DialogBox-Button art (which the dialogButton part dresses once the
+--  walk reaches them). Their own layout is left alone: it sizes the frame.
+--
+--  Ours: the window's surface and edge in place of the border, the close
+--  our size in the corner, the button that goes ahead in the primary Look,
+--  the info button in our muted text colour.
+--------------------------------------------------------------------------------
+local function DialogPrimary(b)
+    if not S.Alive(b) then return end
+    local fs = b.Text or (b.GetFontString and b:GetFontString())
+    S.PainterFor(b):States(T.LOOK.buttonPrimary, { label = fs })
+end
+
+local function FriendDialog(f, k)
+    local W = T.LOOK.window.rest
+    if f.Border then k:Mute(f.Border) end
+    k:Fill(f, W.fill)
+    k:Border(f, W.edge)
+    local close = f.CloseButton
+    if close then
+        k:Size(close, S.TITLE_BAND or 24, S.TITLE_BAND or 24)
+        k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1)
+    end
+end
+
+P{
+    name  = "AddFriendFrame",
+    apply = function(f, k)
+        FriendDialog(f, k)
+        local entry, info = f.EntryFrame, f.InfoFrame
+        local box = entry and entry.EditBoxContainer
+        if box then DialogPrimary(box.AcceptButton) end
+        if info then DialogPrimary(info.OkayButton) end
+        local ib = _G.AddFriendEntryFrameInfoButton
+        local t = ib and ib.GetNormalTexture and ib:GetNormalTexture()
+        if t and t.SetDesaturated then
+            t:SetDesaturated(true)
+            t:SetVertexColor(T.RGBA("textMuted"))
+        end
+    end,
+}
+
+P{
+    name  = "BattleNetInviteFrame",
+    apply = function(f, k)
+        FriendDialog(f, k)
+        DialogPrimary(f.SendButton)
+    end,
+}
