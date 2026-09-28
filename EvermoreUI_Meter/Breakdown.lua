@@ -9,6 +9,10 @@ if EV_BLOCKED then return end
 --  The game gives a breakdown for a GUID it can read from us. In combat a
 --  source's GUID can be secret (yours never is), and then the panel says
 --  the breakdown fills in when combat ends, which it does on its own.
+--
+--  It opens beside its window until you drag it by its title bar; from
+--  then on it opens where you left it. Right-click the title bar (or the
+--  button on the options page) to put it back beside its window.
 --------------------------------------------------------------------------------
 local ADDON, ns = ...
 local EV = EvermoreUI
@@ -29,6 +33,7 @@ local function Build()
     f:SetClampedToScreen(true)
     f:EnableMouse(true)
     f:EnableMouseWheel(true)
+    f:SetMovable(true)
     f:Hide()
     U.Surface(f, "window", 0.95)
 
@@ -42,6 +47,19 @@ local function Build()
     bar.rule:SetPoint("TOPLEFT", bar, "BOTTOMLEFT")
     bar.rule:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT")
     f.bar = bar
+
+    bar:EnableMouse(true)
+    bar:RegisterForDrag("LeftButton")
+    bar:SetScript("OnDragStart", function() f:StartMoving() end)
+    bar:SetScript("OnDragStop", function()
+        f:StopMovingOrSizing()
+        f:SetUserPlaced(false) -- ours to keep, not the game's layout cache
+        local point, _, relPoint, x, y = f:GetPoint(1)
+        M.db.breakdownPos = { point, relPoint, math.floor(x + 0.5), math.floor(y + 0.5) }
+    end)
+    bar:SetScript("OnMouseUp", function(_, button)
+        if button == "RightButton" then B:ResetPosition() end
+    end)
 
     f.title = T.Text(bar, "small", "text", true)
     f.title:SetPoint("LEFT", bar, "LEFT", 6, 0)
@@ -117,13 +135,7 @@ function B:Open(win, src)
     self.frame = self.frame or Build()
     self.win, self.src, self.offset = win, src, 0
     local f = self.frame
-    f:ClearAllPoints()
-    local right = (win.frame:GetRight() or 0) + WIDTH < (UIParent:GetRight() or 0)
-    if right then
-        f:SetPoint("TOPLEFT", win.frame, "TOPRIGHT", 6, 0)
-    else
-        f:SetPoint("TOPRIGHT", win.frame, "TOPLEFT", -6, 0)
-    end
+    self:Place()
     local ok = pcall(f.title.SetText, f.title, ns.Name(src.name))
     if not ok then f.title:SetText(L["Breakdown"]) end
     local r, g, b = EV.Palette.ClassRGB(src.classFilename)
@@ -131,6 +143,31 @@ function B:Open(win, src)
     f:Show()
     self.dirty = true
     self:Tick()
+end
+
+-- Where it was dragged to, or beside its window.
+function B:Place()
+    local f, win = self.frame, self.win
+    f:ClearAllPoints()
+    local pos = M.db.breakdownPos
+    if type(pos) == "table" and pos[1] then
+        f:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4])
+    elseif win then
+        local right = (win.frame:GetRight() or 0) + WIDTH < (UIParent:GetRight() or 0)
+        if right then
+            f:SetPoint("TOPLEFT", win.frame, "TOPRIGHT", 6, 0)
+        else
+            f:SetPoint("TOPRIGHT", win.frame, "TOPLEFT", -6, 0)
+        end
+    else
+        f:SetPoint("CENTER")
+    end
+end
+
+--- Back beside its window.
+function B:ResetPosition()
+    M.db.breakdownPos = nil
+    if self.frame and self.frame:IsShown() then self:Place() end
 end
 
 function B:Close()

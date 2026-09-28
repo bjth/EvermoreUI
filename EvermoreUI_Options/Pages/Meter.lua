@@ -61,6 +61,9 @@ EV.Options:RegisterPage{
             p:Row{ type = "toggle", text = L["Switch off the game's own meter windows"],
                    tooltip = L["Uses the game's own setting, and puts it back when you turn this off."],
                    get = Get("hideBlizzard"), set = Set("hideBlizzard") }
+            p:Row{ type = "button", text = L["Breakdown position"], label = L["Beside its window"], width = 150,
+                   tooltip = L["Drag a breakdown by its title bar and it opens there from then on. This, or right-clicking its title bar, puts it back beside its window."],
+                   onClick = function() if ns and ns.Breakdown then ns.Breakdown:ResetPosition() end end }
             p:Section(L["Reporting"])
             p:Row{ type = "slider", text = L["Lines to report"], min = 1, max = 25, step = 1,
                    get = Get("reportLines"), set = Set("reportLines") }
