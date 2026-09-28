@@ -281,6 +281,7 @@ function Pixel:Edges(obj, opts)
         local decouple = opts.decouple
         if decouple then
             local c = CreateFrame("Frame", nil, obj)
+            c.ignoreInLayout = true
             c:SetAllPoints(obj)
             c:SetFrameLevel((obj:GetFrameLevel() or 0) + 1)
             if c.SetIgnoreParentScale then
@@ -296,6 +297,9 @@ function Pixel:Edges(obj, opts)
             -- one-pixel strip rounding to zero width; with the container
             -- decoupled the geometry is already exact.
             NoSnap(t)
+            -- Ours, and not content: a LayoutFrame measures every region it
+            -- has (LayoutFrame.lua, GetLayoutChildren) unless told not to.
+            t.ignoreInLayout = true
             border.edges[i] = t
         end
         local e = border.edges
@@ -341,6 +345,7 @@ function Pixel:Fill(obj, layer, sub)
     local t = fills[obj]
     if not t then
         t = obj:CreateTexture(nil, layer or "BACKGROUND", nil, sub or -7)
+        t.ignoreInLayout = true
         t:SetAllPoints(obj)
         NoSnap(t)
         fills[obj] = t

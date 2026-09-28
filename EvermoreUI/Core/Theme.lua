@@ -250,6 +250,7 @@ function T.Shadow(frame, size, strength)
     size = size or 10
     strength = strength or T.C.shadow[4]
     local holder = CreateFrame("Frame", nil, frame)
+    holder.ignoreInLayout = true   -- never content to a LayoutFrame (see Pixel:Edges)
     holder:SetFrameLevel(math.max(frame:GetFrameLevel() - 1, 0))
     holder:SetPoint("TOPLEFT", -size, size)
     holder:SetPoint("BOTTOMRIGHT", size, -size)
