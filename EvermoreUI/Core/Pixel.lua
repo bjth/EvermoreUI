@@ -271,10 +271,16 @@ local function Snap4(obj, border)
     local db = OffCentre(b / one) < NEAR and SEAT * one or 0
     if dl == border.dl and dr == border.dr and dt == border.dt and db == border.db then return end
     border.dl, border.dr, border.dt, border.db = dl, dr, dt, db
-    e[1]:ClearAllPoints(); e[1]:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -dt); e[1]:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, -dt)
-    e[2]:ClearAllPoints(); e[2]:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", 0, db); e[2]:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, db)
-    e[3]:ClearAllPoints(); e[3]:SetPoint("TOPLEFT", host, "TOPLEFT", dl, 0); e[3]:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", dl, 0)
-    e[4]:ClearAllPoints(); e[4]:SetPoint("TOPRIGHT", host, "TOPRIGHT", -dr, 0); e[4]:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -dr, 0)
+    -- Every strip is trimmed by the seats of the sides it meets, not only
+    -- moved by its own. A seated top line lights the row inside the frame,
+    -- but the side strips still ran to the frame's top, which is on a pixel
+    -- centre too, so they lit the row above it and stood a pixel proud of
+    -- the corner (Ben's page button, 28 Sep). Trimmed alike, all four end on
+    -- the same rows and columns and the corners meet.
+    e[1]:ClearAllPoints(); e[1]:SetPoint("TOPLEFT", host, "TOPLEFT", dl, -dt);      e[1]:SetPoint("TOPRIGHT", host, "TOPRIGHT", -dr, -dt)
+    e[2]:ClearAllPoints(); e[2]:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", dl, db); e[2]:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -dr, db)
+    e[3]:ClearAllPoints(); e[3]:SetPoint("TOPLEFT", host, "TOPLEFT", dl, -dt);      e[3]:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", dl, db)
+    e[4]:ClearAllPoints(); e[4]:SetPoint("TOPRIGHT", host, "TOPRIGHT", -dr, -dt);   e[4]:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -dr, db)
 end
 
 --- A one-pixel border.
