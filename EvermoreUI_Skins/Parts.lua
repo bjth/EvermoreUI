@@ -798,16 +798,48 @@ function S.AHCategorySync(b)
             kids = sub and type(sub.subCategories) == "table" and #sub.subCategories > 0
         end
     end
+    local open = b.SelectedTexture and b.SelectedTexture:IsShown() or false
+    local over = d.hover or false
+
+    -- A top-level category is a group header, as the quest log's and the
+    -- reputation list's (collapseHeader): a box in surface2 with an edge, a
+    -- step lighter on hover, the name in the title colour. The boxes stand
+    -- a pixel in from the row's top and bottom, so stacked headers keep a
+    -- gap rather than sharing an edge. One with nothing under it shows it is
+    -- picked with a copper edge instead of an open chevron.
+    local header = b.type == "category"
+    if header and not d.ahBox then
+        local box = S.Ours(CreateFrame("Frame", nil, b))
+        box:SetPoint("TOPLEFT", b, "TOPLEFT", 0, -1)
+        box:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 1)
+        box:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
+        box:EnableMouse(false)
+        local bp = S.PainterFor(box)
+        bp:Fill("surface2")
+        bp:Border("border")
+        d.ahBox = box
+    end
+    if d.ahBox then
+        d.ahBox:SetShown(header)
+        if header then
+            local bd = S.D(d.ahBox)
+            if bd.fill then bd.fill:SetColorTexture(S.Colour(over and "surface3" or "surface2")) end
+            T.SetEdge(d.ahBox, { S.Colour((open and not kids) and "accent" or "border") })
+        end
+    end
+    -- The list item's own wash is for the rows under a header only.
+    if d.fill then d.fill:SetAlpha(header and 0 or 1) end
+    if header and b.Text then b.Text:SetTextColor(S.Colour(over and "text" or "title")) end
+
     if kids and not d.ahChev then
         d.ahChev = S.Ours(T.Chevron(b, 4))
-        d.ahChev:SetPoint("RIGHT", b, "RIGHT", -8, 0)
+        d.ahChev:SetPoint("RIGHT", b, "RIGHT", -10, 0)
     end
     if d.ahChev then
         d.ahChev:SetShown(kids and true or false)
         if kids then
-            local open = b.SelectedTexture and b.SelectedTexture:IsShown()
             d.ahChev:Point(open and "down" or "right")
-            d.ahChev:SetColorLines(T.RGBA((open or d.hover) and "text" or "textMuted"))
+            d.ahChev:SetColorLines(S.Colour((open or over) and "text" or "textMuted"))
         end
     end
 end
