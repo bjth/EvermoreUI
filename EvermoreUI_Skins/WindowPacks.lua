@@ -269,9 +269,13 @@ P{
 --  with its heading in the kit's title, and a footer with the three buttons
 --  spaced evenly across it.
 --------------------------------------------------------------------------------
-local QLOG = { head = 40, foot = 26, pad = 8, gap = 6, button = 24, small = 22 }
+-- TITLE_CANVAS_SPACER_FRAME_HEIGHT (Blizzard_WorldMap.lua: the map's top),
+-- our title band plus its rule, and the tool bar's contents.
+local MAP = { spacer = 67, top = (S.TITLE_BAND or 24) + 2, control = 30, gap = 6, search = 180, edge = 8 }
 
-local function QuestLogDetails(k)
+local QLOG = { foot = 26, pad = 8, gap = 6, button = 24, small = 22, back = 80 }
+
+local function QuestLogDetails(k, bar)
     local qm = _G.QuestMapFrame
     local det = qm and qm.DetailsFrame
     if not det then return end
@@ -286,31 +290,32 @@ local function QuestLogDetails(k)
                      { "BOTTOMRIGHT", qm, "BOTTOMRIGHT", 0, 3 } })
     local text = det.ScrollFrame
     if text then
-        k:Anchors(text, { { "TOPLEFT", det, "TOPLEFT", 5, -(QLOG.head + 3) },
+        k:Anchors(text, { { "TOPLEFT", det, "TOPLEFT", 5, -QLOG.pad },
                           { "BOTTOMLEFT", det, "BOTTOMLEFT", 5, 29 } })
     end
 
+    -- Back goes up onto the map's tool bar, where the log's settings button
+    -- sits on the list (the list's search row is hidden with the list while a
+    -- quest is open), so the page gets BackFrame's 52 pixels back.
     local back = det.BackFrame
     if back then
         k:Fade(back)
-        local head = Band(det, "head", "bottom", function(b)
-            b:SetPoint("TOPLEFT", det, "TOPLEFT", 0, 0)
-            b:SetPoint("TOPRIGHT", det, "TOPRIGHT", 0, 0)
-            b:SetHeight(QLOG.head)
-        end)
         local btn = back.BackButton
-        if btn then
-            k:Size(btn, nil, QLOG.button)
-            k:Move(btn, "LEFT", head, "LEFT", QLOG.pad, 0)
+        if btn and bar then
+            k:Size(btn, QLOG.back, MAP.control)
+            k:Move(btn, "RIGHT", bar, "RIGHT", -MAP.gap, 0)
         end
     end
-
     local rc = det.RewardsFrameContainer
     local rf = rc and rc.RewardsFrame
     if rf then
         for _, key in ipairs({ "Top", "Background", "Bottom" }) do
             if rf[key] then S.StripArt(rf[key]) end
         end
+        -- The panel rises over the end of the text as you scroll
+        -- (AdjustRewardsFrameContainer), so it has to be opaque: the window's
+        -- surface under the band's rail colour, the rule along its top.
+        k:Fill(rc, T.LOOK.window.rest.fill)
         Band(rc, "rewards", "top", function(b) b:SetAllPoints(rc) end)
         if rf.Label then
             k:Label(rf.Label, "title", true)
@@ -342,9 +347,6 @@ local function QuestLogDetails(k)
     end
 end
 
--- TITLE_CANVAS_SPACER_FRAME_HEIGHT (Blizzard_WorldMap.lua: the map's top),
--- our title band plus its rule, and the tool bar's contents.
-local MAP = { spacer = 67, top = (S.TITLE_BAND or 24) + 2, control = 30, gap = 6, search = 180, edge = 8 }
 
 P{
     name  = "WorldMapFrame",
@@ -530,7 +532,7 @@ P{
                 end
             end
         end
-        QuestLogDetails(k)
+        QuestLogDetails(k, bar)
     end,
 }
 
@@ -1165,6 +1167,60 @@ P{
 --------------------------------------------------------------------------------
 local SET_BUTTON = { w = 97, h = 28, gap = 4, bottom = 20, above = 6 }
 
+-- The right pane's tab row: the header band's height, the tabs' height, the
+-- first tab in from the pane's edge and the gap between tabs.
+local SIDEBAR = { band = 34, tab = 28, pad = 8, gap = 2, textPad = 12 }
+local SIDEBAR_LABELS = { [1] = "CHARACTER", [2] = "EQUIPMENT_MANAGER", [3] = "PET" }
+
+--- One of the pane's tabs as a text tab: its icon, frame and checked art go,
+--- a window tab face (open at the bottom) and a label take their place, on
+--- while Blizzard has it checked.
+local function SidebarTab(k, tab, id)
+    if not S.Alive(tab) then return end
+    local d = S.D(tab)
+    if not d.textTab then
+        d.textTab = true
+        S.Blank(tab)
+        S.PainterFor(tab):Fade()
+        if tab.Icon then tab.Icon:SetAlpha(0) end
+        local box = S.Ours(CreateFrame("Frame", nil, tab))
+        box:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        box:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, -EV.Pixel:One(tab))
+        box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
+        box:EnableMouse(false)
+        box.Paint = S.TabFace(box, "bottom")
+        local bd = S.D(box)
+        if bd.tabInset then bd.tabInset:Hide() end
+        local label = S.Ours(tab:CreateFontString(nil, "OVERLAY"))
+        local path = T.FontBoldPath and T.FontBoldPath() or T.FontPath()
+        if path then label:SetFont(path, 12, "") end
+        label:SetPoint("CENTER", tab, "CENTER", 0, 0)
+        local key = SIDEBAR_LABELS[id]
+        local text = (key and type(_G[key]) == "string" and _G[key])
+            or (PAPERDOLL_SIDEBARS and PAPERDOLL_SIDEBARS[id] and PAPERDOLL_SIDEBARS[id].name) or ""
+        label:SetText(text)
+        d.label = label
+        local function Sync()
+            local okC, on = pcall(tab.GetChecked, tab)
+            local okE, enabled = pcall(tab.IsEnabled, tab)
+            local st = { on = okC and on or false, hover = tab:IsMouseOver() or false,
+                         disabled = okE and enabled == false }
+            tab:SetAlpha(1)   -- Blizzard fades a disabled tab to half; ours says it in the label
+            box.Paint(st.on, st.hover)
+            label:SetTextColor(T.C4(T.Resolve(T.LOOK.tab, st).text))
+        end
+        d.Sync = Sync
+        T.Watch(box, Sync)
+        k:After(tab, "SetChecked", Sync)
+        k:After(tab, "Enable", Sync)
+        k:After(tab, "Disable", Sync)
+        k:Hook(tab, "OnEnter", Sync)
+        k:Hook(tab, "OnLeave", Sync)
+    end
+    k:Size(tab, math.floor(d.label:GetStringWidth() + 2 * SIDEBAR.textPad + 0.5), SIDEBAR.tab)
+    d.Sync()
+end
+
 local function ModeTab(k, tab)
     local SL = T.LOOK.sideTab
     k:Size(tab, SL.box, SL.box)
@@ -1281,15 +1337,28 @@ P{
             end)
         end
 
-        for i = 1, 3 do
-            local tab = _G["PaperDollSidebarTab" .. i]
-            if tab then
-                local d = OverlayButton(k, tab, nil, { tab.Icon }, function()
-                    local ok, on = pcall(tab.GetChecked, tab)
-                    return ok and on and true or false
-                end)
-                if d then
-                    k:After(tab, "SetChecked", function() if d.Repaint then d.Repaint() end end)
+        -- The pane's tabs (PaperDollSidebarTab1-3: stats, equipment sets,
+        -- pet; 42px icon squares in UI-Character-Info-StatTab frames, in a
+        -- 233x85 holder under the pane's stone). Text tabs, as the talent
+        -- window's Primary and Secondary, standing on the header band's rule,
+        -- which is now only as tall as they are: the stone (and every pane
+        -- anchored under it) comes up to meet them.
+        if right and stone then
+            k:Size(stone, nil, (S.TITLE_BAND or 20) + 2 - 20 + SIDEBAR.band)
+            local band = S.D(right).bands and S.D(right).bands.header
+            local prev
+            for i = 1, 3 do
+                local tab = _G["PaperDollSidebarTab" .. i]
+                if tab and band then
+                    SidebarTab(k, tab, i)
+                    if tab:IsShown() then
+                        if prev then
+                            k:Move(tab, "BOTTOMLEFT", prev, "BOTTOMRIGHT", SIDEBAR.gap, 0)
+                        else
+                            k:Move(tab, "BOTTOMLEFT", band, "BOTTOMLEFT", SIDEBAR.pad, 0)
+                        end
+                        prev = tab
+                    end
                 end
             end
         end
@@ -1795,7 +1864,7 @@ S.TitleInfo = TitleInfo
 --
 --    InspectFrameInset ButtonFrameTemplate's inset, 4,-60 to -6,26: the slots
 --                      hang off its corners. Its box goes; it moves up under
---                      our title band, and the window is as much shorter.
+--                      our title band.
 --    InspectModelFrame 231x320 at 52,-66, with Char-Corner / Char-Inner
 --                      border pieces round it and a race backdrop in four
 --                      BackgroundTop/Bot textures (set per inspect). All art:
@@ -1836,9 +1905,12 @@ P{
             if inset.NineSlice then k:Fade(inset.NineSlice) end
             k:NoFill(inset)
             EV.Pixel:ShowEdges(inset, false)
+            -- Up under the title band. The window keeps Blizzard's height:
+            -- the weapons row is on the frame's bottom (BOTTOMLEFT +116 +16),
+            -- so a shorter window brought it up level with the columns' last
+            -- slots, and the right column ran into the talents button.
             k:Anchors(inset, { { "TOPLEFT", f, "TOPLEFT", 4, -(60 - INSPECT.lift) },
                                { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -6, 26 } })
-            k:Size(f, nil, 424 - INSPECT.lift)
         end
         if model then
             for _, key in ipairs(INSPECT_ART) do
