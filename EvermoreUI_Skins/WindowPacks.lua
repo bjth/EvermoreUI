@@ -4564,7 +4564,8 @@ P{
 -- box by), which sets the window's width; head: room above a box for its
 -- heading; inset: a box's own padding round its rows (4).
 local CFG = { tool = 40, footer = 36, button = 24, pad = 8, gap = 6, side = 136,
-              row = 22, tab = 28, short = 96, text = 10, list = 558, head = 26, inset = 4 }
+              row = 22, tab = 28, short = 96, text = 10, list = 558, head = 26, inset = 4,
+              filters = 85 }
 
 local cfgBoxes = setmetatable({}, { __mode = "k" })
 
@@ -4609,12 +4610,12 @@ end
 
 -- A category row: a list item, copper while its panel is open (Blizzard's
 -- LockHighlight), its blue highlight art gone.
-local function CfgCategory(b)
+local function CfgCategory(b, keepHeight)
     if not S.Alive(b) then return end
     local d = S.D(b)
     local hi = b.Highlight or (b.GetHighlightTexture and b:GetHighlightTexture())
     if hi then S.StripArt(hi) end
-    b:SetHeight(CFG.row)
+    if not keepHeight then b:SetHeight(CFG.row) end
     local text = b.NormalText
     if text then
         text:ClearAllPoints()
@@ -4798,13 +4799,119 @@ P{
             k:Move(cancel, "RIGHT", okay, "LEFT", -CFG.gap, 0)
         end
 
+        ------------------------------------------------------------ Combat log
+        -- Its page is the filter list (85 tall), a row under it of the
+        -- move arrows and Copy / Add / Delete, then five tabs standing on
+        -- the panel, which Blizzard pushes 135 down on show. Ours: the list
+        -- flat with list-item rows, the row's buttons ours at 24, the tabs
+        -- window tab faces on a hairline across the page.
+        local cs = _G.ChatConfigCombatSettings
+        local filters = cs and cs.Filters
+        local cbg = _G.ChatConfigBackgroundFrame
+        local tabTop = CFG.filters + CFG.gap + CFG.button + CFG.gap + CFG.tab
+        if filters then
+            CfgFlat(k, filters)
+            k:Anchors(filters, {
+                { "TOPLEFT",     cs, "TOPLEFT",  CFG.pad - CFG.inset, -CFG.gap },
+                { "BOTTOMRIGHT", cs, "TOPRIGHT", -CFG.pad, -(CFG.gap + CFG.filters) },
+            })
+            local del = _G.ChatConfigCombatSettingsFiltersDeleteButton
+            local add = _G.ChatConfigCombatSettingsFiltersAddFilterButton
+            local copy = _G.ChatConfigCombatSettingsFiltersCopyFilterButton
+            if del then
+                k:Size(del, CFG.short, CFG.button)
+                k:Move(del, "TOPRIGHT", filters, "BOTTOMRIGHT", 0, -CFG.gap)
+            end
+            if add and del then
+                k:Size(add, CFG.short, CFG.button)
+                k:Move(add, "RIGHT", del, "LEFT", -CFG.gap, 0)
+            end
+            if copy and add then
+                k:Size(copy, CFG.short, CFG.button)
+                k:Move(copy, "RIGHT", add, "LEFT", -CFG.gap, 0)
+            end
+            local up, down = _G.ChatConfigMoveFilterUpButton, _G.ChatConfigMoveFilterDownButton
+            for _, pair in ipairs({ { up, "up" }, { down, "down" } }) do
+                local b = pair[1]
+                if b then
+                    OverlayButton(k, b, pair[2])
+                    k:Size(b, CFG.button, CFG.button)
+                    b:SetHitRectInsets(0, 0, 0, 0)
+                end
+            end
+            if up then k:Move(up, "TOPLEFT", filters, "BOTTOMLEFT", CFG.inset, -CFG.gap) end
+            if down and up then k:Move(down, "LEFT", up, "RIGHT", CFG.gap, 0) end
+        end
+        if cs then
+            -- The page's rule the tabs stand on.
+            local d = S.D(cs)
+            if not d.cfgRule then
+                d.cfgRule = S.Ours(cs:CreateTexture(nil, "BORDER", nil, 1))
+                EV.Pixel.NoSnap(d.cfgRule)
+                d.cfgRule:SetPoint("TOPLEFT", cs, "TOPLEFT", 0, -tabTop)
+                d.cfgRule:SetPoint("TOPRIGHT", cs, "TOPRIGHT", 0, -tabTop)
+                local function Paint()
+                    d.cfgRule:SetColorTexture(S.Colour("divider"))
+                    d.cfgRule:SetHeight(EV.Pixel:Line(cs))
+                end
+                Paint()
+                T.Watch(d.cfgRule, Paint)
+            end
+        end
+        local function CombatTabs(selected)
+            local prev
+            for i = 1, #(_G.COMBAT_CONFIG_TABS or {}) do
+                local tab = _G["CombatConfigTab" .. i]
+                if tab then
+                    CfgTab(k, tab)
+                    tab:SetAlpha(1)
+                    if selected then S.D(tab).cfgOn = (i == selected) end
+                    CfgTabState(tab)
+                    tab:ClearAllPoints()
+                    if prev then
+                        tab:SetPoint("BOTTOMLEFT", prev, "BOTTOMRIGHT", 2, 0)
+                    elseif cs then
+                        tab:SetPoint("BOTTOMLEFT", cs, "TOPLEFT", CFG.pad, -tabTop)
+                    end
+                    prev = tab
+                end
+            end
+        end
+        CombatTabs()
+        -- Blizzard moves the panel down for the combat page on every show
+        -- and back on hide; ours is the same, from our own top.
+        local function Ground(combat)
+            if cbg and cats then
+                k:Anchors(cbg, {
+                    { "TOPLEFT",     cats, "TOPRIGHT", 0, combat and -tabTop or 0 },
+                    { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+                })
+            end
+        end
+        Ground(cs and cs:IsShown())
+        k:Once(f, "cfgCombat", function()
+            if type(_G.ChatConfigCombat_OnShow) == "function" then
+                hooksecurefunc("ChatConfigCombat_OnShow", function() Ground(true); CombatTabs() end)
+            end
+            if type(_G.ChatConfigCombat_OnHide) == "function" then
+                hooksecurefunc("ChatConfigCombat_OnHide", function() Ground(false) end)
+            end
+            if type(_G.ChatConfig_UpdateCombatTabs) == "function" then
+                hooksecurefunc("ChatConfig_UpdateCombatTabs", function(id) CombatTabs(id) end)
+            end
+            if type(_G.ChatConfigCombat_InitButton) == "function" then
+                hooksecurefunc("ChatConfigCombat_InitButton", function(b) CfgCategory(b, true) end)
+            end
+        end)
+
         -- As wide as the widest list with a pad each side of it.
         k:Size(f, 1 + CFG.side + CFG.pad - CFG.inset + CFG.list + CFG.pad + 1, nil)
 
         -- The first box of each page a pad in from the categories' hairline
         -- (its rows start at the box's inset), its heading above it.
         for _, name in ipairs({ "ChatConfigChatSettingsLeft", "ChatConfigChannelSettingsLeft",
-                                "ChatConfigOtherSettingsCombat", "ChatConfigTextToSpeechChannelSettingsLeft" }) do
+                                "ChatConfigOtherSettingsCombat", "ChatConfigTextToSpeechChannelSettingsLeft",
+                                "CombatConfigMessageSourcesDoneBy" }) do
             local box = _G[name]
             if box then k:Move(box, "TOPLEFT", box:GetParent(), "TOPLEFT", CFG.pad - CFG.inset, -CFG.head) end
         end
