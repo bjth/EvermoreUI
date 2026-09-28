@@ -178,7 +178,7 @@ end
 --  Next on the inbox; your money, Send and Cancel on send. The body keeps a
 --  sunk well of its own.
 --------------------------------------------------------------------------------
-local MAIL = { row = 45, pad = 8, gap = 6, footer = 36, button = 24, short = 96, open = 120 }
+local MAIL = { row = 45, pad = 8, gap = 6, footer = 36, button = 24, short = 96, open = 120, invoice = 12 }
 
 local function MailRowSync(row)
     local d = S.D(row)
@@ -260,9 +260,12 @@ P{
                 local row = _G["MailItem" .. i]
                 if row then
                     MailRow(row, i)
+                    -- Inset from the window (Ben: full width felt forced
+                    -- here, unlike loot's short list).
+                    local y = -(top + MAIL.pad + (i - 1) * MAIL.row)
                     k:Anchors(row, {
-                        { "TOPLEFT",  f, "TOPLEFT",  1, -(top + (i - 1) * MAIL.row) },
-                        { "TOPRIGHT", f, "TOPRIGHT", -1, -(top + (i - 1) * MAIL.row) },
+                        { "TOPLEFT",  f, "TOPLEFT",  MAIL.pad, y },
+                        { "TOPRIGHT", f, "TOPRIGHT", -MAIL.pad, y },
                     })
                     row:SetHeight(MAIL.row)
                     MailRowSync(row)
@@ -445,9 +448,40 @@ P{
                 region:SetPoint(pt, rel, rp, x, (y or 0) + MAIL.lift)
             end
         end
+        -- The invoice was laid out for the parchment's border: its text 30
+        -- in and 35 down, the price column 27 from the right. Everything
+        -- else in it hangs off these two, so moving them brings it all in.
+        local invoice = _G.OpenMailInvoiceFrame
+        if invoice then
+            if _G.OpenMailInvoiceItemLabel then
+                k:Move(_G.OpenMailInvoiceItemLabel, "TOPLEFT", invoice, "TOPLEFT", MAIL.invoice, -MAIL.invoice)
+            end
+            if _G.OpenMailInvoiceSalePrice then
+                k:Move(_G.OpenMailInvoiceSalePrice, "TOPRIGHT", invoice, "TOPRIGHT", -MAIL.invoice, -(77 - 35 + MAIL.invoice))
+            end
+        end
+        local order = _G.ConsortiumMailFrame
+        if order and order.OpeningText then
+            k:Move(order.OpeningText, "TOPLEFT", order, "TOPLEFT", MAIL.invoice, -MAIL.invoice)
+        end
+
         k:After(f, "Update", function()
             for _, b in ipairs(f.activeAttachmentButtons or {}) do Lift(b) end
-            Lift(_G.OpenMailAttachmentText)
+            -- The label over the attachments: Blizzard left-aligns it and
+            -- centres the icons; centred with them.
+            local label = _G.OpenMailAttachmentText
+            if label then
+                -- Blizzard adds its TOPLEFT without clearing ours, so look
+                -- for its point among whatever the label has.
+                for i = 1, (label:GetNumPoints() or 0) do
+                    local ok, pt, rel, rp, _, y = pcall(label.GetPoint, label, i)
+                    if ok and pt == "TOPLEFT" and rel == f and rp == "BOTTOMLEFT" then
+                        label:ClearAllPoints()
+                        label:SetPoint("TOP", f, "BOTTOM", 0, (y or 0) + MAIL.lift)
+                        break
+                    end
+                end
+            end
             if body then
                 local h = S.Num(body:GetHeight())
                 if h then
