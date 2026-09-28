@@ -675,6 +675,173 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  0a4. Auction house rows (Blizzard_AuctionHouseUI). Three row kinds, all
+--      recognised by the atlases Blizzard declares on them:
+--
+--      ahLine      AuctionHouseItemListLineTemplate (every results, sell and
+--                  auctions table) and AuctionHouseAuctionsSummaryLineTemplate
+--                  (the auctions summary): SelectedHighlight
+--                  (auctionhouse-ui-row-select) shown for the chosen row,
+--                  HighlightTexture on hover, and on the table lines a
+--                  NormalTexture stripe re-set on every scroll.
+--      ahCategory  AuctionCategoryButtonTemplate: FilterBg plate, Blizzard's
+--                  select and tab-highlight art, tree Lines, all re-set by
+--                  AuctionHouseFilterButton_SetUp on every refresh.
+--      ahItemCell  AuctionHouseTableCellItemDisplayTemplate: a 14px icon
+--                  under a static small-border atlas.
+--
+--      Ours: rows are list items (clear, a wash on hover, copper when
+--      chosen), read from Blizzard's own highlight textures with their art
+--      cleared at the source; table rows get a hairline under them instead
+--      of stripes. Icons go through EV.Icons, the edge in the item's quality.
+--------------------------------------------------------------------------------
+local function AHRowHooks(b, texes)
+    local d = S.D(b)
+    if d.ahHooked then return end
+    d.ahHooked = true
+    local function Sync() if d.Repaint then d.Repaint() end end
+    for _, t in ipairs(texes) do
+        if t then
+            hooksecurefunc(t, "Show", Sync)
+            hooksecurefunc(t, "Hide", Sync)
+            hooksecurefunc(t, "SetShown", Sync)
+        end
+    end
+end
+
+local function AHIcon(icon, host)
+    if not (icon and icon.SetTexCoord) then return end
+    EV.Icons:Style(icon, { host = host })
+end
+
+R{
+    name = "ahLine",
+    type = "Button",
+    keys = { "SelectedHighlight" },
+    test = function(b) return S.ArtIs(b.SelectedHighlight, "auctionhouse%-ui%-row%-select") end,
+    paint = function(b, p)
+        local sel, hi = b.SelectedHighlight, b.HighlightTexture
+        S.StripArt(sel)
+        if hi then S.StripArt(hi) end
+        local normal = b.GetNormalTexture and b:GetNormalTexture()
+        if normal then S.StripArt(normal) end
+        if b.IconBorder then S.StripArt(b.IconBorder) end
+        if b.Icon then AHIcon(b.Icon, b) end
+        local d = S.D(b)
+        -- The table lines (not the summary list) get a hairline under them.
+        if normal and not d.ahRule then
+            d.ahRule = S.Ours(b:CreateTexture(nil, "BORDER", nil, 1))
+            EV.Pixel.NoSnap(d.ahRule)
+            d.ahRule:SetPoint("BOTTOMLEFT"); d.ahRule:SetPoint("BOTTOMRIGHT")
+            local function Paint()
+                d.ahRule:SetColorTexture(S.Colour("divider"))
+                d.ahRule:SetHeight(EV.Pixel:Line(b))
+            end
+            Paint()
+            T.Watch(d.ahRule, Paint)
+        end
+        p:Fill("surface2")
+        p:States(LOOK.listItem, { on = function() return sel:IsShown() end })
+        AHRowHooks(b, { sel })
+    end,
+}
+
+R{
+    name = "ahCategory",
+    type = "Button",
+    keys = { "SelectedTexture", "HighlightTexture", "Lines", "NormalTexture" },
+    test = function(b) return S.ArtIs(b.Lines, "auctionhouse%-nav%-button") end,
+    paint = function(b, p)
+        for _, key in ipairs({ "SelectedTexture", "HighlightTexture", "Lines", "NormalTexture" }) do
+            S.StripArt(b[key])
+        end
+        local d = S.D(b)
+        p:Fill("surface2")
+        p:States(LOOK.listItem, {
+            on = function() return b.SelectedTexture:IsShown() end,
+        })
+        -- Blizzard shows its highlight itself (OnEnter/OnLeave); follow it
+        -- as well as the selection, which SetUp sets with SetShown.
+        AHRowHooks(b, { b.SelectedTexture, b.HighlightTexture })
+        if not d.ahHover then
+            d.ahHover = true
+            hooksecurefunc(b.HighlightTexture, "Show", function() d.hover = true; if d.Repaint then d.Repaint() end end)
+            hooksecurefunc(b.HighlightTexture, "Hide", function() d.hover = false; if d.Repaint then d.Repaint() end end)
+        end
+    end,
+}
+
+local function AHQuality(icon, itemKeyInfo)
+    local q = type(itemKeyInfo) == "table" and itemKeyInfo.quality
+    if q and q > 1 and C_Item and C_Item.GetItemQualityColor then
+        local r, g, bl = C_Item.GetItemQualityColor(q)
+        if r then EV.Icons:SetState(icon, r, g, bl); return end
+    end
+    EV.Icons:SetState(icon, nil)
+end
+
+R{
+    name = "ahItemCell",
+    keys = { "Icon", "IconBorder", "Text" },
+    test = function(c) return S.ArtIs(c.IconBorder, "auctionhouse%-itemicon%-small%-border") end,
+    paint = function(c, p)
+        S.StripArt(c.IconBorder)
+        AHIcon(c.Icon, c)
+        local d = S.D(c)
+        if not d.ahQuality and type(c.UpdateDisplay) == "function" then
+            d.ahQuality = true
+            hooksecurefunc(c, "UpdateDisplay", function(self, _, itemKeyInfo) AHQuality(self.Icon, itemKeyInfo) end)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  0a5. Column header     ColumnDisplayButtonShortTemplate (SharedXML): the
+--      auction house's sortable columns, the who list, the guild roster.
+--      WhoFrame-ColumnTabs caps and middle, the tab-highlight on hover.
+--
+--      Ours: no box. The header row is the table's band (the pack's); each
+--      column is its label, muted at rest and lit on hover, with a hairline
+--      down its right edge to mark the column.
+--------------------------------------------------------------------------------
+R{
+    name = "columnHeader",
+    type = "Button",
+    keys = { "Left", "Middle", "Right" },
+    test = function(b) return S.ArtIsFile(b.Left, "Interface\\FriendsFrame\\WhoFrame-ColumnTabs") end,
+    paint = function(b, p)
+        for _, key in ipairs({ "Left", "Middle", "Right" }) do S.StripArt(b[key]) end
+        local h = b.GetHighlightTexture and b:GetHighlightTexture()
+        if h then S.StripArt(h) end
+        local d = S.D(b)
+        if not d.colRule then
+            d.colRule = S.Ours(b:CreateTexture(nil, "BORDER", nil, 1))
+            EV.Pixel.NoSnap(d.colRule)
+            d.colRule:SetPoint("TOPRIGHT", b, "TOPRIGHT", 0, -4)
+            d.colRule:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, 4)
+            local function Paint()
+                d.colRule:SetColorTexture(S.Colour("divider"))
+                d.colRule:SetWidth(EV.Pixel:Line(b))
+            end
+            Paint()
+            T.Watch(d.colRule, Paint)
+        end
+        -- The sort arrow in our text colour rather than Blizzard's gold.
+        local arrow = rawget(b, "Arrow")
+        if arrow and arrow.SetDesaturated then
+            arrow:SetDesaturated(true)
+            arrow:SetVertexColor(T.RGBA("accent"))
+        end
+        local label = b.GetFontString and b:GetFontString()
+        p:States({
+            rest  = { text = "textMuted" },
+            hover = { text = "text" },
+            disabled = { text = "textMuted" },
+        }, { label = label })
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  0b. Slider             UISliderTemplate and friends
 --      Also claimed before `window` could have it. A slider has a NineSlice
 --      (its track is one), so the old fingerprint painted sliders as windows:

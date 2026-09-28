@@ -3994,3 +3994,452 @@ P{
         ACHeight(f)
     end,
 }
+
+--------------------------------------------------------------------------------
+--  AuctionHouseFrame (Blizzard_AuctionHouseUI, Shared + Classic family, which
+--  Camelot loads). An 800x538 PortraitFrameTemplate with three display modes
+--  (AuctionHouseFrameDisplayMode), each a set of sub-frames SetDisplayMode
+--  shows:
+--
+--    Buy       SearchBar (618x40 at TOPRIGHT -12,-29: favourites, search box,
+--              filter, Search), CategoriesList (168 wide under it, an
+--              InsetFrameTemplate nine-slice, parchment Background, a
+--              ScrollBox of AuctionCategoryButtonTemplate rows) and
+--              BrowseResultsFrame (an item list to the right). Picking a
+--              result swaps the results for ItemBuyFrame or
+--              CommoditiesBuyFrame (a Back button, an item card, the offers
+--              list, bid and buyout at the bottom).
+--    Sell      ItemSellFrame / CommoditiesSellFrame (363 wide, a
+--              VerticalLayoutFrame of aligned controls on a parchment, a
+--              "Create Auction" tab of three atlases over its top edge) with
+--              ItemSellList / CommoditiesSellList beside it.
+--    Auctions  AuctionsFrame: Auctions / Bids top tabs, a summary list on the
+--              left, the auctions or bids table, Cancel Auction (or bid and
+--              buyout) hanging 22 below the frame.
+--
+--  Every table is an AuctionHouseItemListTemplate: a background texture and
+--  nine-slice, a 19px HeaderContainer, a ScrollBox under it and a classic
+--  scroll bar overhanging the right edge, and a RefreshFrame (the count and a
+--  refresh button) pushed up by per-list offsets to sit on the row above.
+--  The money is a ThinGoldEdge box on an inset under the bottom-left corner.
+--  The mode tabs hang below the window, as the classic character window's.
+--
+--  Ours: a 40px tool bar under the title in every mode (the search in Buy,
+--  the "Create Auction" heading in Sell, the Auctions / Bids tabs in
+--  Auctions; the refresh on its right where the mode has one) and a footer
+--  band (money left, the mode's action buttons right). Between them nothing
+--  is boxed: the lists sit straight on the window, split by hairlines. Tables
+--  have a header band, rows (ahLine), and the scroll bar centred in a gutter
+--  of their own. Item cards are tile cards.
+--------------------------------------------------------------------------------
+local AH = { tool = 40, control = 30, pad = 8, gap = 6, footer = 36, button = 24,
+             side = 168, sell = 363, gutter = 20, head = 23, headH = 19,
+             short = 96, long = 120, wide = 140, back = 96, card = 72 }
+
+-- An AuctionHouseBackgroundTemplate (or any inset nine-slice) left as a plain
+-- rect: no picture, box, fill or edge.
+local function AHFlat(k, frame)
+    if not S.Alive(frame) then return end
+    if frame.Background then S.StripArt(frame.Background) end
+    local ns = frame.NineSlice
+    if ns then
+        S.PainterFor(ns):FadeSlice(ns)
+        k:NoFill(ns)
+        EV.Pixel:ShowEdges(ns, false)
+    end
+    k:NoFill(frame)
+    EV.Pixel:ShowEdges(frame, false)
+end
+
+-- A hairline of ours down one side of a frame, to split two panes.
+local function AHSeam(host, side)
+    local d = S.D(host)
+    local key = "ahSeam" .. side
+    if d[key] then return d[key] end
+    local t = S.Ours(host:CreateTexture(nil, "BORDER", nil, 2))
+    EV.Pixel.NoSnap(t)
+    local x = side == "RIGHT" and 0 or 0
+    t:SetPoint("TOP" .. side, host, "TOP" .. side, x, 0)
+    t:SetPoint("BOTTOM" .. side, host, "BOTTOM" .. side, x, 0)
+    local function Paint()
+        t:SetColorTexture(S.Colour("divider"))
+        t:SetWidth(EV.Pixel:Line(host))
+    end
+    Paint()
+    T.Watch(t, Paint)
+    d[key] = t
+    return t
+end
+
+-- The refresh control: the button a tool bar control, its gold icon in our
+-- text colour, the count beside it muted.
+local function AHRefresh(k, rf, point, rel, relPoint, x, y)
+    if not S.Alive(rf) then return end
+    k:Move(rf, point, rel, relPoint, x, y)
+    local b = rf.RefreshButton
+    if b then
+        k:Size(b, AH.control, AH.control)
+        local icon = b.Icon
+        if icon and icon.SetDesaturated then
+            icon:SetDesaturated(true)
+            icon:SetVertexColor(T.RGBA("text"))
+        end
+    end
+    if rf.TotalQuantity then k:Label(rf.TotalQuantity, "textMuted") end
+end
+
+-- An item list: a header band across the top, the rows under it to the
+-- gutter, the scroll bar centred in the gutter.
+local function AHList(k, list)
+    if not S.Alive(list) then return end
+    AHFlat(k, list)
+    local head = Band(list, "head", "bottom", function(b)
+        b:SetPoint("TOPLEFT", list, "TOPLEFT", 0, 0)
+        b:SetPoint("TOPRIGHT", list, "TOPRIGHT", 0, 0)
+        b:SetHeight(AH.head)
+    end)
+    local hc = list.HeaderContainer
+    if hc then
+        k:Anchors(hc, {
+            { "TOPLEFT",  head, "TOPLEFT",  AH.pad - 4, -math.floor((AH.head - AH.headH) / 2) },
+            { "TOPRIGHT", head, "TOPRIGHT", -AH.gutter, -math.floor((AH.head - AH.headH) / 2) },
+        })
+    end
+    local box, bar = list.ScrollBox, list.ScrollBar
+    if box then
+        k:Anchors(box, {
+            { "TOPLEFT",     head, "BOTTOMLEFT", 0, -1 },
+            { "BOTTOMRIGHT", list, "BOTTOMRIGHT", -AH.gutter, 0 },
+        })
+        if bar then
+            local w = S.Num(bar:GetWidth()) or 8
+            local x = math.floor((AH.gutter - w) / 2 + 0.5)
+            k:Anchors(bar, {
+                { "TOPLEFT",    box, "TOPRIGHT",    x, -AH.gap },
+                { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, AH.gap },
+            })
+        end
+    end
+    if list.ResultsText then k:Label(list.ResultsText, "textMuted") end
+end
+
+-- A side list (categories, the auctions summary): rows from the top edge to
+-- the gutter, the scroll bar centred in it, a hairline down the right.
+local function AHSideList(k, list)
+    if not S.Alive(list) then return end
+    AHFlat(k, list)
+    AHSeam(list, "RIGHT")
+    local box, bar = list.ScrollBox, list.ScrollBar
+    if box then
+        k:Anchors(box, {
+            { "TOPLEFT",     list, "TOPLEFT",     0, 0 },
+            { "BOTTOMRIGHT", list, "BOTTOMRIGHT", -AH.gutter, 0 },
+        })
+        if bar then
+            local w = S.Num(bar:GetWidth()) or 8
+            local x = math.floor((AH.gutter - w) / 2 + 0.5)
+            k:Anchors(bar, {
+                { "TOPLEFT",    box, "TOPRIGHT",    x, -AH.gap },
+                { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, AH.gap },
+            })
+        end
+    end
+end
+
+-- An item card: the tile Look, the header frame art and the empty slot art
+-- gone (the item button's well shows instead).
+local function AHCard(k, disp)
+    if not S.Alive(disp) then return end
+    AHFlat(k, disp)
+    ClearAtlas(disp, "auctionhouse%-itemheaderframe")
+    local tile = T.LOOK.tile.rest
+    k:Fill(disp, tile.fill)
+    k:Border(disp, tile.edge)
+    local ib = disp.ItemButton
+    if ib and ib.EmptyBackground then S.StripArt(ib.EmptyBackground) end
+end
+
+-- A button sized to our footer kinds.
+local function AHButton(k, b, w)
+    if b then k:Size(b, w, AH.button) end
+end
+
+P{
+    name  = "AuctionHouseFrame",
+    addon = "Blizzard_AuctionHouseUI",
+    apply = function(f, k)
+        local top = (S.TITLE_BAND or 24) + 2
+        local under = -(top + AH.tool)
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(AH.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(AH.footer)
+        end)
+
+        -- The money: on the footer, left, out of its gold box and inset.
+        if f.MoneyFrameInset then k:Mute(f.MoneyFrameInset) end
+        local mb = f.MoneyFrameBorder
+        if mb then
+            k:Fade(mb)
+            k:NoFill(mb)
+            EV.Pixel:ShowEdges(mb, false)
+            local money = mb.MoneyFrame
+            if money then
+                if money.SetResizeToFit and not S.D(money).fit then
+                    S.D(money).fit = true
+                    money:SetResizeToFit(true)
+                    if money.UpdateWidth then pcall(money.UpdateWidth, money) end
+                end
+                k:Move(money, "LEFT", foot, "LEFT", AH.pad, 0)
+            end
+        end
+
+        ------------------------------------------------------------ Buy
+        local sb = f.SearchBar
+        if sb then
+            k:Anchors(sb, {
+                { "TOPLEFT",     bar, "TOPLEFT",     AH.pad, 0 },
+                { "BOTTOMRIGHT", bar, "BOTTOMRIGHT", -AH.pad, 0 },
+            })
+            local fav, box, filter, go = sb.FavoritesSearchButton, sb.SearchBox, sb.FilterButton, sb.SearchButton
+            if fav then
+                k:Size(fav, AH.control, AH.control)
+                k:Move(fav, "LEFT", sb, "LEFT", 0, 0)
+            end
+            if go then
+                k:Size(go, AH.long, AH.control)
+                k:Move(go, "RIGHT", sb, "RIGHT", 0, 0)
+            end
+            if filter then
+                k:Size(filter, nil, AH.control)
+                if go then k:Move(filter, "RIGHT", go, "LEFT", -AH.gap, 0) end
+            end
+            if box and fav and filter then
+                k:Anchors(box, {
+                    { "LEFT",  fav,    "RIGHT", AH.gap + 4, 0 },
+                    { "RIGHT", filter, "LEFT",  -AH.gap, 0 },
+                })
+                k:Size(box, nil, AH.control)
+            end
+        end
+
+        local cats = f.CategoriesList
+        if cats then
+            k:Anchors(cats, {
+                { "TOPLEFT",    f,    "TOPLEFT",    1, under },
+                { "BOTTOMLEFT", foot, "TOPLEFT",    0, 0 },
+            })
+            k:Size(cats, AH.side, nil)
+            AHSideList(k, cats)
+        end
+
+        local results = f.BrowseResultsFrame
+        if results and cats then
+            k:Anchors(results, {
+                { "TOPLEFT",     cats, "TOPRIGHT", 0, 0 },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+            local list = results.ItemList
+            if list then
+                k:Anchors(list, { { "TOPLEFT", results, "TOPLEFT" }, { "BOTTOMRIGHT", results, "BOTTOMRIGHT" } })
+                AHList(k, list)
+            end
+        end
+
+        -- A picked item or commodity: Back and the refresh on the pane's
+        -- first line, the card, the offers.
+        for _, key in ipairs({ "ItemBuyFrame", "CommoditiesBuyFrame" }) do
+            local pane = f[key]
+            if pane and cats then
+                k:Anchors(pane, {
+                    { "TOPLEFT",     cats, "TOPRIGHT", 0, 0 },
+                    { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+                })
+                local back = pane.BackButton
+                if back then
+                    k:Size(back, AH.back, AH.button)
+                    k:Move(back, "TOPLEFT", pane, "TOPLEFT", AH.pad, -AH.gap)
+                end
+            end
+        end
+        local ib = f.ItemBuyFrame
+        if ib then
+            local back = ib.BackButton
+            local disp = ib.ItemDisplay
+            if disp and back then
+                AHCard(k, disp)
+                k:Anchors(disp, {
+                    { "TOPLEFT",  back, "BOTTOMLEFT", 0, -AH.gap },
+                    { "TOPRIGHT", ib,   "TOPRIGHT",   -AH.pad, 0 },
+                })
+                k:Size(disp, nil, AH.card)
+            end
+            -- Bid and buyout on the footer, right.
+            local buyout, bid = ib.BuyoutFrame, ib.BidFrame
+            if buyout then
+                k:Move(buyout, "RIGHT", foot, "RIGHT", -AH.pad, 0)
+                AHButton(k, buyout.BuyoutButton, AH.long)
+            end
+            if bid and buyout then
+                k:Move(bid, "RIGHT", buyout, "LEFT", -AH.pad * 2, 0)
+                AHButton(k, bid.BidButton, AH.long)
+            end
+            local list = ib.ItemList
+            if list and disp then
+                k:Anchors(list, {
+                    { "TOPLEFT",     disp, "BOTTOMLEFT", -AH.pad, -AH.gap },
+                    { "BOTTOMRIGHT", ib,   "BOTTOMRIGHT", 0, 0 },
+                })
+                AHList(k, list)
+                if back then AHRefresh(k, list.RefreshFrame, "RIGHT", ib, "TOPRIGHT", -AH.pad, -(AH.gap + AH.button / 2)) end
+            end
+        end
+        local cb = f.CommoditiesBuyFrame
+        if cb then
+            local back, show, list = cb.BackButton, cb.BuyDisplay, cb.ItemList
+            if show and back then
+                AHFlat(k, show)
+                AHSeam(show, "RIGHT")
+                k:Anchors(show, {
+                    { "TOPLEFT",    back, "BOTTOMLEFT", -AH.pad, -AH.gap },
+                    { "BOTTOMLEFT", cb,   "BOTTOMLEFT", 0, 0 },
+                })
+                AHCard(k, show.ItemDisplay)
+                AHButton(k, show.BuyButton, nil)
+            end
+            if list and show then
+                k:Anchors(list, {
+                    { "TOPLEFT",     show, "TOPRIGHT",   0, 0 },
+                    { "BOTTOMRIGHT", cb,   "BOTTOMRIGHT", 0, 0 },
+                })
+                AHList(k, list)
+                AHRefresh(k, list.RefreshFrame, "RIGHT", cb, "TOPRIGHT", -AH.pad, -(AH.gap + AH.button / 2))
+            end
+        end
+
+        ------------------------------------------------------------ Sell
+        -- The form on the left, its list on the right, one hairline between.
+        local isf, isl = f.ItemSellFrame, f.ItemSellList
+        if isf then
+            k:Anchors(isf, {
+                { "TOPLEFT",    f,    "TOPLEFT", 1, under },
+                { "BOTTOMLEFT", foot, "TOPLEFT", 0, 0 },
+            })
+            k:Size(isf, AH.sell, nil)
+        end
+        if isl and isf then
+            k:Anchors(isl, {
+                { "TOPLEFT",     isf,  "TOPRIGHT", 0, 0 },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+        end
+        for _, key in ipairs({ "ItemSellFrame", "CommoditiesSellFrame" }) do
+            local sf = f[key]
+            if sf then
+                AHFlat(k, sf)
+                AHSeam(sf, "RIGHT")
+                for _, t in ipairs({ "CreateAuctionTabLeft", "CreateAuctionTabMiddle", "CreateAuctionTabRight" }) do
+                    if sf[t] then S.StripArt(sf[t]) end
+                end
+                -- "Create Auction" is the mode's heading, on the tool bar.
+                if sf.CreateAuctionLabel then
+                    k:Move(sf.CreateAuctionLabel, "LEFT", bar, "LEFT", AH.pad + 4, 0)
+                    k:Label(sf.CreateAuctionLabel, "text", true)
+                end
+                AHCard(k, sf.ItemDisplay)
+                AHButton(k, sf.PostButton, nil)
+                local q = sf.QuantityInput
+                if q and q.MaxButton then AHButton(k, q.MaxButton, nil) end
+            end
+        end
+        for _, key in ipairs({ "ItemSellList", "CommoditiesSellList" }) do
+            local list = f[key]
+            if list then
+                AHList(k, list)
+                AHRefresh(k, list.RefreshFrame, "RIGHT", bar, "RIGHT", -AH.pad, 0)
+            end
+        end
+
+        ------------------------------------------------------------ Auctions
+        local af = f.AuctionsFrame
+        if af then
+            k:Anchors(af, {
+                { "TOPLEFT",     f,    "TOPLEFT",  1, under },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", 0, 0 },
+            })
+            -- Auctions / Bids stand on the tool bar's rule.
+            local t1 = af.AuctionsTab
+            if t1 then k:Move(t1, "BOTTOMLEFT", bar, "BOTTOMLEFT", AH.pad, 0) end
+            if af.BidsTab and t1 then k:Move(af.BidsTab, "LEFT", t1, "RIGHT", 2, 0) end
+
+            local cancel = af.CancelAuctionButton
+            if cancel then
+                k:Size(cancel, AH.wide, AH.button)
+                k:Move(cancel, "RIGHT", foot, "RIGHT", -AH.pad, 0)
+            end
+            local buyout, bid = af.BuyoutFrame, af.BidFrame
+            if buyout and cancel then
+                k:Move(buyout, "RIGHT", cancel, "RIGHT", 0, 0)
+                AHButton(k, buyout.BuyoutButton, AH.long)
+            end
+            if bid and buyout then
+                k:Move(bid, "RIGHT", buyout, "LEFT", -AH.pad * 2, 0)
+                AHButton(k, bid.BidButton, AH.long)
+            end
+
+            local sum = af.SummaryList
+            if sum then
+                k:Anchors(sum, {
+                    { "TOPLEFT",    af, "TOPLEFT",    0, 0 },
+                    { "BOTTOMLEFT", af, "BOTTOMLEFT", 0, 0 },
+                })
+                k:Size(sum, AH.side, nil)
+                AHSideList(k, sum)
+            end
+            local all = af.AllAuctionsList
+            if all and sum then
+                k:Anchors(all, {
+                    { "TOPLEFT",     sum, "TOPRIGHT",    0, 0 },
+                    { "BOTTOMRIGHT", af,  "BOTTOMRIGHT", 0, 0 },
+                })
+            end
+            local disp = af.ItemDisplay
+            if disp and sum then
+                AHCard(k, disp)
+                k:Anchors(disp, {
+                    { "TOPLEFT",  sum, "TOPRIGHT", AH.pad, -AH.gap },
+                    { "TOPRIGHT", af,  "TOPRIGHT", -AH.pad, -AH.gap },
+                })
+                k:Size(disp, nil, AH.card)
+            end
+            local il = af.ItemList
+            if il and disp and sum then
+                k:Anchors(il, {
+                    { "TOPLEFT",     disp, "BOTTOMLEFT", -AH.pad, -AH.gap },
+                    { "BOTTOMRIGHT", af,   "BOTTOMRIGHT", 0, 0 },
+                })
+            end
+            for _, key in ipairs({ "AllAuctionsList", "BidsList", "ItemList", "CommoditiesList" }) do
+                local list = af[key]
+                if list then
+                    AHList(k, list)
+                    AHRefresh(k, list.RefreshFrame, "RIGHT", bar, "RIGHT", -AH.pad, 0)
+                end
+            end
+        end
+
+        ------------------------------------------------------------ Dialogs
+        local dlg = f.BuyDialog
+        if dlg then
+            if dlg.Border then k:Mute(dlg.Border) end
+            k:Fill(dlg, T.LOOK.window.rest.fill)
+            k:Border(dlg, T.LOOK.window.rest.edge)
+        end
+    end,
+}
