@@ -3,6 +3,22 @@ if EV_BLOCKED then return end
 -- changelog, not this file.
 EvermoreUI.CHANGELOG = {
     {
+        version = "0.13.1",
+        intro = { "A swing timer that keeps up with what actually happens to your swing." },
+        sections = {
+            { title = "New", items = {
+                "**Parry haste and haste mid-swing** on the swing timer. Forever doesn't document either rule, so each one only moves the bar once your own swings have confirmed it twice in a row; until then, and after any swing that goes against it, the bar keeps Blizzard's timing. The Swing Timer page shows where each rule stands, and either can be switched off.",
+                "**Global cooldown shading**: the part of the swing your global cooldown still covers, so you can see whether there's time for another ability before the swing lands. On by default.",
+                "**Latency zone**: the end of each swing tinted by your latency, the stretch where anything you press arrives after the swing has gone. Off by default.",
+                "**Auto attack off**: the main hand bar says so when you're in combat, within reach of something hostile, and not attacking it.",
+            } },
+            { title = "Fixes", items = {
+                "Swapping weapons now restarts the swing at the new weapon's speed, as the game does, even in combat when the speed can't be read.",
+                "The swing timer could stop dimming when your target was out of reach, after hiding Blizzard's own timer switched the range check off.",
+            } },
+        },
+    },
+    {
         version = "0.13.0",
         intro = { "Built around how Forever plays: a setup that gets you going in a minute, every character's bags, bank and gold from any of them, the built-in damage meter in our style, and cooldown icons that tell you more." },
         sections = {
@@ -115,32 +131,6 @@ EvermoreUI.CHANGELOG = {
             } },
             { title = "Changed", items = {
                 "**Aura trackers are gone**, replaced by Cooldowns. Choose the buffs you want to watch in the game's Cooldown Manager settings (there's a button on the Cooldowns page) and they appear in the Tracked buffs bar. Your movable buffs and debuffs, and Reminders, are unchanged; their page is now called Buffs & Debuffs.",
-            } },
-        },
-    },
-    {
-        version = "0.10.1",
-        intro = { "The little things that make a classic evening smoother: bags that stay stocked, a nudge when a buff drops, and tidier group windows." },
-        sections = {
-            { title = "New", items = {
-                "**Restock**: keep reagents, ammo, food and water topped up. Alt + click an item at a vendor to add it to this character's list, set how many you want to carry, and we buy the difference every time. Extras > Quality of Life.",
-                "**Reminders**: icons for the class buffs you're missing, a poison or imbue that has worn off, and food in dungeons. Click one to cast the buff, apply the poison or eat. Hidden in combat. The list is yours to edit: reorder it, switch things off, or add your own flasks, elixirs and anything you're wearing right now. Combat > Reminders.",
-                "**Loot rolls**: need, greed and pass rows in the EvermoreUI style, movable with `/evui edit`. Interface > Group has a test roll for placing them.",
-                "**Ready check**: a prompt that matches the rest of the UI, with a sound and a taskbar flash, and a line in chat afterwards saying who wasn't ready.",
-                "**Loot luck**: every need, greed and pass is counted, by quality, for each of your characters, and `/evui luck` ranks them by how often they win. Find out which of your alts the dice love.",
-            } },
-            { title = "Fixes", items = {
-                "The action bar editor's spell list now shows spells you haven't learnt yet, greyed out with the level they arrive at.",
-                "Repairs no longer claim guild funds paid when you aren't in a guild.",
-                "The spell count on the micro menu works again. Forever no longer lists unlearnt spells in the spellbook, so the count now comes from what your class trainer lists; visit one once and every character of that class benefits. Hover the spellbook button to see what's ready, with prices, and what arrives at your next level.",
-                "Train All sits neatly between the money and Train buttons.",
-                "Alt + clicking an item to restock now asks how many to carry, with a full stack filled in. Alt + click it again to change the amount or stop.",
-                "The restock list on the Quality of Life page shows each item with its icon and how many you have, and each can be paused without losing its amount.",
-                "Nameplate cast targets and class-coloured player health no longer error.",
-                "Swing timer rows no longer throw \"Font not set\" errors.",
-                "Hovering durability on the data bar no longer errors.",
-                "The Well Fed reminder only shows when you have food that gives it, and clicking it eats that food. Any reminder can do the same with \"Only when I carry something for it\".",
-                "Unit frames no longer error on class colours in dungeons.",
             } },
         },
     },
