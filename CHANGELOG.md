@@ -10,6 +10,8 @@ footer, and cards and rows in our look.
 - **Tracked recipes in the objective tracker**: a Professions section of
   its own beside Quests, folding the same way, with a heading for each
   profession and each recipe as a row.
+- **A Discord button** on this window, with the invite ready to copy, if
+  you'd like to join us for ideas, help and feedback.
 
 ### Changed
 - **Settings**, Blizzard's options window: a title band, the search on a

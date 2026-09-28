@@ -8,6 +8,7 @@ EvermoreUI.CHANGELOG = {
         sections = {
             { title = "New", items = {
                 "**Tracked recipes in the objective tracker**: a Professions section of its own beside Quests, folding the same way, with a heading for each profession and each recipe as a row.",
+                "**A Discord button** on this window, with the invite ready to copy, if you'd like to join us for ideas, help and feedback.",
             } },
             { title = "Changed", items = {
                 "**Settings**, Blizzard's options window: a title band, the search on a tool bar, Close and Apply on a footer, rows in body text and thin sliders. The Graphics page's quality box and advanced rows are tidied.",
