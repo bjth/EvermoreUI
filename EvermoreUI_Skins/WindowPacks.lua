@@ -5625,3 +5625,92 @@ P{
         DialogPrimary(f.SendButton)
     end,
 }
+
+--------------------------------------------------------------------------------
+--  FriendsFriendsFrame (Blizzard_FriendsFrame Mainline FriendsFriendsFrame.xml):
+--  "Friends of <name>". A user-scaled dialog: DialogBorderTemplate, the title
+--  left-aligned 26 in and 20 down, the Everyone / Mutual dropdown under it,
+--  the list in a TooltipBackdrop box 24 in from each side, Send Request and
+--  Close 30 in and 24 up.
+--
+--  Ours: our window with the title centred on a title bar, the dropdown on a
+--  tool bar, the list straight on the window between the bars with its
+--  scroll bar in a gutter, Send Request (primary) and Close on a footer.
+--------------------------------------------------------------------------------
+local FOF = { tool = 40, control = 30, pad = 8, footer = 36, button = 24, long = 120, gutter = 20, gap = 6 }
+
+P{
+    name  = "FriendsFriendsFrame",
+    apply = function(f, k)
+        local W = T.LOOK.window.rest
+        if f.Border then k:Mute(f.Border) end
+        k:Fill(f, W.fill)
+        k:Border(f, W.edge)
+        local TB = S.TITLE_BAND or 24
+
+        local title = Band(f, "title", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+            b:SetHeight(TB)
+        end)
+        if f.Title then
+            k:Anchors(f.Title, {
+                { "LEFT",  title, "LEFT",  FOF.pad, 0 },
+                { "RIGHT", title, "RIGHT", -FOF.pad, 0 },
+            })
+            f.Title:SetJustifyH("CENTER")
+            k:Label(f.Title, W.title, true)
+        end
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -(TB + 2))
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -(TB + 2))
+            b:SetHeight(FOF.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(FOF.footer)
+        end)
+
+        local dd = f.FriendsDropdown
+        if dd then
+            k:Size(dd, nil, FOF.control)
+            k:Move(dd, "LEFT", bar, "LEFT", FOF.pad, 0)
+        end
+
+        local border = f.ScrollFrameBorder
+        if border then
+            CfgFlat(k, border)
+            k:Anchors(border, {
+                { "TOPLEFT",     bar,  "BOTTOMLEFT", 0, -1 },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT",   0, 0 },
+            })
+            local box, sbar = f.ScrollBox, f.ScrollBar
+            if box then
+                k:Anchors(box, {
+                    { "TOPLEFT",     border, "TOPLEFT",     0, 0 },
+                    { "BOTTOMRIGHT", border, "BOTTOMRIGHT", -FOF.gutter, 0 },
+                })
+                if sbar then
+                    local w = S.Num(sbar:GetWidth()) or 8
+                    local x = math.floor((FOF.gutter - w) / 2 + 0.5)
+                    k:Anchors(sbar, {
+                        { "TOPLEFT",    box, "TOPRIGHT",    x, -FOF.gap },
+                        { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, FOF.gap },
+                    })
+                end
+            end
+        end
+
+        local send, close = f.SendRequestButton, f.CloseButton
+        if send then
+            k:Size(send, FOF.long, FOF.button)
+            k:Move(send, "LEFT", foot, "LEFT", FOF.pad, 0)
+            DialogPrimary(send)
+        end
+        if close then
+            k:Size(close, FOF.long, FOF.button)
+            k:Move(close, "RIGHT", foot, "RIGHT", -FOF.pad, 0)
+        end
+    end,
+}

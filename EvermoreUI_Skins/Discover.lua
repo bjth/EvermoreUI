@@ -77,6 +77,7 @@ local function Sweep()
     -- The add friend and Battle.net invite dialogs, bare Shows too.
     Take("AddFriendFrame")
     Take("BattleNetInviteFrame")
+    Take("FriendsFriendsFrame")
 end
 S.Sweep = Sweep
 
