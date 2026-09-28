@@ -3,6 +3,27 @@ if EV_BLOCKED then return end
 -- changelog, not this file.
 EvermoreUI.CHANGELOG = {
     {
+        version = "0.13.6",
+        intro = { "More of Blizzard's windows brought up to the same standard: no boxes inside boxes, controls on a tool bar or a footer, and rows in our look." },
+        sections = {
+            { title = "Changed", items = {
+                "**Auction house**: the search, filter and refresh on a tool bar, your money and the buy, bid and cancel buttons on a footer, and the lists straight on the window. Categories are headers that open and close, with a line down the side of what's under them. Results are rows, item icons are edged in their quality, and the Buy, Sell and Auctions tabs are in our style.",
+                "**Contacts**: your status, BattleTag and the menu on a tool bar, Friends and Recent Allies as tabs, and friends as rows with our status dots and invite buttons. Click your BattleTag to copy it. Add Friend, the Battle.net invite and Friends of Friends are in our style too, and the Raid tab is laid out the same way.",
+                "**Chat settings**: the chat windows as tabs along the top, the pages as a list down the side, and the settings unboxed with a line under each row. The window grows to fit its longest list, and every combat log page is laid out on one grid.",
+                "**Calendar**: the days are a grid, with today and the day you've picked marked on it, and holidays open in our window beside it.",
+                "**Name suggestions** under a whisper or mail name are in our menu style.",
+                "**Flight map**: our title bar, with the map filling the window under it.",
+                "**Macros**: Save and Cancel together, the character count clear of the buttons, and the icon picker in our style.",
+                "**Addons list** and the **clock** are laid out on a tool bar and footer.",
+                "Sortable column headings (the auction house, the who list, the guild roster) are plain labels with a line between them.",
+            } },
+            { title = "Fixes", items = {
+                "Whisper tabs no longer leave a gap before what you type.",
+                "Text left in the chat box when it loses focus no longer sits after an empty gap.",
+            } },
+        },
+    },
+    {
         version = "0.13.5",
         intro = { "A pass over the windows you open most, to the standard the spellbook and character window set: no boxes inside boxes, controls on a tool bar or a footer, and cards and rows in our look." },
         sections = {
@@ -123,29 +144,6 @@ EvermoreUI.CHANGELOG = {
             { title = "Changed", items = {
                 "**More ways to style a frame**: border from 0 to 8 pixels in any colour, background colour, your own health and power colours (or power in your class colour), a font per frame, name colour and width, where the name, health and power text sit with offsets, and the size and spot of the raid mark, leader and PvP icons and your combat and resting icons.",
                 "**Target of target and pet** sit a little lower by default, clear of the new cast bars and your target's buffs. Frames you've already placed stay where you put them.",
-            } },
-        },
-    },
-    {
-        version = "0.11.5",
-        intro = { "Small comforts while the bag addon is built." },
-        sections = {
-            { title = "New", items = {
-                "**Bags**: all your bags in one window, split into sections: new items, gear sets, equipment, consumables, quest items, herbs, ore, leather and cloth for gatherers, trade goods and the rest, junk last. Search, sort, your gold and free space at a glance. Replaces Blizzard's bag windows.",
-                "**Your own sections**: make sections with rules (item type, quality, name, tooltip text, soulbound, slot, item level, gear sets, can't be sold, item IDs), matching every rule or any. Drop an item on a section's title to keep it there. Reorder, fold and switch sections off; sort by quality, item level, name or ID; item level on gear. Interface > Bags.",
-                "**Ready-made sets**: add a Gatherer, Dungeons and raids or Levelling set of sections in one click, and share your whole setup as a line of text.",
-                "**Search terms**: `#herb` for a type, `ilvl>20`, `q>=rare`, `boe`, `bop`, `set`, `junk`, `new`, `quest`, `tip:use` for tooltip text, `in:gathering` for a section, `|` for or and `!` for not. Hover the search box for the list. Searching hides what doesn't match (or dims it, if you prefer).",
-                "**Bank**: your bank in the same style when you visit one, with the same sections, search and sort, and your account bank alongside where the game allows. Right-click items in your bags to put them in whichever bank is showing, or use Deposit all. Buy bank tabs and move gold in and out of the account bank from the same window. The game's own bank window is a button away.",
-                "**Empty a bag**: Alt + click a bag on the bag bar to move everything in it into free space in your other bags, topping up part stacks first and keeping arrows, shards and herbs in their own bags. Then swap it out.",
-                "**Move Blizzard's windows**: drag the character sheet, spellbook, merchant, quest log and the rest by their title bar, and they open where you left them. Reset them all on the Quality of Life page.",
-                "**The whole world map**: the parts of each zone you haven't explored yet are revealed too, as if you had. Switch it on or off on the Quality of Life page, and tint them darker there if you want to tell them apart.",
-                "**Weather density**: choose how much rain, snow and dust the game draws, from low to very high, on the Quality of Life page or from the cloud next to the sun and moon on the minimap. Switching it off puts your old setting back.",
-            } },
-            { title = "Changed", items = {
-                "**Up/Down in the chat box** remembers what you've sent through a reload or relog: your last 50 lines per window, for this character. Forget kept history on the Chat page clears them too.",
-            } },
-            { title = "Fixes", items = {
-                "The minimap clock's tooltip shows realm and local time in your theme's text colour, not red.",
             } },
         },
     },

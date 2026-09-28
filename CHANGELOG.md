@@ -1,5 +1,41 @@
 # EvermoreUI
 
+## 0.13.6
+
+More of Blizzard's windows brought up to the same standard: no boxes
+inside boxes, controls on a tool bar or a footer, and rows in our look.
+
+### Changed
+- **Auction house**: the search, filter and refresh on a tool bar, your
+  money and the buy, bid and cancel buttons on a footer, and the lists
+  straight on the window. Categories are headers that open and close,
+  with a line down the side of what's under them. Results are rows, item
+  icons are edged in their quality, and the Buy, Sell and Auctions tabs
+  are in our style.
+- **Contacts**: your status, BattleTag and the menu on a tool bar, Friends
+  and Recent Allies as tabs, and friends as rows with our status dots and
+  invite buttons. Click your BattleTag to copy it. Add Friend, the
+  Battle.net invite and Friends of Friends are in our style too, and the
+  Raid tab is laid out the same way.
+- **Chat settings**: the chat windows as tabs along the top, the pages as
+  a list down the side, and the settings unboxed with a line under each
+  row. The window grows to fit its longest list, and every combat log
+  page is laid out on one grid.
+- **Calendar**: the days are a grid, with today and the day you've picked
+  marked on it, and holidays open in our window beside it.
+- **Name suggestions** under a whisper or mail name are in our menu style.
+- **Flight map**: our title bar, with the map filling the window under it.
+- **Macros**: Save and Cancel together, the character count clear of the
+  buttons, and the icon picker in our style.
+- **Addons list** and the **clock** are laid out on a tool bar and footer.
+- Sortable column headings (the auction house, the who list, the guild
+  roster) are plain labels with a line between them.
+
+### Fixes
+- Whisper tabs no longer leave a gap before what you type.
+- Text left in the chat box when it loses focus no longer sits after an
+  empty gap.
+
 ## 0.13.5
 
 A pass over the windows you open most, to the standard the spellbook and
