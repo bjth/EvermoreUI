@@ -4128,7 +4128,11 @@ local AH_TAB = { h = 28, gap = 2 }
 local function AHTabState(f, tab)
     local d = S.D(tab)
     if not (d.textBox and d.textBox.Paint) then return end
-    local on = type(f.Tabs) == "table" and f.selectedTab and f.Tabs[f.selectedTab] == tab or false
+    local on = false
+    if f.selectedTab then
+        if type(f.Tabs) == "table" and f.Tabs[f.selectedTab] == tab then on = true
+        elseif tab.GetID and tab:GetID() ~= 0 and tab:GetID() == f.selectedTab then on = true end
+    end
     local hover = tab.IsMouseOver and tab:IsMouseOver() or false
     d.textBox.Paint(on, hover)
     local text = tab.Text
@@ -5215,6 +5219,146 @@ P{
 local FR = { tool = 40, control = 30, pad = 8, gap = 6, tabs = 24, footer = 36, button = 24,
              wide = 140, gutter = 20 }
 
+--------------------------------------------------------------------------------
+--  The Raid tab (Blizzard_RaidFrame Mainline RaidFrame.xml, and
+--  Blizzard_RaidUI, loaded on demand in a raid): RaidFrame is re-parented
+--  into the contacts window (ClaimRaidFrame) and fills it. Its controls:
+--  the All Assist check at 58,-23, the role counts centred 25 down, Raid
+--  Info at the top right, Convert to Raid 5 up from the bottom right. In a
+--  raid, eight RaidGroup frames (162x80, a UI-RaidFrame-GroupOutline
+--  picture, a "Group N" label above) each hold five slots and the members
+--  as secure RaidGroupButtons (UI-RaidFrame-GroupButton art); sixteen
+--  RaidClassButtons count classes down the right on SpellBook-SkillLineTab
+--  plates. RaidInfoFrame, the saved instances, opens beside the window.
+--
+--  Ours, written from the source (the tab can't be seen outside a raid):
+--  the controls on the window's tool bar and footer, each group a sunk well
+--  with its label as a heading, members as rows (surface, lighter on hover),
+--  empty slots clear with their text muted, the class plates gone and the
+--  class icons in our icon style; the saved instances panel as our window.
+--  Nothing here moves a secure button.
+--------------------------------------------------------------------------------
+local raidDressed = setmetatable({}, { __mode = "k" })
+
+local function FrRaidInfo(k)
+    local rf = _G.RaidInfoFrame
+    if not rf or raidDressed[rf] then return end
+    raidDressed[rf] = true
+    local W = T.LOOK.window.rest
+    if rf.Border then k:Mute(rf.Border) end
+    k:Fill(rf, W.fill)
+    k:Border(rf, W.edge)
+    for _, n in ipairs({ "RaidInfoDetailHeader", "RaidInfoDetailFooter" }) do
+        if _G[n] then S.StripArt(_G[n]) end
+    end
+    k:Art(rf, "Interface\\FriendsFrame\\WhoFrame-ColumnTabs")
+    local band = Band(rf, "title", "bottom", function(b)
+        b:SetPoint("TOPLEFT", rf, "TOPLEFT", 1, -1)
+        b:SetPoint("TOPRIGHT", rf, "TOPRIGHT", -1, -1)
+        b:SetHeight(S.TITLE_BAND or 24)
+    end)
+    local header = rf.Header
+    if header then
+        k:Mute(header)
+        local name = header.Text
+        if name then
+            if name:GetParent() ~= band then name:SetParent(band) end
+            k:Move(name, "CENTER", band, "CENTER", 0, 0)
+            k:Label(name, W.title, true)
+        end
+    end
+    local close = _G.RaidInfoCloseButton
+    if close then
+        k:Size(close, S.TITLE_BAND or 24, S.TITLE_BAND or 24)
+        k:Move(close, "TOPRIGHT", rf, "TOPRIGHT", -1, -1)
+    end
+    for _, n in ipairs({ "RaidInfoInstanceLabel", "RaidInfoIDLabel" }) do
+        local l = _G[n]
+        if l and l.text then k:Label(l.text, "textMuted") end
+    end
+    for _, n in ipairs({ "RaidInfoExtendButton", "RaidInfoCancelButton" }) do
+        if _G[n] then k:Size(_G[n], nil, FR.button) end
+    end
+    local owner = rf:GetParent()
+    if owner then k:Move(rf, "TOPLEFT", owner, "TOPRIGHT", FR.gap, 0) end
+end
+
+local function FrRaid(k, f, bar, foot)
+    local raid = _G.RaidFrame
+    if not raid then return end
+    -- Controls onto the window's bars while the window holds the raid page.
+    if raid:GetParent() == f then
+        local assist = _G.RaidFrameAllAssistCheckButton
+        if assist then k:Move(assist, "LEFT", bar, "LEFT", FR.pad, 0) end
+        if raid.RoleCount then k:Move(raid.RoleCount, "CENTER", bar, "CENTER", 0, 0) end
+        local info = _G.RaidFrameRaidInfoButton
+        if info then
+            k:Size(info, 96, FR.control)
+            k:Move(info, "RIGHT", bar, "RIGHT", -FR.pad, 0)
+        end
+        local convert = _G.RaidFrameConvertToRaidButton
+        if convert then
+            k:Size(convert, FR.wide, FR.button)
+            k:Move(convert, "RIGHT", foot, "RIGHT", -FR.pad, 0)
+        end
+    end
+    FrRaidInfo(k)
+
+    -- The groups, once Blizzard_RaidUI has built them.
+    for g = 1, 8 do
+        local group = _G["RaidGroup" .. g]
+        if group and not raidDressed[group] then
+            raidDressed[group] = true
+            for _, r in ipairs(S.Regions(group)) do
+                if S.ArtIsFile(r, "Interface\\RaidFrame\\UI-RaidFrame-GroupOutline") then S.StripArt(r) end
+            end
+            local gp = S.PainterFor(group)
+            gp:Fill("surfaceSunk")
+            gp:Border("border")
+            local label = _G["RaidGroup" .. g .. "Label"]
+            local fs = label and label.GetFontString and label:GetFontString()
+            if fs then k:Label(fs, "title", true) end
+            for s = 1, 5 do
+                local slot = _G["RaidGroup" .. g .. "Slot" .. s]
+                if slot then
+                    local h = slot.GetHighlightTexture and slot:GetHighlightTexture()
+                    if h then S.StripArt(h) end
+                    for _, r in ipairs(S.Regions(slot)) do
+                        if r.GetObjectType and r:GetObjectType() == "FontString" then k:Label(r, "textDisabled") end
+                    end
+                end
+            end
+        end
+    end
+    local ROW = { rest = { fill = "surface2" }, hover = { fill = "surface3" } }
+    for i = 1, 40 do
+        local b = _G["RaidGroupButton" .. i]
+        if b and not raidDressed[b] then
+            raidDressed[b] = true
+            for _, g in ipairs({ "GetNormalTexture", "GetHighlightTexture" }) do
+                local t = b[g] and b[g](b)
+                if t then S.StripArt(t) end
+            end
+            local p = S.PainterFor(b)
+            p:Fill("surface2")
+            p:States(ROW)
+        end
+    end
+    for i = 1, 16 do
+        local b = _G["RaidClassButton" .. i]
+        if b and not raidDressed[b] then
+            raidDressed[b] = true
+            for _, r in ipairs(S.Regions(b)) do
+                if S.ArtIsFile(r, "Interface\\SpellBook\\SpellBook-SkillLineTab") then S.StripArt(r) end
+            end
+            local h = b.GetHighlightTexture and b:GetHighlightTexture()
+            if h then S.StripArt(h) end
+            local icon = _G["RaidClassButton" .. i .. "IconTexture"]
+            if icon then EV.Icons:Style(icon, { host = b, keepCoords = true }) end
+        end
+    end
+end
+
 P{
     name  = "FriendsFrame",
     addon = "Blizzard_FriendsFrame",
@@ -5249,19 +5393,56 @@ P{
         if status then
             k:Size(status, nil, FR.control)
             k:Move(status, "LEFT", bar, "LEFT", FR.pad, 0)
+            -- Blizzard shows the status as a 16px icon in the text, sat on
+            -- the baseline. Ours: the status dot, centred in the room left
+            -- of the chevron.
+            local d = S.D(status)
+            local text = status.Text
+            if text and not d.dot then
+                local dot = S.Ours(status:CreateTexture(nil, "OVERLAY", nil, 3))
+                dot:SetTexture(T.MEDIA .. "circle.png")
+                dot:SetSize(8, 8)
+                dot:SetPoint("CENTER", status, "LEFT", 16, 0)
+                d.dot = dot
+                local function Sync()
+                    local token = S.StatusToken and S.StatusToken(header.bnStatus) or nil
+                    text:SetAlpha(token and 0 or 1)
+                    dot:SetShown(token ~= nil)
+                    if token then dot:SetVertexColor(S.Colour(token)) end
+                end
+                hooksecurefunc(text, "SetText", Sync)
+                T.Watch(dot, Sync)
+                Sync()
+            end
         end
         if bn then
             k:Fade(bn)
             k:Move(bn, "CENTER", bar, "CENTER", 0, 0)
             local menu = bn.ContactsMenuButton
             if menu then
+                -- Our button with our chevron, not Blizzard's gold arrow.
+                OverlayButton(k, menu, "down")
                 k:Size(menu, FR.control, FR.control)
                 k:Move(menu, "RIGHT", bar, "RIGHT", -FR.pad, 0)
-                local icon = menu.Icon
-                if icon and icon.SetDesaturated then
-                    icon:SetDesaturated(true)
-                    icon:SetVertexColor(T.RGBA("text"))
-                end
+            end
+            -- Click the tag to copy it.
+            local d = S.D(bn)
+            if bn.Tag and not d.copy then
+                local b = S.Ours(CreateFrame("Button", nil, bn))
+                b:SetAllPoints(bn.Tag)
+                b:SetScript("OnClick", function()
+                    local _, tag = BNGetInfo()
+                    if tag and EV.UI and EV.UI.ShowCopyText then
+                        EV.UI.ShowCopyText(EV.L["BattleTag"], tag, EV.L["Send it to anyone who wants to add you."])
+                    end
+                end)
+                b:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                    GameTooltip:SetText(EV.L["Click to copy your BattleTag"], 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                b:SetScript("OnLeave", GameTooltip_Hide)
+                d.copy = b
             end
             if bn.BroadcastFrame then
                 local bf = bn.BroadcastFrame
@@ -5344,5 +5525,48 @@ P{
 
         local ignore = f.IgnoreListWindow
         if ignore then k:Panel(ignore, "surfaceSunk") end
+
+        -- Contacts / Raid (/ Quick Join) as window tab faces under the
+        -- window, laid out over whichever are showing.
+        local function Tabs()
+            local prev
+            for _, name in ipairs({ "FriendsFrameTab1", "FriendsFrameTab3", "FriendsFrameTab4" }) do
+                local tab = _G[name]
+                if tab then
+                    AHTab(k, f, tab)
+                    if tab:IsShown() then
+                        tab:ClearAllPoints()
+                        if prev then
+                            tab:SetPoint("TOPLEFT", prev, "TOPRIGHT", AH_TAB.gap, 0)
+                        else
+                            tab:SetPoint("TOPLEFT", f, "BOTTOMLEFT", FR.pad, 0)
+                        end
+                        prev = tab
+                    end
+                end
+            end
+        end
+        Tabs()
+        k:Once(f, "frTabs", function()
+            if type(_G.PanelTemplates_SetTab) == "function" then
+                hooksecurefunc("PanelTemplates_SetTab", function(frame)
+                    if frame == f then
+                        for _, name in ipairs({ "FriendsFrameTab1", "FriendsFrameTab3", "FriendsFrameTab4" }) do
+                            if _G[name] then AHTabState(f, _G[name]) end
+                        end
+                    end
+                end)
+            end
+            if type(_G.FriendsFrame_UpdateQuickJoinTab) == "function" then
+                hooksecurefunc("FriendsFrame_UpdateQuickJoinTab", Tabs)
+            end
+            local raid = _G.RaidFrame
+            if raid then
+                raid:HookScript("OnShow", function()
+                    C_Timer.After(0, function() FrRaid(k, f, bar, foot) end)
+                end)
+            end
+        end)
+        if _G.RaidFrame and _G.RaidFrame:IsShown() then FrRaid(k, f, bar, foot) end
     end,
 }

@@ -977,6 +977,14 @@ function S.InviteButton(b)
     S.claimed[b] = S.claimed[b] or "part"
     p:Fade()
     b:SetSize(22, 22)
+    -- Centred on its row, 6 in from the row's right so it clears the list's
+    -- scroll bar (Blizzard hangs it on the row's very edge, 32 tall).
+    local row = b:GetParent()
+    if row and not d.inviteSeated then
+        d.inviteSeated = true
+        b:ClearAllPoints()
+        b:SetPoint("RIGHT", row, "RIGHT", -6, 0)
+    end
     p:Fill(LOOK.button.rest.fill)
     p:Border(LOOK.button.rest.edge)
     if not d.plus then
@@ -990,6 +998,12 @@ function S.InviteButton(b)
         local c = r.glyph or r.text
         if c then for _, t in ipairs(d.plus) do t:SetColorTexture(T.C4(c)) end end
     end })
+end
+
+--- The colour token for one of Blizzard's FRIENDS_TEXTURE_* status paths.
+function S.StatusToken(path)
+    if type(path) == "string" then path = path:lower() end
+    return StatusTokens()[path]
 end
 
 local function RowRule(b)
