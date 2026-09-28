@@ -120,6 +120,58 @@ local function Band(host, key, rule, place)
 end
 
 --------------------------------------------------------------------------------
+--  Icon picker pop-ups: IconSelectorPopupFrameTemplate (SharedXML), used by
+--  MacroPopupFrame and GearManagerPopupFrame. A BG texture, a BorderBox
+--  (SelectionFrameTemplate, frameLevel 50, setAllPoints) over everything, the
+--  name field (IconSelectorEditBox, three UI-ClassTrainer-FilterBorder
+--  pieces), the current icon (SelectedIconButton: a slot square, the icon as
+--  its NormalTexture) and the grid (IconSelector, SelectorButtonTemplate
+--  buttons, which selectorButton dresses) under the BorderBox.
+--
+--  The generic window part filled the BorderBox, the top of the stack, and
+--  so covered the grid entirely. The BorderBox keeps no fill; the pop-up
+--  itself carries the surface and the edge. They are children of their
+--  windows, not windows, so the windows' packs call this.
+--------------------------------------------------------------------------------
+local function IconPopup(k, pop)
+    if not S.Alive(pop) then return end
+    local box = pop.BorderBox
+    if box then
+        k:NoFill(box)
+        EV.Pixel:ShowEdges(box, false)
+    end
+    if pop.BG then S.StripArt(pop.BG) end
+    k:Fill(pop, "surface0")
+    k:Border(pop, "border")
+    local edit = box and box.IconSelectorEditBox
+    if edit then
+        for _, key in ipairs({ "IconSelectorPopupNameLeft", "IconSelectorPopupNameMiddle", "IconSelectorPopupNameRight" }) do
+            if edit[key] then S.StripArt(edit[key]) end
+        end
+        k:Fill(edit, "surfaceSunk")
+        k:Border(edit, "borderStrong")
+        if edit.SetTextInsets then edit:SetTextInsets(6, 6, 0, 0) end
+        k:Size(edit, nil, 24)
+    end
+    local sel = box and box.SelectedIconArea and box.SelectedIconArea.SelectedIconButton
+    if sel then
+        k:Once(sel, "popupIcon", function()
+            for _, r in ipairs(S.Regions(sel)) do
+                if r ~= sel.Icon and r.GetObjectType and r:GetObjectType() == "Texture" and not S.ours[r] then
+                    S.StripArt(r)
+                end
+            end
+            if sel.Highlight then S.StripArt(sel.Highlight) end
+            if sel.Icon then
+                sel.Icon:ClearAllPoints()
+                sel.Icon:SetAllPoints(sel)
+                EV.Icons:Style(sel.Icon, { host = sel })
+            end
+        end)
+    end
+end
+
+--------------------------------------------------------------------------------
 --  MailFrame
 --
 --  What the generic layer cannot reach here, all confirmed against
@@ -1689,10 +1741,22 @@ P{
             if count then k:Move(count, "BOTTOMRIGHT", box, "TOPRIGHT", -4, 3) end
         end
 
-        for _, n in ipairs({ "MacroEditButton", "MacroSaveButton", "MacroCancelButton" }) do
-            local b = _G[n]
-            if b then k:Size(b, nil, M.button) end
+        -- Save over Cancel on the right, M.gap apart (Blizzard: 15), and
+        -- Change Name/Icon beside them on their middle line, the selected
+        -- macro's slot to its left on the same line.
+        local save, cancel, edit = _G.MacroSaveButton, _G.MacroCancelButton, _G.MacroEditButton
+        if cancel then k:Size(cancel, M.short, M.button) end
+        if save then
+            k:Size(save, M.short, M.button)
+            if cancel then k:Move(save, "BOTTOM", cancel, "TOP", 0, M.gap) end
         end
+        if edit then
+            k:Size(edit, 160, M.button)
+            if save then k:Move(edit, "RIGHT", save, "BOTTOMLEFT", -M.pad, -M.gap / 2) end
+            local slot = f.SelectedMacroButton or _G.MacroFrameSelectedMacroButton
+            if slot then k:Move(slot, "RIGHT", edit, "LEFT", -M.pad, 0) end
+        end
+        IconPopup(k, _G.MacroPopupFrame)
         local del, new, exit = _G.MacroDeleteButton, _G.MacroNewButton, _G.MacroExitButton
         if del then k:Size(del, M.short, M.button); k:Move(del, "LEFT", foot, "LEFT", M.pad - 1, 0) end
         if exit then k:Size(exit, M.short, M.button); k:Move(exit, "RIGHT", foot, "RIGHT", -(M.pad - 1), 0) end
@@ -3051,6 +3115,9 @@ P{
         PaneList(_G.PaperDollFrame and PaperDollFrame.EquipmentManagerPane)
         PaneList(_G.CharacterStatsPaneScrollBox, SIDE_LIST.top)
         PaneList(_G.CharacterStatsPanePetScrollBox, SIDE_LIST.top)
+        -- The equipment set icon picker: the same pop-up as the macros'.
+        IconPopup(k, _G.GearManagerPopupFrame)
+
         -- "Level N Class" in the title bar, as the inspect window has it.
         local level = _G.CharacterLevelText
         if level and S.TitleInfo then S.TitleInfo(k, f, level) end
