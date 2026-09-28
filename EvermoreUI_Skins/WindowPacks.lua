@@ -677,6 +677,120 @@ P{
 }
 
 --------------------------------------------------------------------------------
+--  BattlefieldMapFrame: the zone map (Blizzard_BattlefieldMap, Mainline, which
+--  this client loads; Classic's extra CloseButtonBorder is covered too).
+--
+--  Blizzard's geometry, from Blizzard_BattlefieldMap.xml:
+--
+--    BattlefieldMapTab    64x32 on UIParent, strata LOW: ChatFrameTab
+--                         Left/Middle/Right, a tab highlight, the label 5
+--                         below centre. Alpha 0 until the cursor rests on the
+--                         map (then 0.75); drag and right-click menu are its.
+--    BattlefieldMapFrame  300x200, TOPLEFT on the tab's BOTTOMLEFT 0,-5.
+--      ScrollContainer    the canvas: TOPLEFT 0,+2, BOTTOMRIGHT -2,+3, so it
+--                         stands 2 above the frame and 2-3 in from its right
+--                         and bottom. Its top is the tab's bottom -3.
+--      BorderFrame        strata HIGH, setAllPoints, over the map: eight
+--                         battlefieldminimap-border-* pieces hanging 7-13
+--                         outside it, and the close button at TOPRIGHT 2,6.
+--                         RefreshAlpha sets its alpha to 1 - opacity.
+--
+--  Ours: the eight pieces go, a hairline goes round the CANVAS (not the frame,
+--  which it does not fill) on BorderFrame so the opacity setting takes it too,
+--  a sunk fill behind the canvas that follows the same alpha, the close button
+--  flush inside the canvas's top right corner as on our windows, and the tab a
+--  window tab standing on the map's top edge, label centred.
+--
+--  The frame is in neither UIPanelWindows nor UISpecialFrames (Toggle shows
+--  it with a bare Show), so Discover.lua takes it by name.
+--------------------------------------------------------------------------------
+local ZONE = {
+    tab   = 20,    -- the tab face's height, a chat tab's
+    below = 3,     -- tab bottom to canvas top: the frame's -5 and the canvas's +2
+}
+local ZONE_ART = { "TopLeft", "TopRight", "BottomLeft", "BottomRight",
+                   "Top", "Bottom", "Left", "Right", "CloseButtonBorder" }
+
+local function ZoneTab(k)
+    local tab = _G.BattlefieldMapTab
+    if not S.Alive(tab) then return end
+    k:Once(tab, "zoneTab", function()
+        S.claimed[tab] = S.claimed[tab] or "pack"
+        for _, key in ipairs({ "Left", "Middle", "Right" }) do
+            if tab[key] then S.StripArt(tab[key]) end
+        end
+        local okH, hl = pcall(tab.GetHighlightTexture, tab)
+        if okH and hl then S.StripArt(hl) end
+
+        -- The face: the tab's width, ZONE.tab tall, its bottom on the
+        -- canvas's top edge line (one pixel above the canvas), open there.
+        local one = EV.Pixel:One(tab)
+        local face = S.Ours(CreateFrame("Frame", nil, tab))
+        face:EnableMouse(false)
+        face:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
+        face:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, one - ZONE.below)
+        face:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, one - ZONE.below)
+        face:SetHeight(ZONE.tab)
+        face.Paint = S.TabFace(face, "bottom")
+        local fd = S.D(face)
+        if fd.tabInset then fd.tabInset:Hide() end
+
+        local text = tab.Text
+        if text then
+            text:ClearAllPoints()
+            text:SetPoint("CENTER", face, "CENTER", 0, 0)
+            k:Label(text, false, true)
+        end
+        -- Always the map's own tab, so always on; hover lifts it.
+        local function Sync()
+            local st = { on = true, hover = tab:IsMouseOver() or false }
+            face.Paint(st.on, st.hover)
+            if text then text:SetTextColor(T.C4(T.Resolve(T.LOOK.tab, st).text)) end
+        end
+        T.Watch(face, Sync)
+        k:Hook(tab, "OnEnter", Sync)
+        k:Hook(tab, "OnLeave", Sync)
+        Sync()
+    end)
+end
+
+P{
+    name  = "BattlefieldMapFrame",
+    addon = "Blizzard_BattlefieldMap",
+    apply = function(f, k)
+        local border, canvas = f.BorderFrame, f.ScrollContainer
+        if not (border and canvas) then return end
+
+        -- BorderFrame lies over the map and the frame is wider than the
+        -- canvas: a generic fill on either would cover map or show a strip.
+        k:NoFill(border)
+        k:NoFill(f)
+        for _, key in ipairs(ZONE_ART) do
+            if border[key] then S.StripArt(border[key]) end
+        end
+
+        k:Once(f, "zoneMap", function()
+            Hairlines(border, canvas, "borderStrong")
+            local back = S.Ours(f:CreateTexture(nil, "BACKGROUND", nil, -7))
+            back:SetAllPoints(canvas)
+            local function Paint() back:SetColorTexture(T.RGBA("surfaceSunk")) end
+            Paint()
+            T.Watch(back, Paint)
+            -- The opacity option (right-click the tab) fades the map and the
+            -- border frame; the backing follows the border frame.
+            local function Alpha() back:SetAlpha(border:GetAlpha()) end
+            Alpha()
+            k:After(f, "RefreshAlpha", Alpha)
+        end)
+
+        local close = border.CloseButton
+        if close then k:Move(close, "TOPRIGHT", canvas, "TOPRIGHT", 0, 0) end
+
+        ZoneTab(k)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  PlayerSpellsFrame: the spellbook (Blizzard_PlayerSpells/Camelot/SpellBook).
 --
 --  Blizzard's geometry, from Blizzard_PlayerSpellsFrame.xml,

@@ -65,6 +65,8 @@ local function Sweep()
     Take("GameMenuFrame")
     Take("DropDownList1")
     Take("DropDownList2")
+    -- The zone map toggles itself with a bare Show and is in neither table.
+    Take("BattlefieldMapFrame")
 end
 S.Sweep = Sweep
 
