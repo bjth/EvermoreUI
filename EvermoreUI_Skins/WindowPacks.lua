@@ -2291,51 +2291,40 @@ P{
 --  top. InsetBg is content here and is put back on every show.
 --
 --  The frame's own art (Bg, TitleBg, the corner and edge pieces) is faded by
---  the walk and nothing claims the frame, so it also gets our surface, a
---  title strip over where TitleBg was (y -1 to -21 in BasicFrameTemplate),
---  a border, and a hairline round the map.
+--  the walk and nothing claims the frame, so it also gets our window surface
+--  and edge, our title bar with the name centred and the close in its
+--  corner, and the map from under the title rule to the border.
 --------------------------------------------------------------------------------
-local TAXI_TITLE_H = 21
-
-local function Hairlines(host, around, token)
-    local e = {}
-    for i = 1, 4 do
-        e[i] = S.Ours(host:CreateTexture(nil, "BORDER", nil, 6))
-        if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(e[i]) end
-    end
-    e[1]:SetPoint("BOTTOMLEFT", around, "TOPLEFT");     e[1]:SetPoint("BOTTOMRIGHT", around, "TOPRIGHT")
-    e[2]:SetPoint("TOPLEFT", around, "BOTTOMLEFT");     e[2]:SetPoint("TOPRIGHT", around, "BOTTOMRIGHT")
-    e[3]:SetPoint("TOPRIGHT", around, "TOPLEFT");       e[3]:SetPoint("BOTTOMRIGHT", around, "BOTTOMLEFT")
-    e[4]:SetPoint("TOPLEFT", around, "TOPRIGHT");       e[4]:SetPoint("BOTTOMLEFT", around, "BOTTOMRIGHT")
-    local function Paint()
-        local px = EV.Pixel:Line(host)
-        e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
-        for _, t in ipairs(e) do t:SetColorTexture(T.RGBA(token)) end
-    end
-    Paint()
-    T.Watch(e[1]); e[1].Paint = Paint
-    return e
-end
-
 P{
     name  = "TaxiFrame",
     apply = function(f, k)
         -- The map. Content, never chrome.
         if f.InsetBg then f.InsetBg:SetAlpha(1) end
 
-        k:Fill(f, "surface0")
-        k:Border(f, "borderStrong")
+        local W = T.LOOK.window.rest
+        k:Fill(f, W.fill)
+        k:Border(f, W.edge)
 
-        local d = S.D(f)
-        if not d.taxiDressed then
-            d.taxiDressed = true
-            local strip = S.Ours(f:CreateTexture(nil, "BACKGROUND", nil, 1))
-            strip:SetPoint("TOPLEFT"); strip:SetPoint("TOPRIGHT")
-            strip:SetHeight(TAXI_TITLE_H)
-            local function Paint() strip:SetColorTexture(T.RGBA("titleBar")) end
-            Paint()
-            T.Watch(strip); strip.Paint = Paint
-            if f.InsetBg then Hairlines(f, f.InsetBg, "border") end
+        -- Our title bar, the name centred on it and the close flush in its
+        -- corner, as every other window; the map from under its rule to our
+        -- border (Blizzard: 4 in, 24 down, 6 from the right, 4 up).
+        S.TitleBar(f, S.PainterFor(f))
+        local band = S.D(f).titleBar
+        local title = f.TitleText or (f.TitleContainer and f.TitleContainer.TitleText)
+        if title and band then
+            k:Anchors(title, { { "CENTER", band, "CENTER", 0, 0 } })
+            k:Label(title, W.title, true)
+        end
+        local close = f.CloseButton
+        if close then
+            k:Size(close, S.TITLE_BAND or 24, S.TITLE_BAND or 24)
+            k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1)
+        end
+        if f.InsetBg then
+            k:Anchors(f.InsetBg, {
+                { "TOPLEFT",     f, "TOPLEFT",     1, -((S.TITLE_BAND or 24) + 2) },
+                { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1 },
+            })
         end
     end,
 }
