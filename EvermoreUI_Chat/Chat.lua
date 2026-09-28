@@ -203,10 +203,30 @@ end
 --- (the game's classic chat style, or a box restored after a reload) would
 --- otherwise show the header on its own, often just its ": " when the
 --- channel part is blank.
+---
+--- The header's width stays in the box's left inset, so text left typed in a
+--- box that lost focus sat after an empty gap. While the header is hidden
+--- the text starts at our own inset; the game's comes back with the focus,
+--- unless the game has set a new one in the meantime.
 local function HeaderShown(eb, on)
     if on == nil then on = eb.HasFocus and eb:HasFocus() or false end
     for _, fs in ipairs({ eb.header, eb.headerSuffix }) do
         if fs and fs.SetAlpha then fs:SetAlpha(on and 1 or 0) end
+    end
+    if not eb.GetTextInsets then return end
+    local d = CFD(eb)
+    local l, r, t, b = eb:GetTextInsets()
+    if type(l) ~= "number" or issecret(l) then return end
+    local bare = G.padX()
+    if on then
+        if d.bareInset and d.gameInsets and math.abs(l - d.bareInset) < 0.01 then
+            eb:SetTextInsets(unpack(d.gameInsets))
+        end
+        d.bareInset, d.gameInsets = nil, nil
+    elseif math.abs(l - bare) >= 0.01 then
+        d.gameInsets = { l, r, t, b }
+        d.bareInset = bare
+        eb:SetTextInsets(bare, r, t, b)
     end
 end
 ns.HeaderShown = HeaderShown
