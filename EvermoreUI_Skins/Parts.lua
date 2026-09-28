@@ -1620,16 +1620,49 @@ R{
 --     Items, money, experience and reputation all use one or the other. The
 --     name box was a dark, gold-edged plate per reward. Ours: the spellbook's
 --     card (the tile Look, lit under the mouse) for the whole reward, the
---     icon in the suite's style, the name beside it; the icon's edge takes the
---     colour Blizzard gives the name (the item's quality), resting when it is
---     plain white. Tried before itemButton: at runtime these carry an
+--     icon in the suite's style, the name beside it; the icon's edge in the
+--     item's quality colour from uncommon up (SetItemButtonQuality, which
+--     Blizzard calls for every reward), resting for poor and common. Tried before itemButton: at runtime these carry an
 --     IconBorder, and itemButton filled the whole 134x30 button as a slot.
 --------------------------------------------------------------------------------
+-- The item's quality, as Blizzard's SetItemButtonQuality is told it (the
+-- reward code calls it by its global name for every item and currency
+-- reward). Kept per button, because a button is made and given its quality
+-- before our walk reaches it.
+local rewardQuality = setmetatable({}, { __mode = "k" })
+local rewardHooked = false
+
+local function RewardEdge(b)
+    local icon = b and b.Icon
+    if not (icon and EV.Icons:IsStyled(icon)) then return end
+    local q = rewardQuality[b]
+    -- Poor and common rest in the style's own colour, as bag slots do.
+    if type(q) == "number" and q >= 2 then
+        local r, g, bl
+        if C_Item and C_Item.GetItemQualityColor then
+            r, g, bl = C_Item.GetItemQualityColor(q)
+        elseif ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
+            local c = ITEM_QUALITY_COLORS[q]
+            r, g, bl = c.r, c.g, c.b
+        end
+        if r then EV.Icons:SetState(icon, r, g, bl, 1); return end
+    end
+    EV.Icons:SetState(icon, nil)
+end
+
 R{
     name = "rewardItem",
     type = "Button",
     keys = { "Icon", "NameFrame", "Name" },
     paint = function(b, p)
+        if not rewardHooked and type(SetItemButtonQuality) == "function" then
+            rewardHooked = true
+            hooksecurefunc("SetItemButtonQuality", function(button, quality)
+                if type(button) ~= "table" or not rawget(button, "NameFrame") then return end
+                rewardQuality[button] = quality
+                RewardEdge(button)
+            end)
+        end
         S.StripArt(b.NameFrame)
         if b.IconBorder then S.StripArt(b.IconBorder) end
         -- A card, as a spell is in the spellbook: the kit's tile over the
@@ -1648,22 +1681,7 @@ R{
             icon:SetSize(h - 2 * inset, h - 2 * inset)
         end
         EV.Icons:Style(icon, { host = b })
-        local name = b.Name
-        if not name then return end
-        local function Edge(_, r, g, bl)
-            if type(r) ~= "number" then
-                local ok
-                ok, r, g, bl = pcall(name.GetTextColor, name)
-                if not ok then return end
-            end
-            if r and g and bl and not (r > 0.95 and g > 0.95 and bl > 0.95) then
-                EV.Icons:SetState(icon, r, g, bl, 1)
-            else
-                EV.Icons:SetState(icon, nil)
-            end
-        end
-        pcall(hooksecurefunc, name, "SetTextColor", Edge)
-        Edge()
+        RewardEdge(b)
     end,
 }
 
