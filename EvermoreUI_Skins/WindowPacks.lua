@@ -268,6 +268,15 @@ P{
                         { "TOPRIGHT", f, "TOPRIGHT", -MAIL.pad, y },
                     })
                     row:SetHeight(MAIL.row)
+                    -- The letter opens from its 37px icon button only; its
+                    -- click area runs the row's width (as the loot rows'
+                    -- does), stopping short of the expiry text.
+                    local b = row.Button or _G[row:GetName() .. "Button"]
+                    local w = S.Num(f:GetWidth())
+                    if b and w then
+                        local rowW = w - 2 * MAIL.pad
+                        b:SetHitRectInsets(0, -(rowW - 4 - 37 - 4 - 104), -4, -4)
+                    end
                     MailRowSync(row)
                 end
             end
@@ -441,13 +450,6 @@ P{
             if del then k:Move(reply, "RIGHT", del, "LEFT", -MAIL.gap, 0) end
         end
 
-        local function Lift(region)
-            if not (region and region.GetPoint) then return end
-            local ok, pt, rel, rp, x, y = pcall(region.GetPoint, region, 1)
-            if ok and pt and rel == f and rp == "BOTTOMLEFT" then
-                region:SetPoint(pt, rel, rp, x, (y or 0) + MAIL.lift)
-            end
-        end
         -- The invoice was laid out for the parchment's border: its text 30
         -- in and 35 down, the price column 27 from the right. Everything
         -- else in it hangs off these two, so moving them brings it all in.
@@ -465,14 +467,30 @@ P{
             k:Move(order.OpeningText, "TOPLEFT", order, "TOPLEFT", MAIL.invoice, -MAIL.invoice)
         end
 
-        k:After(f, "Update", function()
-            for _, b in ipairs(f.activeAttachmentButtons or {}) do Lift(b) end
+        -- Lift a region Blizzard hangs off the window's bottom. Each one
+        -- remembers the y it was lifted to, so a second pass over a layout
+        -- already lifted does nothing: Update runs before the window is
+        -- shown (and so before this pack) on the first letter, and the pack
+        -- runs this pass itself as well as after every Update.
+        local function Lift(region, fresh)
+            if not (region and region.GetPoint) then return end
+            local ok, pt, rel, rp, x, y = pcall(region.GetPoint, region, 1)
+            if not (ok and pt and rel == f and rp == "BOTTOMLEFT") then return end
+            local d = S.D(region)
+            if not fresh and d.mailLifted == y then return end
+            d.mailLifted = (y or 0) + MAIL.lift
+            region:SetPoint(pt, rel, rp, x, d.mailLifted)
+        end
+
+        -- `fresh`: straight after Blizzard's Update, which has just put
+        -- everything back to its base, so everything is lifted.
+        local function Layout(fresh)
+            for _, b in ipairs(f.activeAttachmentButtons or {}) do Lift(b, fresh) end
             -- The label over the attachments: Blizzard left-aligns it and
-            -- centres the icons; centred with them.
+            -- centres the icons; centred with them. Blizzard adds its
+            -- TOPLEFT without clearing ours, so look for its point.
             local label = _G.OpenMailAttachmentText
             if label then
-                -- Blizzard adds its TOPLEFT without clearing ours, so look
-                -- for its point among whatever the label has.
                 for i = 1, (label:GetNumPoints() or 0) do
                     local ok, pt, rel, rp, _, y = pcall(label.GetPoint, label, i)
                     if ok and pt == "TOPLEFT" and rel == f and rp == "BOTTOMLEFT" then
@@ -483,13 +501,17 @@ P{
                 end
             end
             if body then
+                local d = S.D(body)
                 local h = S.Num(body:GetHeight())
-                if h then
-                    body:SetHeight(h - MAIL.lift)
-                    if _G.OpenMailScrollChildFrame then _G.OpenMailScrollChildFrame:SetHeight(h - MAIL.lift) end
+                if h and (fresh or d.mailHeight ~= h) then
+                    d.mailHeight = h - MAIL.lift
+                    body:SetHeight(d.mailHeight)
+                    if _G.OpenMailScrollChildFrame then _G.OpenMailScrollChildFrame:SetHeight(d.mailHeight) end
                 end
             end
-        end)
+        end
+        k:After(f, "Update", function() Layout(true) end)
+        Layout(false)
     end,
 }
 
