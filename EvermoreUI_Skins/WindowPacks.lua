@@ -378,6 +378,90 @@ local function QuestLogDetails(k, bar)
 end
 
 
+--------------------------------------------------------------------------------
+--  QuestFrame: talking to a quest giver (Mainline QuestFrame.xml and
+--  QuestFrameTemplates.xml, which this client loads).
+--
+--  Blizzard's geometry:
+--
+--    QuestFrame        338x496, ButtonFrameTemplate: Inset TOPLEFT 4,-60,
+--                      BOTTOMRIGHT -6,26.
+--    Four panels       Detail, Progress, Reward, Greeting
+--                      (QuestFramePanelTemplate), each with one
+--                      QuestScrollFrameTemplate: 300x403 at the window's
+--                      TOPLEFT 5,-65, its scroll bar 9 to the right. The 65
+--                      is room for the 60px portrait, which we hide: it was
+--                      the empty space above the quest text.
+--    Buttons           22 tall at the window's bottom, y=4, x=6 from either
+--                      side: Accept 77 and Decline 78 (detail), Complete
+--                      Quest 120 (reward), Continue 120 and Cancel 78
+--                      (progress), Goodbye 78 (greeting). Nothing under
+--                      them, and their tops met the inset's border at 26.
+--
+--  None of it is re-anchored by Blizzard's Lua (only the greeting's rows,
+--  inside the scroll child), so it is seated once:
+--
+--    * a footer band the width of the window, the buttons on it, one height,
+--      centred on it, one width per kind of button;
+--    * the inset from under the title band to the footer, with the same gap
+--      above and below;
+--    * each scroll frame from the inset's top to its bottom, its width kept
+--      (the text inside is laid out to Blizzard's 300).
+--------------------------------------------------------------------------------
+local QUEST = { footer = 36, button = 24, pad = 6, gap = 6, short = 96, long = 120, inset = 4 }
+local QUEST_SCROLLS = { "QuestDetailScrollFrame", "QuestRewardScrollFrame",
+                        "QuestProgressScrollFrame", "QuestGreetingScrollFrame" }
+-- name -> side, width
+local QUEST_BUTTONS = {
+    QuestFrameAcceptButton          = { "left",  "short" },
+    QuestFrameDeclineButton         = { "right", "short" },
+    QuestFrameCompleteQuestButton   = { "left",  "long" },
+    QuestFrameCompleteButton        = { "left",  "long" },
+    QuestFrameGoodbyeButton         = { "right", "short" },
+    QuestFrameGreetingGoodbyeButton = { "right", "short" },
+}
+
+P{
+    name  = "QuestFrame",
+    apply = function(f, k)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(QUEST.footer)
+        end)
+
+        for name, how in pairs(QUEST_BUTTONS) do
+            local b = _G[name]
+            if b then
+                k:Size(b, QUEST[how[2]], QUEST.button)
+                if how[1] == "left" then
+                    k:Move(b, "LEFT", foot, "LEFT", QUEST.pad + 2, 0)
+                else
+                    k:Move(b, "RIGHT", foot, "RIGHT", -(QUEST.pad + 2), 0)
+                end
+            end
+        end
+
+        local inset = f.Inset
+        if inset then
+            local top = (S.TITLE_BAND or 24) + 2 + QUEST.gap
+            k:Anchors(inset, {
+                { "TOPLEFT",     f,    "TOPLEFT",  QUEST.pad, -top },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", -(QUEST.pad - 1), QUEST.gap },
+            })
+            for _, name in ipairs(QUEST_SCROLLS) do
+                local sf = _G[name]
+                if sf then
+                    k:Anchors(sf, {
+                        { "TOPLEFT",    inset, "TOPLEFT",    QUEST.inset, -QUEST.inset },
+                        { "BOTTOMLEFT", inset, "BOTTOMLEFT", QUEST.inset, QUEST.inset },
+                    })
+                end
+            end
+        end
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",
