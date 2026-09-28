@@ -4121,6 +4121,14 @@ local function AHList(k, list)
         end
     end
     if list.ResultsText then k:Label(list.ResultsText, "textMuted") end
+    -- A list builds its header buttons when its layout is first set, which
+    -- for the sell and auctions tables is after the window's walk: dress
+    -- them each time Blizzard lays the columns out.
+    k:After(list, "UpdateTableBuilderLayout", function(self)
+        local h = self.HeaderContainer
+        if h then S.Walk(h, 0) end
+    end)
+    if hc then S.Walk(hc, 0) end
 end
 
 -- A side list (categories, the auctions summary): rows from the top edge to
@@ -4157,6 +4165,52 @@ local function AHCard(k, disp)
     k:Border(disp, tile.edge)
     local ib = disp.ItemButton
     if ib and ib.EmptyBackground then S.StripArt(ib.EmptyBackground) end
+end
+
+-- The mode tabs (CharacterFrameTabButtonTemplate, the Cata one) hang
+-- under the window: window tab faces open on their top, the chosen one the
+-- window's own surface running up into it, a copper bar along its foot.
+-- PanelTemplates keeps the choice on the window (selectedTab indexes Tabs).
+local AH_TAB = { h = 28, gap = 2 }
+
+local function AHTabState(f, tab)
+    local d = S.D(tab)
+    if not (d.textBox and d.textBox.Paint) then return end
+    local on = type(f.Tabs) == "table" and f.selectedTab and f.Tabs[f.selectedTab] == tab or false
+    local hover = tab.IsMouseOver and tab:IsMouseOver() or false
+    d.textBox.Paint(on, hover)
+    local text = tab.Text
+    if text then
+        text:SetTextColor(T.C4(T.Resolve(T.LOOK.tab, { on = on, hover = hover }).text))
+        text:ClearAllPoints()
+        text:SetPoint("CENTER", tab, "CENTER", 0, 0)
+    end
+end
+
+local function AHTab(k, f, tab)
+    if not S.Alive(tab) then return end
+    local d = S.D(tab)
+    k:Fade(tab)
+    if d.fill then d.fill:SetAlpha(0) end
+    d.edgeless = true
+    EV.Pixel:ShowEdges(tab, false)
+    k:Size(tab, nil, AH_TAB.h)
+    if not d.textBox then
+        local box = S.Ours(CreateFrame("Frame", nil, tab))
+        local one = EV.Pixel:One(tab)
+        box:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, one)
+        box:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 0)
+        box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
+        box:EnableMouse(false)
+        box.Paint = S.TabFace(box, "top")
+        local bd = S.D(box)
+        if bd.tabInset then bd.tabInset:Hide() end
+        d.textBox = box
+        T.Watch(box, function() AHTabState(f, tab) end)
+        k:Hook(tab, "OnEnter", function() AHTabState(f, tab) end)
+        k:Hook(tab, "OnLeave", function() AHTabState(f, tab) end)
+    end
+    AHTabState(f, tab)
 end
 
 -- A button sized to our footer kinds.
@@ -4199,6 +4253,34 @@ P{
                 k:Move(money, "LEFT", foot, "LEFT", AH.pad, 0)
             end
         end
+
+        -- The mode tabs, flush under the window's bottom edge.
+        local tabs = type(f.Tabs) == "table" and f.Tabs or {}
+        local prev
+        for _, tab in ipairs(tabs) do
+            AHTab(k, f, tab)
+            if prev then
+                k:Move(tab, "TOPLEFT", prev, "TOPRIGHT", AH_TAB.gap, 0)
+            else
+                k:Move(tab, "TOPLEFT", f, "BOTTOMLEFT", AH.pad, 0)
+            end
+            prev = tab
+        end
+        k:Once(f, "ahTabs", function()
+            local function All()
+                for _, tab in ipairs(type(f.Tabs) == "table" and f.Tabs or {}) do AHTabState(f, tab) end
+            end
+            if type(_G.PanelTemplates_SetTab) == "function" then
+                hooksecurefunc("PanelTemplates_SetTab", function(frame) if frame == f then All() end end)
+            end
+            for _, fn in ipairs({ "PanelTemplates_SelectTab", "PanelTemplates_DeselectTab" }) do
+                if type(_G[fn]) == "function" then
+                    hooksecurefunc(fn, function(tab)
+                        if tab and tab.GetParent and tab:GetParent() == f then AHTabState(f, tab) end
+                    end)
+                end
+            end
+        end)
 
         ------------------------------------------------------------ Buy
         local sb = f.SearchBar

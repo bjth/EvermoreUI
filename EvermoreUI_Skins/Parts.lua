@@ -765,11 +765,52 @@ R{
         AHRowHooks(b, { b.SelectedTexture, b.HighlightTexture })
         if not d.ahHover then
             d.ahHover = true
-            hooksecurefunc(b.HighlightTexture, "Show", function() d.hover = true; if d.Repaint then d.Repaint() end end)
-            hooksecurefunc(b.HighlightTexture, "Hide", function() d.hover = false; if d.Repaint then d.Repaint() end end)
+            hooksecurefunc(b.HighlightTexture, "Show", function() d.hover = true; S.AHCategorySync(b) end)
+            hooksecurefunc(b.HighlightTexture, "Hide", function() d.hover = false; S.AHCategorySync(b) end)
         end
+        if not S.ahSetUpHooked and type(_G.AuctionHouseFilterButton_SetUp) == "function" then
+            S.ahSetUpHooked = true
+            hooksecurefunc("AuctionHouseFilterButton_SetUp", function(button) S.AHCategorySync(button) end)
+        end
+        S.AHCategorySync(b)
     end,
 }
+
+--- A category that opens: a chevron at the row's right, pointing right while
+--- it is shut and down while it is open. Blizzard's list has no marker at
+--- all; a category opens when it is picked (its sub-categories are inserted
+--- under it), so "open" is the row's own selection. Categories and
+--- sub-categories can open; the third level cannot.
+function S.AHCategorySync(b)
+    local d = S.D(b)
+    if d.Repaint then d.Repaint() end
+    local cats = _G.AuctionCategories
+    local kids = false
+    if type(cats) == "table" then
+        if b.type == "category" then
+            local c = cats[b.categoryIndex]
+            kids = c and type(c.subCategories) == "table" and #c.subCategories > 0
+        elseif b.type == "subCategory" then
+            local list = _G.AuctionHouseFrame and _G.AuctionHouseFrame.CategoriesList
+            local ci = list and list.GetSelectedCategory and list:GetSelectedCategory()
+            local c = ci and cats[ci]
+            local sub = c and type(c.subCategories) == "table" and c.subCategories[b.subCategoryIndex]
+            kids = sub and type(sub.subCategories) == "table" and #sub.subCategories > 0
+        end
+    end
+    if kids and not d.ahChev then
+        d.ahChev = S.Ours(T.Chevron(b, 4))
+        d.ahChev:SetPoint("RIGHT", b, "RIGHT", -8, 0)
+    end
+    if d.ahChev then
+        d.ahChev:SetShown(kids and true or false)
+        if kids then
+            local open = b.SelectedTexture and b.SelectedTexture:IsShown()
+            d.ahChev:Point(open and "down" or "right")
+            d.ahChev:SetColorLines(T.RGBA((open or d.hover) and "text" or "textMuted"))
+        end
+    end
+end
 
 local function AHQuality(icon, itemKeyInfo)
     local q = type(itemKeyInfo) == "table" and itemKeyInfo.quality
