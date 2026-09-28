@@ -3,6 +3,22 @@ if EV_BLOCKED then return end
 -- changelog, not this file.
 EvermoreUI.CHANGELOG = {
     {
+        version = "0.14.0",
+        intro = { "A damage meter of our own, fed by the game's." },
+        sections = {
+            { title = "New", items = {
+                "**Damage meter**: up to four windows, each showing any of the game's meter modes (damage, healing, absorbs, interrupts, dispels, damage taken, deaths and more) for the current fight, overall, or an earlier fight. Rows are in class colours with spec icons, and you stay in view even when you've scrolled past yourself.",
+                "**Breakdowns**: click a row to see that player's spells, with a red edge on avoidable or deadly hits. Drag it wherever you like and it opens there from then on.",
+                "**Reports** to say, party, raid, instance, guild or a whisper to your target, from the menu on each window's title bar.",
+                "Settings under Interface > Damage Meter, windows placed and sized in edit mode, and `/evui meter` to show and hide them. The game's own meter windows are switched off while ours are on, and put back if you turn that off.",
+                "In combat the game keeps the numbers to itself: the windows still show its order, amounts and bars, and shares, other players' breakdowns and reports fill in once combat ends.",
+            } },
+            { title = "Changed", items = {
+                "Dropdown menus are as wide as their longest entry, so names are no longer cut short.",
+            } },
+        },
+    },
+    {
         version = "0.13.6",
         intro = { "More of Blizzard's windows brought up to the same standard: no boxes inside boxes, controls on a tool bar or a footer, and rows in our look." },
         sections = {
@@ -121,29 +137,6 @@ EvermoreUI.CHANGELOG = {
                 "Channel names in the chat input no longer end in \"::\".",
                 "The experience bar's session time starts again when you log in; it could run on from the day before. A /reload still carries it on.",
                 "The sample party and raid frames in the designer showed the empty part of each health bar white.",
-            } },
-        },
-    },
-    {
-        version = "0.12.0",
-        intro = { "The unit frames catch up with the rest of the suite: everything Blizzard's target and player frames used to carry, and the settings you'd expect from a full frames addon." },
-        sections = {
-            { title = "New", items = {
-                "**Cast bars** on the player, target, focus and pet frames. Under the frame, or anywhere you like in edit mode. Spell icon, name, time left, a spark on the leading edge, grey when the cast can't be interrupted and a red \"Interrupted\" when it's cut off. Your own bar shows your latency, and replaces Blizzard's (switch that off on the Player tab).",
-                "**Buffs and debuffs on your target**: everyone's debuffs above the frame, so you can see who has Sunder or a curse up and whether it's sheeped, and its buffs below, for Purge, Tranquilizing Shot or checking a friend's buffs before you rebuff. \"Only mine\" narrows either to yours. Focus, player and pet can show them too.",
-                "**Combo points** above the player frame for rogues, and druids in Cat Form, and across the edge of your target's nameplate so you can read them without looking away from the mob. Size, spot and colour on the Nameplates page.",
-                "**Totems** under the player frame for shamans, with the time left. Right click one to destroy it.",
-                "**Fade out of combat**: the player and pet frames can fade away until you're fighting, targeting, casting, hurt, short of power or hovering them.",
-                "**Copy settings** from one frame onto another.",
-                "**The designer**: drag the name, health and power text, icons, portrait, cast bar, buffs and debuffs, combo points and totems into place on a live copy of any unit frame, resize them by their corner, nudge with the arrow keys. Save, Discard and undo, as in edit mode. `/evui design`, or Open designer on the Unit Frames page.",
-                "**Arrange your cooldowns**: the designer's Cooldowns tab shows each bar as a row of icons. Drag to reorder, move a cooldown between the Essential and Utility bars, or drop it in the tray to hide it from our bars. Saved per class and spec; which spells are tracked stays in the game's own Cooldown Manager settings, a button away.",
-                "**Design your nameplates**: the designer's Nameplates tab has a plate with a sample cast, auras, raid mark and quest count. Drag the raid mark, the quest count and each row of auras anywhere around the bar, move the mana strip and cast bar up or down, flip combo points between edges, and resize by the corner. Nothing moves until you move it.",
-                "**Design your party and raid frames**: the designer's Party & Raid tab shows a sample party, or three raid groups, laid out as yours will be. Drag the name, health text, role, leader, ready check and raid mark anywhere on the first frame, and the debuff and buff rows around it, and every frame follows. Resize by the corner. Texture, border, font and colours are there too.",
-                "**Everything in the designer**: every Unit Frames, Nameplates, Cooldowns and Party & Raid setting now lives in the designer, with the part it belongs to. The frame or plate as a whole (size, colours, fading, the aggro glow, threat, target highlighting, how plates move) is under Frame or Plate behaviour in its list; click a cooldown bar for its size and text, or a cooldown for its linked timer. Their options pages open the designer, and so does Frame settings in edit mode.",
-            } },
-            { title = "Changed", items = {
-                "**More ways to style a frame**: border from 0 to 8 pixels in any colour, background colour, your own health and power colours (or power in your class colour), a font per frame, name colour and width, where the name, health and power text sit with offsets, and the size and spot of the raid mark, leader and PvP icons and your combat and resting icons.",
-                "**Target of target and pet** sit a little lower by default, clear of the new cast bars and your target's buffs. Frames you've already placed stay where you put them.",
             } },
         },
     },
