@@ -1960,7 +1960,10 @@ local function CalSide(name, closeName)
             end)
             local header = f.Header
             if header and band then
+                -- The plate is 39 tall against our 24; the generic layer's
+                -- fill on it hung below the band and read as a taller bar.
                 k:Fade(header)
+                k:NoFill(header)
                 k:Move(header, "CENTER", band, "CENTER", 0, 0)
                 -- Blizzard pins the name 13 down a 39 tall plate; centre
                 -- the name itself on the band, not the plate.
