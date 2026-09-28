@@ -1,5 +1,32 @@
 # EvermoreUI
 
+## 0.14.0
+
+A damage meter of our own, fed by the game's.
+
+### New
+- **Damage meter**: up to four windows, each showing any of the game's
+  meter modes (damage, healing, absorbs, interrupts, dispels, damage
+  taken, deaths and more) for the current fight, overall, or an earlier
+  fight. Rows are in class colours with spec icons, and you stay in view
+  even when you've scrolled past yourself.
+- **Breakdowns**: click a row to see that player's spells, with a red
+  edge on avoidable or deadly hits. Drag it wherever you like and it
+  opens there from then on.
+- **Reports** to say, party, raid, instance, guild or a whisper to your
+  target, from the menu on each window's title bar.
+- Settings under Interface > Damage Meter, windows placed and sized in
+  edit mode, and `/evui meter` to show and hide them. The game's own
+  meter windows are switched off while ours are on, and put back if you
+  turn that off.
+- In combat the game keeps the numbers to itself: the windows still show
+  its order, amounts and bars, and shares, other players' breakdowns and
+  reports fill in once combat ends.
+
+### Changed
+- Dropdown menus are as wide as their longest entry, so names are no
+  longer cut short.
+
 ## 0.13.6
 
 More of Blizzard's windows brought up to the same standard: no boxes

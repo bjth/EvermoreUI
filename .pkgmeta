@@ -21,6 +21,7 @@ move-folders:
   EvermoreUI/EvermoreUI_QoL: EvermoreUI_QoL
   EvermoreUI/EvermoreUI_Cooldowns: EvermoreUI_Cooldowns
   EvermoreUI/EvermoreUI_Bags: EvermoreUI_Bags
+  EvermoreUI/EvermoreUI_Meter: EvermoreUI_Meter
 
 ignore:
   - tools

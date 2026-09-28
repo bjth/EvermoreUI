@@ -1,0 +1,14 @@
+## Interface: 16001, 120100
+## Title: |cffd4924eEvermoreUI|r Damage Meter
+## IconTexture: Interface\AddOns\EvermoreUI\Media\UI\evermore.png
+## Notes: Damage, healing and more in our own windows, from the game's own meter data
+## Author: Ben
+## Version: @project-version@
+## Dependencies: EvermoreUI
+## Category: |cffd4924eEvermore|rUI
+## Group: EvermoreUI
+
+Meter.lua
+Window.lua
+Breakdown.lua
+Report.lua
