@@ -392,7 +392,7 @@ function Window:FightMenu(owner)
         for _, s in ipairs(fights) do
             local name = EV.Usable(s.name) and s.name ~= "" and s.name or (L["Fight"] .. " " .. s.sessionID)
             local clock = ns.Clock(s.durationSeconds)
-            list[#list + 1] = { value = "id:" .. s.sessionID, text = clock and (name .. "  " .. clock) or name }
+            list[#list + 1] = { value = "id:" .. s.sessionID, text = name, detail = clock }
         end
     end
     local current = self.sessionID and ("id:" .. self.sessionID) or self.db.session

@@ -8,9 +8,11 @@ if EV_BLOCKED then return end
 --      { value = x, text = "Label" }                 a choice
 --      { value = x, text = "Label", icon = tex }     with an icon
 --      { value = x, text = "Label", disabled = true }
+--      { value = x, text = "Label", detail = "1:42" } with muted text on the right
 --      { header = "Section" }                         non-clickable heading
 --      { separator = true }                           divider line
---  Long lists get a filter box at the top.
+--  Long lists get a filter box at the top. The menu is as wide as its
+--  widest entry (never narrower than its owner), up to MAX_W.
 --
 --  U.Menu:Open(owner, list, current, onPick) is usable on its own for
 --  context menus.
@@ -21,6 +23,8 @@ local U = EV.UI
 local max, min = math.max, math.min
 
 local ITEM_H, MAX_VISIBLE, SEARCH_OVER = 26, 12, 14
+local MIN_W, MAX_W = 140, 420
+local PAD_L, PAD_ICON, PAD_R, DETAIL_GAP = 12, 32, 10, 16
 local MENU, DROP = T.LOOK.menu, T.LOOK.dropdown
 local rowState, rowOut = {}, {}
 
@@ -53,6 +57,12 @@ local function BuildMenu()
     filter:SetHeight(24)
     filter:Hide()
     m.filterBox = filter
+
+    -- Measures entries for the menu's width: shown, so it lays out, but
+    -- clear and without a shadow.
+    m.measure = T.Font(m, T.SIZE.body, false, 0)
+    T.TextShadow(m.measure, false)
+    m.measure:SetPoint("TOPLEFT")
 
     m.items = {}
     m.offset = 0
@@ -93,7 +103,9 @@ local function BuildMenu()
         it.icon:SetSize(16, 16)
         it.icon:SetPoint("LEFT", 10, 0)
         it.text = T.Font(it, T.SIZE.body, false, 1)
-        it.text:SetPoint("RIGHT", -10, 0)
+        it.text:SetPoint("RIGHT", -PAD_R, 0)
+        it.detail = T.Font(it, T.SIZE.body, false, 1, "RIGHT")
+        it.detail:SetPoint("RIGHT", -PAD_R, 0)
         it:SetScript("OnEnter", function(self) if self.pickable then self.hl:Show() end end)
         it:SetScript("OnLeave", function(self) self.hl:Hide() end)
         it:SetScript("OnClick", function(self)
@@ -141,8 +153,16 @@ local function BuildMenu()
             it.icon:SetShown(e.icon ~= nil)
             if e.icon then it.icon:SetTexture(e.icon) end
             it.text:ClearAllPoints()
-            it.text:SetPoint("LEFT", e.icon and 32 or 12, 0)
-            it.text:SetPoint("RIGHT", -10, 0)
+            it.text:SetPoint("LEFT", e.icon and PAD_ICON or PAD_L, 0)
+            local detail = not e.header and e.detail
+            it.detail:SetShown(detail and true or false)
+            if detail then
+                it.detail:SetText(detail)
+                it.detail:SetTextColor(T.RGBA("textMuted"))
+                it.text:SetPoint("RIGHT", it.detail, "LEFT", -DETAIL_GAP, 0)
+            else
+                it.text:SetPoint("RIGHT", -PAD_R, 0)
+            end
             it.text:SetText(e.header or e.text or "")
             if e.header then
                 it.text:SetFont(T.FontBoldPath(), T.SIZE.small, "")
@@ -154,6 +174,31 @@ local function BuildMenu()
             it:Show()
         end
         self:SetHeight(max(n, 1) * ITEM_H + top + 1)
+    end
+
+    -- The widest entry, text and detail, with its padding.
+    function m:Widest()
+        local fs, widest = self.measure, 0
+        for _, e in ipairs(self.list) do
+            if not e.separator then
+                local w = e.icon and PAD_ICON or PAD_L
+                if e.header then
+                    fs:SetFont(T.FontBoldPath(), T.SIZE.small, "")
+                    fs:SetText(e.header)
+                else
+                    fs:SetFont(T.FontPath(), T.SIZE.body, "")
+                    fs:SetText(e.text or "")
+                end
+                w = w + fs:GetUnboundedStringWidth()
+                if e.detail and not e.header then
+                    fs:SetFont(T.FontPath(), T.SIZE.body, "")
+                    fs:SetText(e.detail)
+                    w = w + DETAIL_GAP + fs:GetUnboundedStringWidth()
+                end
+                widest = max(widest, w + PAD_R + 2)
+            end
+        end
+        return math.ceil(widest)
     end
 
     function m:Paint()
@@ -177,7 +222,7 @@ local function BuildMenu()
         end
         self:SetScale(owner:GetEffectiveScale() / UIParent:GetEffectiveScale())
         self:SetFrameLevel(100)
-        self:SetWidth(max(owner:GetWidth(), 140))
+        self:SetWidth(min(max(owner:GetWidth(), MIN_W, self:Widest()), MAX_W))
         self:Layout()
         self:ClearAllPoints()
         local bottom = owner:GetBottom() or 0
