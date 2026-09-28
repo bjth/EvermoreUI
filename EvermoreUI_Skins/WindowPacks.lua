@@ -467,19 +467,21 @@ P{
             k:Move(order.OpeningText, "TOPLEFT", order, "TOPLEFT", MAIL.invoice, -MAIL.invoice)
         end
 
-        -- Lift a region Blizzard hangs off the window's bottom. Each one
-        -- remembers the y it was lifted to, so a second pass over a layout
-        -- already lifted does nothing: Update runs before the window is
-        -- shown (and so before this pack) on the first letter, and the pack
-        -- runs this pass itself as well as after every Update.
+        -- Lift a region Blizzard hangs off the window's bottom, from its
+        -- BASE: the position Blizzard last gave it, recorded straight after
+        -- Blizzard's Update (`fresh`) or the first time we see it. Every pass
+        -- sets base + lift, so any number of passes lands in the same place.
+        -- (Comparing against the last lifted value instead let a rounding
+        -- hair through and lifted the icons twice.) Update runs before the
+        -- window is shown on the first letter, and so before this pack,
+        -- which is why the pack runs a pass of its own too.
         local function Lift(region, fresh)
             if not (region and region.GetPoint) then return end
             local ok, pt, rel, rp, x, y = pcall(region.GetPoint, region, 1)
             if not (ok and pt and rel == f and rp == "BOTTOMLEFT") then return end
             local d = S.D(region)
-            if not fresh and d.mailLifted == y then return end
-            d.mailLifted = (y or 0) + MAIL.lift
-            region:SetPoint(pt, rel, rp, x, d.mailLifted)
+            if fresh or d.mailBase == nil then d.mailBase = y or 0 end
+            region:SetPoint(pt, rel, rp, x, d.mailBase + MAIL.lift)
         end
 
         -- `fresh`: straight after Blizzard's Update, which has just put
@@ -503,10 +505,10 @@ P{
             if body then
                 local d = S.D(body)
                 local h = S.Num(body:GetHeight())
-                if h and (fresh or d.mailHeight ~= h) then
-                    d.mailHeight = h - MAIL.lift
-                    body:SetHeight(d.mailHeight)
-                    if _G.OpenMailScrollChildFrame then _G.OpenMailScrollChildFrame:SetHeight(d.mailHeight) end
+                if h and (fresh or d.mailBaseH == nil) then d.mailBaseH = h end
+                if d.mailBaseH then
+                    body:SetHeight(d.mailBaseH - MAIL.lift)
+                    if _G.OpenMailScrollChildFrame then _G.OpenMailScrollChildFrame:SetHeight(d.mailBaseH - MAIL.lift) end
                 end
             end
         end
