@@ -1663,11 +1663,47 @@ local function RewardEdge(b)
     EV.Icons:SetState(icon, nil)
 end
 
+-- The reward you have picked. Blizzard marks it with QuestInfoItemHighlight
+-- (QuestInfo.xml): one frame of UI-QuestItemHighlight in ADD, moved onto the
+-- clicked button and shown by QuestInfoItem_OnClick, hidden again by
+-- QuestInfo_ShowRewards when the rewards are rebuilt. Its art goes; the card
+-- is the tile Look's "on" while it is the choice QuestInfoFrame records
+-- (QuestInfoItem_IsSelected's own test), repainted whenever Blizzard shows or
+-- hides its highlight. Hooked on the frame, not on QuestInfoItem_OnClick,
+-- which the buttons' XML binds by reference.
+local rewardButtons = setmetatable({}, { __mode = "k" })
+
+local function RewardChosen(b)
+    local info = _G.QuestInfoFrame
+    if not (info and b.type == "choice") then return false end
+    local ok, id = pcall(b.GetID, b)
+    return ok and id ~= 0 and info.itemChoice == id
+end
+
+local function HookRewardHighlight()
+    local hl = _G.QuestInfoItemHighlight
+    if not hl or S.D(hl).rewardHooked then return end
+    S.D(hl).rewardHooked = true
+    for _, r in ipairs(S.Regions(hl)) do
+        if r.GetObjectType and r:GetObjectType() == "Texture" then S.StripArt(r) end
+    end
+    local function All()
+        for b in pairs(rewardButtons) do
+            local d = S.D(b)
+            if d.Repaint then d.Repaint() end
+        end
+    end
+    hooksecurefunc(hl, "Show", All)
+    hooksecurefunc(hl, "Hide", All)
+end
+
 R{
     name = "rewardItem",
     type = "Button",
     keys = { "Icon", "NameFrame", "Name" },
     paint = function(b, p)
+        rewardButtons[b] = true
+        HookRewardHighlight()
         if not rewardHooked and type(SetItemButtonQuality) == "function" then
             rewardHooked = true
             hooksecurefunc("SetItemButtonQuality", function(button, quality)
@@ -1682,7 +1718,7 @@ R{
         -- button's whole rect, the icon on its left inside the edge.
         p:Fill(LOOK.tile.rest.fill)
         p:Border(LOOK.tile.rest.edge)
-        p:States(LOOK.tile)
+        p:States(LOOK.tile, { on = function() return RewardChosen(b) end })
         -- The icon filled the button's full height (30 of 30, 39 of 41),
         -- over the card's own edge. Inside it, with room for the icon's edge.
         local icon = b.Icon
