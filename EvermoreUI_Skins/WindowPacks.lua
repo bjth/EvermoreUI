@@ -4695,6 +4695,243 @@ local function CfgList(k, box)
     S.Walk(box, 0)
 end
 
+--------------------------------------------------------------------------------
+--  The combat log's five pages, laid out on one grid. Blizzard places each
+--  with its own offsets (x 10, 11, 13, 15, 25, 27 from four different
+--  frames, one page hung from the bottom); ours all hang from the panel's
+--  top-left under the tab rule: the first control 30 down, headings 2 above
+--  what they head, a check box's drawn square 17 in (its button 13), the
+--  second column half the page across, sub-options 20 in under their
+--  parent, columns of sub-options 110 apart, labels 4 clear of their box.
+--------------------------------------------------------------------------------
+local CC = { x = 13, top = 30, col = 285, sub = 20, subCol = 110, label = 4, block = 28, gap = 26 }
+
+-- A check button's label, 4 clear of it and on its centre line (Blizzard
+-- sets 0 or -2 across and 2 up).
+local function CfgCheckLabel(cb)
+    if not (cb and cb.GetName) then return end
+    local fs = cb.Text or _G[(cb:GetName() or "") .. "Text"]
+    if fs and fs.SetPoint then
+        fs:ClearAllPoints()
+        fs:SetPoint("LEFT", cb, "RIGHT", CC.label, 0)
+    end
+end
+
+-- A heading in the title colour, 2 above what it heads, over its glyph.
+local function CfgHeading(k, fs, over, x)
+    if not fs then return end
+    k:Label(fs, "title", true)
+    fs:ClearAllPoints()
+    fs:SetPoint("BOTTOMLEFT", over, "TOPLEFT", x or 0, 2)
+end
+
+-- A bordered row box of Blizzard's (ChatConfigBorderBoxTemplate) as one of
+-- our rows: unboxed, a hairline under it.
+local function CfgRowBox(k, row)
+    if not S.Alive(row) then return end
+    CfgFlat(k, row)
+    local d = S.D(row)
+    if d.cfgRule then return end
+    d.cfgRule = S.Ours(row:CreateTexture(nil, "BORDER", nil, 1))
+    EV.Pixel.NoSnap(d.cfgRule)
+    d.cfgRule:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 1, 0)
+    d.cfgRule:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -1, 0)
+    local function Paint()
+        d.cfgRule:SetColorTexture(S.Colour("divider"))
+        d.cfgRule:SetHeight(EV.Pixel:Line(row))
+    end
+    Paint()
+    T.Watch(d.cfgRule, Paint)
+end
+
+-- Message Types' tiered lists: a check per type with its sub-types in two
+-- columns under it. The containers are positioned by the caller.
+local function CfgTiered(frame, columns)
+    if not (frame and frame.checkBoxTable) then return end
+    local base = frame:GetName() .. "Checkbox"
+    for i = 1, #frame.checkBoxTable do
+        local cb = _G[base .. i]
+        if cb then
+            CfgCheckLabel(cb)
+            local fs = cb.Text or _G[base .. i .. "Text"]
+            if fs and not columns then
+                local path, size = fs:GetFont()
+                if path then fs:SetFont(T.FontBoldPath and T.FontBoldPath() or path, size, "") end
+            end
+            -- The misc list's columns: every other box beside its pair.
+            if columns and i % columns == 0 then
+                cb:ClearAllPoints()
+                cb:SetPoint("TOPLEFT", _G[base .. (i - 1)], "TOPLEFT", CC.subCol, 0)
+            end
+            local k2 = 1
+            while _G[base .. i .. "_" .. k2] do
+                local sub = _G[base .. i .. "_" .. k2]
+                CfgCheckLabel(sub)
+                sub:ClearAllPoints()
+                if k2 == 1 then
+                    sub:SetPoint("TOPLEFT", cb, "BOTTOMLEFT", CC.sub, 0)
+                elseif k2 % 2 == 0 then
+                    sub:SetPoint("TOPLEFT", _G[base .. i .. "_" .. (k2 - 1)], "TOPLEFT", CC.subCol, 0)
+                else
+                    sub:SetPoint("TOPLEFT", _G[base .. i .. "_" .. (k2 - 2)], "BOTTOMLEFT", 0, 0)
+                end
+                k2 = k2 + 1
+            end
+        end
+    end
+end
+
+-- The example lines at the top of Colors and Formatting, as a block under
+-- its heading.
+local function CfgExample(k, page, prefix)
+    local s1, s2, title = _G[prefix .. "ExampleString1"], _G[prefix .. "ExampleString2"], _G[prefix .. "ExampleTitle"]
+    if not s1 then return end
+    s1:ClearAllPoints()
+    s1:SetPoint("TOPLEFT", page, "TOPLEFT", CC.x + 4, -CC.top)
+    if title then CfgHeading(k, title, s1, 0) end
+    return s2 or s1
+end
+
+local function CfgCombatPages(k, cbg)
+    if not cbg then return end
+    -- Every page from the panel's top-left.
+    for _, name in ipairs({ "CombatConfigMessageSources", "CombatConfigMessageTypes", "CombatConfigColors",
+                            "CombatConfigFormatting", "CombatConfigSettings" }) do
+        local page = _G[name]
+        if page then k:Move(page, "TOPLEFT", cbg, "TOPLEFT", 0, 0) end
+    end
+
+    -- Message Sources: two lists side by side.
+    local src = _G.CombatConfigMessageSources
+    local by, to = _G.CombatConfigMessageSourcesDoneBy, _G.CombatConfigMessageSourcesDoneTo
+    if src and by then k:Move(by, "TOPLEFT", src, "TOPLEFT", CC.x - 5 - CFG.inset, -CC.top) end
+    if src and to then k:Move(to, "TOPLEFT", src, "TOPLEFT", CC.x - 5 - CFG.inset + CC.col, -CC.top) end
+    for _, box in ipairs({ by, to }) do
+        if box and box.checkBoxTable then
+            for i = 1, #box.checkBoxTable do
+                local row = _G[box:GetName() .. "Checkbox" .. i]
+                if row and row.CheckButton then CfgCheckLabel(row.CheckButton) end
+            end
+        end
+    end
+
+    -- Message Types: two columns of tiered lists, the misc list under the
+    -- right one.
+    local types = _G.CombatConfigMessageTypes
+    local left, right, misc = _G.CombatConfigMessageTypesLeft, _G.CombatConfigMessageTypesRight, _G.CombatConfigMessageTypesMisc
+    if types and left then k:Move(left, "TOPLEFT", types, "TOPLEFT", CC.x - 4, -(CC.top - 4)) end
+    if types and right then k:Move(right, "TOPLEFT", types, "TOPLEFT", CC.x - 4 + CC.col, -(CC.top - 4)) end
+    if misc and right then
+        k:Move(misc, "TOPLEFT", right, "BOTTOMLEFT", 0, -CC.gap)
+        for _, r in ipairs(S.Regions(misc)) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == _G.MISCELLANEOUS then
+                -- Over the small boxes' drawn squares (a 20 button, 16 box).
+                CfgHeading(k, r, misc, 4 + 2)
+            end
+        end
+    end
+    CfgTiered(left)
+    CfgTiered(right)
+    CfgTiered(misc, 2)
+
+    -- Colors: the example, then unit colours and highlighting on the left,
+    -- the colourise options on the right.
+    local colors = _G.CombatConfigColors
+    if colors then
+        CfgExample(k, colors, "CombatConfigColors")
+        local unit = _G.CombatConfigColorsUnitColors
+        local listTop = CC.top + CC.block + CC.gap + 12
+        if unit then k:Move(unit, "TOPLEFT", colors, "TOPLEFT", CC.x - 5 - CFG.inset + 2, -listTop) end
+        local hl = _G.CombatConfigColorsHighlighting
+        if hl and unit then
+            CfgFlat(k, hl)
+            -- Its checks sit 6 in and draw their square 4 inside that: one
+            -- pixel further in than the colour list, to land on 17.
+            k:Move(hl, "TOPLEFT", unit, "BOTTOMLEFT", 1, -CC.gap)
+            local line, ability = _G.CombatConfigColorsHighlightingLine, _G.CombatConfigColorsHighlightingAbility
+            local dmg, school = _G.CombatConfigColorsHighlightingDamage, _G.CombatConfigColorsHighlightingSchool
+            for _, cb in ipairs({ line, ability, dmg, school }) do CfgCheckLabel(cb) end
+            if ability and line then ability:ClearAllPoints(); ability:SetPoint("TOPLEFT", line, "TOPLEFT", CC.subCol, 0) end
+            if school and dmg then school:ClearAllPoints(); school:SetPoint("TOPLEFT", dmg, "TOPLEFT", CC.subCol, 0) end
+            if dmg and line then dmg:ClearAllPoints(); dmg:SetPoint("TOPLEFT", line, "BOTTOMLEFT", 0, 0) end
+            CfgHeading(k, _G.CombatConfigColorsHighlightingTitle, hl, 6 + 4)
+        end
+        local cz = _G.CombatConfigColorsColorize
+        if cz then
+            k:Move(cz, "TOPLEFT", colors, "TOPLEFT", CC.x - 7 + CC.col, -listTop)
+            for _, key in ipairs({ "UnitName", "SpellNames", "DamageNumber", "DamageSchool", "EntireLine" }) do
+                local row = _G["CombatConfigColorsColorize" .. key]
+                if row then
+                    CfgRowBox(k, row)
+                    CfgCheckLabel(_G["CombatConfigColorsColorize" .. key .. "Check"])
+                    CfgCheckLabel(_G["CombatConfigColorsColorize" .. key .. "SchoolColoring"])
+                end
+            end
+            local first = _G.CombatConfigColorsColorizeUnitName
+            if first then
+                for _, r in ipairs(S.Regions(first)) do
+                    if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == _G.COLORIZE then
+                        CfgHeading(k, r, first, 7 + 4)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Formatting: the example, then the options as one indented list.
+    local fmt = _G.CombatConfigFormatting
+    if fmt then
+        local last = CfgExample(k, fmt, "CombatConfigFormatting")
+        local ts = _G.CombatConfigFormattingShowTimeStamp
+        if ts and last then
+            ts:ClearAllPoints()
+            ts:SetPoint("TOPLEFT", last, "BOTTOMLEFT", -4, -CC.gap)
+        end
+        for _, key in ipairs({ "ShowTimeStamp", "ShowBraces", "UnitNames", "SpellNames", "ItemNames", "FullText" }) do
+            CfgCheckLabel(_G["CombatConfigFormatting" .. key])
+        end
+        local braces, unit = _G.CombatConfigFormattingShowBraces, _G.CombatConfigFormattingUnitNames
+        if braces and ts then braces:ClearAllPoints(); braces:SetPoint("TOPLEFT", ts, "BOTTOMLEFT", 0, -CFG.gap) end
+        if unit and braces then unit:ClearAllPoints(); unit:SetPoint("TOPLEFT", braces, "BOTTOMLEFT", CC.sub, 0) end
+        local spell, item = _G.CombatConfigFormattingSpellNames, _G.CombatConfigFormattingItemNames
+        if spell and unit then spell:ClearAllPoints(); spell:SetPoint("TOPLEFT", unit, "BOTTOMLEFT", 0, 0) end
+        if item and spell then item:ClearAllPoints(); item:SetPoint("TOPLEFT", spell, "BOTTOMLEFT", 0, 0) end
+        local full = _G.CombatConfigFormattingFullText
+        if full and item then full:ClearAllPoints(); full:SetPoint("TOPLEFT", item, "BOTTOMLEFT", -CC.sub, -CFG.gap) end
+    end
+
+    -- Settings: the filter's name and Save on one line, the quick button
+    -- and where it shows under it.
+    local set = _G.CombatConfigSettings
+    if set then
+        local name, save = _G.CombatConfigSettingsNameEditBox, _G.CombatConfigSettingsSaveButton
+        if name then
+            k:Size(name, 200, CFG.button)
+            k:Move(name, "TOPLEFT", set, "TOPLEFT", CC.x + 4, -CC.top)
+            for _, r in ipairs(S.Regions(name)) do
+                if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == _G.FILTER_NAME then
+                    CfgHeading(k, r, name, 0)
+                end
+            end
+        end
+        if save and name then
+            k:Size(save, CFG.short, CFG.button)
+            k:Move(save, "LEFT", name, "RIGHT", CFG.gap, 0)
+        end
+        local quick = _G.CombatConfigSettingsShowQuickButton
+        if quick and name then
+            CfgCheckLabel(quick)
+            quick:ClearAllPoints()
+            quick:SetPoint("TOPLEFT", name, "BOTTOMLEFT", -4, -CC.gap + 6)
+        end
+        local solo, party, raid = _G.CombatConfigSettingsSolo, _G.CombatConfigSettingsParty, _G.CombatConfigSettingsRaid
+        for _, cb in ipairs({ solo, party, raid }) do CfgCheckLabel(cb) end
+        if solo and quick then solo:ClearAllPoints(); solo:SetPoint("TOPLEFT", quick, "BOTTOMLEFT", CC.sub, 0) end
+        if party and solo then party:ClearAllPoints(); party:SetPoint("TOPLEFT", solo, "TOPLEFT", CC.subCol, 0) end
+        if raid and party then raid:ClearAllPoints(); raid:SetPoint("TOPLEFT", party, "TOPLEFT", CC.subCol, 0) end
+    end
+end
+
 P{
     name  = "ChatConfigFrame",
     apply = function(f, k)
@@ -4900,11 +5137,11 @@ P{
         end
         Ground(cs and cs:IsShown())
         k:Once(f, "cfgCombat", function()
-            if type(_G.ChatConfigCombat_OnShow) == "function" then
-                hooksecurefunc("ChatConfigCombat_OnShow", function() Ground(true); CombatTabs() end)
-            end
-            if type(_G.ChatConfigCombat_OnHide) == "function" then
-                hooksecurefunc("ChatConfigCombat_OnHide", function() Ground(false) end)
+            -- The XML binds OnShow / OnHide to the functions themselves at
+            -- load, so a hook on the globals never runs: follow the frame.
+            if cs then
+                cs:HookScript("OnShow", function() Ground(true); CombatTabs() end)
+                cs:HookScript("OnHide", function() Ground(false) end)
             end
             if type(_G.ChatConfig_UpdateCombatTabs) == "function" then
                 hooksecurefunc("ChatConfig_UpdateCombatTabs", function() CombatTabs() end)
@@ -4913,6 +5150,8 @@ P{
                 hooksecurefunc("ChatConfigCombat_InitButton", function(b) CfgCategory(b, true) end)
             end
         end)
+
+        CfgCombatPages(k, cbg)
 
         -- As wide as the widest list with a pad each side of it.
         k:Size(f, 1 + CFG.side + CFG.pad - CFG.inset + CFG.list + CFG.pad + 1, nil)
@@ -4965,7 +5204,9 @@ P{
         for _, name in ipairs({ "ChatConfigChatSettingsLeft", "ChatConfigChannelSettingsLeft",
                                 "ChatConfigOtherSettingsCombat", "ChatConfigOtherSettingsPVP",
                                 "ChatConfigOtherSettingsAdditionalColors", "ChatConfigOtherSettingsSystem",
-                                "ChatConfigOtherSettingsCreature", "ChatConfigTextToSpeechChannelSettingsLeft" }) do
+                                "ChatConfigOtherSettingsCreature", "ChatConfigTextToSpeechChannelSettingsLeft",
+                                "CombatConfigMessageSourcesDoneBy", "CombatConfigMessageSourcesDoneTo",
+                                "CombatConfigColorsUnitColors" }) do
             local box = _G[name]
             if box and box.checkBoxTable or (box and box.swatchTable) then CfgList(k, box) end
         end
