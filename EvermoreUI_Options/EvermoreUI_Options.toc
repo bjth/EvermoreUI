@@ -35,6 +35,7 @@ Pages\Reminders.lua
 Pages\Minimap.lua
 Pages\Objectives.lua
 Pages\DataBars.lua
+Pages\Meter.lua
 Pages\MicroMenu.lua
 Pages\Bags.lua
 Pages\Characters.lua

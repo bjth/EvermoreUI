@@ -285,7 +285,7 @@ local GROUPS = {
     { key = "Combat", title = L["Combat"],
       mods = { "UnitFrames", "SwingTimer", "GroupFrames", "Nameplates", "ActionBars", "Cooldowns", "Auras", "Reminders" } },
     { key = "Interface", title = L["Interface"],
-      mods = { "Minimap", "Objectives", "DataBars", "MicroMenu", "BagBar", "Bags", "Characters", "LootRolls", "ReadyCheck", "LootStats" } },
+      mods = { "Minimap", "Objectives", "DataBars", "Meter", "MicroMenu", "BagBar", "Bags", "Characters", "LootRolls", "ReadyCheck", "LootStats" } },
     { key = "Chat", title = L["Chat & Tooltips"], mods = { "Chat", "Tooltips" } },
 }
 
