@@ -1373,24 +1373,63 @@ P{
         -- window's Primary and Secondary, standing on the header band's rule,
         -- which is now only as tall as they are: the stone (and every pane
         -- anchored under it) comes up to meet them.
+        --
+        -- Blizzard undoes both on every switch of pane, after this pack has
+        -- run (Camelot PaperDollFrame.lua):
+        --   PaperDollFrame_SetSidebar       StoneBg:SetAtlas(..., true), which
+        --                                   puts the stone back to its atlas
+        --                                   height and drops the pane under it
+        --   PaperDollFrame_UpdateSidebarTabLayout
+        --                                   clears all three tabs and centres
+        --                                   them on PaperDollSidebarTabs
+        -- so both are seated again straight after Blizzard's.
         if right and stone then
-            k:Size(stone, nil, (S.TITLE_BAND or 20) + 2 - 20 + SIDEBAR.band)
-            local band = S.D(right).bands and S.D(right).bands.header
-            local prev
-            for i = 1, 3 do
-                local tab = _G["PaperDollSidebarTab" .. i]
-                if tab and band then
-                    SidebarTab(k, tab, i)
-                    if tab:IsShown() then
-                        if prev then
-                            k:Move(tab, "BOTTOMLEFT", prev, "BOTTOMRIGHT", SIDEBAR.gap, 0)
-                        else
-                            k:Move(tab, "BOTTOMLEFT", band, "BOTTOMLEFT", SIDEBAR.pad, 0)
+            local function SeatStone()
+                stone:SetHeight((S.TITLE_BAND or 20) + 2 - 20 + SIDEBAR.band)
+            end
+            local function SeatTabs()
+                local band = S.D(right).bands and S.D(right).bands.header
+                if not band then return end
+                local prev
+                for i = 1, 3 do
+                    local tab = _G["PaperDollSidebarTab" .. i]
+                    if tab then
+                        SidebarTab(k, tab, i)
+                        if tab:IsShown() then
+                            if prev then
+                                k:Move(tab, "BOTTOMLEFT", prev, "BOTTOMRIGHT", SIDEBAR.gap, 0)
+                            else
+                                k:Move(tab, "BOTTOMLEFT", band, "BOTTOMLEFT", SIDEBAR.pad, 0)
+                            end
+                            prev = tab
                         end
-                        prev = tab
                     end
                 end
             end
+            k:Size(stone, nil, (S.TITLE_BAND or 20) + 2 - 20 + SIDEBAR.band)
+            SeatTabs()
+            k:After(stone, "SetAtlas", SeatStone)
+            k:Once(right, "sidebarLayout", function()
+                if type(_G.PaperDollFrame_UpdateSidebarTabLayout) == "function" then
+                    hooksecurefunc("PaperDollFrame_UpdateSidebarTabLayout", SeatTabs)
+                end
+            end)
+        end
+
+        -- The sets list's scroll bar: Blizzard hangs it 5 INSIDE the list's
+        -- right edge and 12 below its top (ScrollBar TOPLEFT on the box's
+        -- TOPRIGHT -5,-12), over rows that run the list's full width. Ours
+        -- stands in the 20px gutter Blizzard left beside the list (box
+        -- BOTTOMRIGHT x=-20), centred in it, top and bottom with the rows.
+        local em2 = _G.PaperDollFrame and PaperDollFrame.EquipmentManagerPane
+        local box, bar = em2 and em2.ScrollBox, em2 and em2.ScrollBar
+        if box and bar then
+            local w = S.Num(bar:GetWidth()) or 8
+            local x = math.floor((20 - w) / 2 + 0.5)
+            k:Anchors(bar, {
+                { "TOPLEFT",    box, "TOPRIGHT",    x, 0 },
+                { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, 0 },
+            })
         end
         -- "Level N Class" in the title bar, as the inspect window has it.
         local level = _G.CharacterLevelText
