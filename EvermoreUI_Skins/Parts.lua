@@ -2389,7 +2389,8 @@ R{
 --     rewards: a 30px icon and a QuestItemBorder box for the name) and
 --     LargeItemButtonTemplate (the quest window's: UI-QuestItemNameFrame).
 --     Items, money, experience and reputation all use one or the other. The
---     name box was a dark, gold-edged plate per reward. Ours: no plate, the
+--     name box was a dark, gold-edged plate per reward. Ours: the spellbook's
+--     card (the tile Look, lit under the mouse) for the whole reward, the
 --     icon in the suite's style, the name beside it; the icon's edge takes the
 --     colour Blizzard gives the name (the item's quality), resting when it is
 --     plain white.
@@ -2401,6 +2402,11 @@ R{
     paint = function(b, p)
         S.StripArt(b.NameFrame)
         if b.IconBorder then S.StripArt(b.IconBorder) end
+        -- A card, as a spell is in the spellbook: the kit's tile over the
+        -- button's whole rect, the icon on its left inside the edge.
+        p:Fill(LOOK.tile.rest.fill)
+        p:Border(LOOK.tile.rest.edge)
+        p:States(LOOK.tile)
         local icon = b.Icon
         EV.Icons:Style(icon, { host = b })
         local name = b.Name

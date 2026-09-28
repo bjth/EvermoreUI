@@ -292,7 +292,33 @@ local function QuestLogDetails(k, bar)
     if text then
         k:Anchors(text, { { "TOPLEFT", det, "TOPLEFT", 5, -QLOG.pad },
                           { "BOTTOMLEFT", det, "BOTTOMLEFT", 5, 29 } })
+        -- Its bar was hung 17 above the text and 27 below it
+        -- (scrollBarTopY / scrollBarBottomY), for the header plank and the
+        -- button row: into the map's tool bar and the footer. The text's
+        -- own height now.
+        local sb = text.ScrollBar
+        if sb then
+            local x = rawget(text, "scrollBarX") or 13
+            k:Anchors(sb, { { "TOPLEFT", text, "TOPRIGHT", x, 0 },
+                            { "BOTTOMLEFT", text, "BOTTOMRIGHT", x, 0 } })
+        end
     end
+
+    -- Reward buttons are made on demand (QuestInfo_GetRewardButton), after
+    -- the window's walk: dress them each time the rewards are shown.
+    k:Once(det, "rewardButtons", function()
+        if type(QuestInfo_ShowRewards) == "function" then
+            hooksecurefunc("QuestInfo_ShowRewards", function()
+                -- The next frame: the buttons are laid out and shown by then.
+                C_Timer.After(0, function()
+                    for _, name in ipairs({ "MapQuestInfoRewardsFrame", "QuestInfoRewardsFrame" }) do
+                        local fr = _G[name]
+                        if fr then S.Walk(fr, 0) end
+                    end
+                end)
+            end)
+        end
+    end)
 
     -- Back goes up onto the map's tool bar, where the log's settings button
     -- sits on the list (the list's search row is hidden with the list while a
