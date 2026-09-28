@@ -683,7 +683,7 @@ end
 --    * each list from the content's top to its bottom, TALK.pad in, its
 --      width kept (the text inside is laid out to Blizzard's 300).
 --------------------------------------------------------------------------------
-local TALK = { footer = 36, button = 24, pad = 8, short = 96, long = 120, gutter = 21 }
+local TALK = { footer = 36, button = 24, pad = 8, short = 96, long = 120, wide = 140, gutter = 21, text = 18 }
 
 local function TalkWindow(f, k, lists, buttons)
     local foot = Band(f, "footer", "top", function(b)
@@ -747,6 +747,63 @@ P{
     name  = "QuestFrame",
     apply = function(f, k)
         TalkWindow(f, k, QUEST_SCROLLS, QUEST_BUTTONS)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  PetitionFrame (a guild charter) and GuildRegistrarFrame (buying one), both
+--  Mainline and both the talk window again, but with their text hung straight
+--  off the window rather than in a scroll frame: the charter from
+--  PetitionFrameCharterTitle at 12,-80, the registrar's pages from 20,-70 and
+--  10,-10. Each draws the QuestBG-Parchment atlas as Bg (7,-62) and hangs a
+--  MinimalScrollBar off it that "is for cosmetic purposes; it never scrolls"
+--  (PetitionFrame.xml). Ben had a charter to test on 28 Sep; the registrar
+--  follows the same rules from the source, untested.
+--
+--  Ours: the talk window's footer and no inner box; the parchment and the
+--  cosmetic scroll bar gone; the text from under the title, TALK.text in.
+--  The charter's Rename stretches between Request and Close with a gap each
+--  side (Blizzard: -3 into Request, flush to Close).
+--------------------------------------------------------------------------------
+local function TalkText(k, f, region)
+    if region then k:Move(region, "TOPLEFT", f, "TOPLEFT", TALK.text, -((S.TITLE_BAND or 24) + 2 + TALK.pad)) end
+end
+
+P{
+    name  = "PetitionFrame",
+    apply = function(f, k)
+        if f.Bg then S.StripArt(f.Bg) end
+        if f.ScrollBar then k:Mute(f.ScrollBar) end
+        TalkWindow(f, k, {}, {
+            PetitionFrameSignButton    = { "left",  "long" },
+            PetitionFrameRequestButton = { "left",  "wide" },
+            PetitionFrameCancelButton  = { "right", "short" },
+        })
+        TalkText(k, f, _G.PetitionFrameCharterTitle)
+        local rename, req, close = _G.PetitionFrameRenameButton, _G.PetitionFrameRequestButton, _G.PetitionFrameCancelButton
+        if rename and req and close then
+            k:Anchors(rename, {
+                { "LEFT",  req,   "RIGHT", TALK.pad - 2, 0 },
+                { "RIGHT", close, "LEFT",  -(TALK.pad - 2), 0 },
+            })
+            rename:SetHeight(TALK.button)
+        end
+    end,
+}
+
+P{
+    name  = "GuildRegistrarFrame",
+    apply = function(f, k)
+        if f.Bg then S.StripArt(f.Bg) end
+        if f.ScrollBar then k:Mute(f.ScrollBar) end
+        TalkWindow(f, k, {}, {
+            GuildRegistrarFrameGoodbyeButton  = { "right", "short" },
+            GuildRegistrarFrameCancelButton   = { "right", "short" },
+            GuildRegistrarFramePurchaseButton = { "left",  "short" },
+        })
+        TalkText(k, f, _G.GuildRegistrarText)
+        TalkText(k, f, _G.AvailableServicesText)
+        TalkText(k, f, _G.GuildRegistrarPurchaseText)
     end,
 }
 
