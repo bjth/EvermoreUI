@@ -1767,6 +1767,10 @@ P{
             if count and label then
                 k:Move(count, "LEFT", label, "RIGHT", M.pad, 0)
                 count:SetJustifyH("LEFT")
+                -- Blizzard fixes its height at 10, shorter than our font,
+                -- which truncates the end of the line. Let it size itself.
+                count:SetHeight(0)
+                count:SetWordWrap(false)
                 k:Label(count, "textMuted")
             end
         end
@@ -1810,9 +1814,9 @@ P{
 --  Ours: the window surface and edge; the top as a band with the month and
 --  its arrows centred and the filter and close on the right; the weekday
 --  names on a band; each day a flat cell on a frame of ours under its
---  content, a pixel short on the right and bottom so the window shows
---  through as the grid; other months dimmed, hover lighter, the selected
---  day the tile Look's on, today edged in copper. Holiday art and event
+--  content, and a grid of hairlines on a layer above it (Ben: a border
+--  round each square); other months dimmed, hover lighter, the selected
+--  day the tile Look's on, today edged in copper on that upper layer. Holiday art and event
 --  text stay: they are content. The grid is centred (Blizzard: 12 in on
 --  the left, 10 on the right).
 --------------------------------------------------------------------------------
@@ -1825,13 +1829,54 @@ local function CalCell(b)
     if not cell then return end
     local r = T.Resolve(T.LOOK.tile, { on = st.selected, hover = st.hover, disabled = st.other })
     cell.fill:SetColorTexture(T.C4(r.fill))
+    -- Today and the selected day: an edge inside the grid lines, on the
+    -- layer above the day's art, so a holiday's picture can't cover it.
     if st.today then
-        T.SetEdge(cell, { S.Colour("accent") })
+        T.SetEdge(st.mark, { S.Colour("accent") })
     elseif st.selected then
-        T.SetEdge(cell, r.edge)
+        T.SetEdge(st.mark, r.edge)
     else
-        T.SetEdge(cell, nil)
+        T.SetEdge(st.mark, nil)
     end
+end
+
+--- The grid: each cell draws its right and bottom line, the first column its
+--- left one too (the top is the weekday band's rule), on a mouse-transparent
+--- layer above the day's content, so full-cell holiday art can't hide it.
+local function CalGrid(b, st)
+    local name = b:GetName() or ""
+    local index = tonumber(name:match("(%d+)$")) or 0
+    local over = S.Ours(CreateFrame("Frame", nil, b))
+    over:EnableMouse(false)
+    over:SetAllPoints(b)
+    over:SetFrameLevel(b:GetFrameLevel() + 8)
+    local lines = {}
+    local function Line(a1, a2, vertical)
+        local t = S.Ours(over:CreateTexture(nil, "OVERLAY", nil, 6))
+        EV.Pixel.NoSnap(t)
+        t:SetPoint(a1); t:SetPoint(a2)
+        lines[#lines + 1] = { t, vertical }
+    end
+    Line("TOPRIGHT", "BOTTOMRIGHT", true)
+    Line("BOTTOMLEFT", "BOTTOMRIGHT", false)
+    if index % 7 == 1 then Line("TOPLEFT", "BOTTOMLEFT", true) end
+    local function Paint()
+        local px = EV.Pixel:Line(over)
+        for _, l in ipairs(lines) do
+            l[1]:SetColorTexture(S.Colour("border"))
+            if l[2] then l[1]:SetWidth(px) else l[1]:SetHeight(px) end
+        end
+    end
+    Paint()
+    T.Watch(lines[1][1], Paint)
+    -- The mark for today and the selected day, a pixel inside the lines.
+    local mark = S.Ours(CreateFrame("Frame", nil, over))
+    mark:EnableMouse(false)
+    local one = EV.Pixel:One(b)
+    mark:SetPoint("TOPLEFT", over, "TOPLEFT", index % 7 == 1 and one or 0, 0)
+    mark:SetPoint("BOTTOMRIGHT", over, "BOTTOMRIGHT", -one, one)
+    EV.Pixel:Edges(mark, { size = 1 })
+    st.mark = mark
 end
 
 local function CalDay(b)
@@ -1850,11 +1895,10 @@ local function CalDay(b)
     local cell = S.Ours(CreateFrame("Frame", nil, b))
     cell:EnableMouse(false)
     cell:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
-    cell:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
-    cell:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
+    cell:SetAllPoints(b)
     cell.fill = S.Ours(EV.Pixel:Fill(cell, "BACKGROUND", -7))
-    EV.Pixel:Edges(cell, { size = 1 })
     st.cell = cell
+    CalGrid(b, st)
     b:HookScript("OnEnter", function() st.hover = true; CalCell(b) end)
     b:HookScript("OnLeave", function() st.hover = false; CalCell(b) end)
     T.Watch(cell.fill, function() CalCell(b) end)
