@@ -5607,7 +5607,7 @@ P{
         FriendDialog(f, k)
         local entry, info = f.EntryFrame, f.InfoFrame
         local box = entry and entry.EditBoxContainer
-        if box then DialogPrimary(box.AcceptButton) end
+        DialogPrimary((box and box.AcceptButton) or (entry and entry.AcceptButton) or _G.AddFriendEntryFrameAcceptButton)
         if info then DialogPrimary(info.OkayButton) end
         local ib = _G.AddFriendEntryFrameInfoButton
         local t = ib and ib.GetNormalTexture and ib:GetNormalTexture()
