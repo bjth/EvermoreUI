@@ -18,6 +18,11 @@ A swing timer that keeps up with what actually happens to your swing.
   by default.
 - **Auto attack off**: the main hand bar says so when you're in combat,
   within reach of something hostile, and not attacking it.
+- **The swing timer stops when you do.** When your target dies or you stop
+  attacking, the bar goes at once instead of running out the swing. Attack
+  again before that swing would have landed and it comes back where the
+  swing really is. Ranged bars follow Shoot, Auto Shot and Throw. Can be
+  switched off on the Swing Timer page.
 
 ### Fixes
 - Swapping weapons now restarts the swing at the new weapon's speed, as
