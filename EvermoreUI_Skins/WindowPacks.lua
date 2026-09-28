@@ -1737,8 +1737,14 @@ P{
                 { "TOPLEFT",     f,    "TOPLEFT",  6, -289 },
                 { "BOTTOMRIGHT", foot, "TOPRIGHT", -(338 - 328), M.gap },
             })
-            local count = _G.MacroFrameCharLimitText
-            if count then k:Move(count, "BOTTOMRIGHT", box, "TOPRIGHT", -4, 3) end
+            -- The character count on the label's line, straight after the
+            -- label: at the line's right end it sat under Cancel.
+            local count, label = _G.MacroFrameCharLimitText, _G.MacroFrameEnterMacroText
+            if count and label then
+                k:Move(count, "LEFT", label, "RIGHT", M.pad, 0)
+                count:SetJustifyH("LEFT")
+                k:Label(count, "textMuted")
+            end
         end
 
         -- Save over Cancel on the right, M.gap apart (Blizzard: 15), and
