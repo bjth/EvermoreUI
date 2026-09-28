@@ -1668,10 +1668,21 @@ end
 -- clicked button and shown by QuestInfoItem_OnClick, hidden again by
 -- QuestInfo_ShowRewards when the rewards are rebuilt. Its art goes; the card
 -- is the tile Look's "on" while it is the choice QuestInfoFrame records
--- (QuestInfoItem_IsSelected's own test), repainted whenever Blizzard shows or
--- hides its highlight. Hooked on the frame, not on QuestInfoItem_OnClick,
--- which the buttons' XML binds by reference.
+-- (QuestInfoItem_IsSelected's own test). Every card repaints after a
+-- reward's own OnClick has run (a HookScript runs after it), because
+-- QuestInfoItem_OnClick shows the highlight BEFORE it sets itemChoice: a
+-- repaint on Show still saw the old choice and left it lit. The highlight's
+-- Hide covers the rewards being rebuilt, which clears the choice.
+-- Not a hook on QuestInfoItem_OnClick itself, which the buttons' XML binds
+-- by reference.
 local rewardButtons = setmetatable({}, { __mode = "k" })
+
+local function RepaintRewards()
+    for b in pairs(rewardButtons) do
+        local d = S.D(b)
+        if d.Repaint then d.Repaint() end
+    end
+end
 
 local function RewardChosen(b)
     local info = _G.QuestInfoFrame
@@ -1687,14 +1698,7 @@ local function HookRewardHighlight()
     for _, r in ipairs(S.Regions(hl)) do
         if r.GetObjectType and r:GetObjectType() == "Texture" then S.StripArt(r) end
     end
-    local function All()
-        for b in pairs(rewardButtons) do
-            local d = S.D(b)
-            if d.Repaint then d.Repaint() end
-        end
-    end
-    hooksecurefunc(hl, "Show", All)
-    hooksecurefunc(hl, "Hide", All)
+    hooksecurefunc(hl, "Hide", RepaintRewards)
 end
 
 R{
@@ -1702,7 +1706,10 @@ R{
     type = "Button",
     keys = { "Icon", "NameFrame", "Name" },
     paint = function(b, p)
-        rewardButtons[b] = true
+        if not rewardButtons[b] then
+            rewardButtons[b] = true
+            b:HookScript("OnClick", RepaintRewards)
+        end
         HookRewardHighlight()
         if not rewardHooked and type(SetItemButtonQuality) == "function" then
             rewardHooked = true
