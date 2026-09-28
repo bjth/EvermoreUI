@@ -308,6 +308,17 @@ function Pixel:Edges(obj, opts)
         e[3]:SetPoint("TOPLEFT");    e[3]:SetPoint("BOTTOMLEFT")
         e[4]:SetPoint("TOPRIGHT");   e[4]:SetPoint("BOTTOMRIGHT")
         borders[obj] = border
+        -- The thickness is baked in at the scale the frame has NOW, and a
+        -- frame's scale can change afterwards without any event we hear: the
+        -- static pop-ups were painted at one scale and shown at another, and
+        -- their "one pixel" edges came out 0.55 of a pixel, so whichever side
+        -- landed between pixel centres was not drawn (/evui skin edges
+        -- measured it). Re-measure every time the frame is shown, after
+        -- Blizzard's own OnShow has set it up. A global scale change is
+        -- ResnapAll's; a decoupled border never needs this.
+        if not decouple and obj.HookScript then
+            pcall(obj.HookScript, obj, "OnShow", function() Snap4(obj, border) end)
+        end
     end
     if opts.size then border.size = opts.size end
     Snap4(obj, border)
