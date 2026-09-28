@@ -4654,7 +4654,14 @@ local function CfgList(k, box)
     CfgFlat(k, box)
     cfgBoxes[box] = true
     local title = box.header or _G[(box:GetName() or "") .. "Title"]
-    if title then k:Label(title, "title", true) end
+    if title then
+        k:Label(title, "title", true)
+        -- Over the rows' first column, not the box's padded edge: the
+        -- check box's left side (a row 4 in, its check 5 in, the drawn box
+        -- 4 inside that), or a swatch row's label (7 in).
+        local x = box.checkBoxTable and (CFG.inset + 5 + 4) or (CFG.inset + 7)
+        k:Move(title, "BOTTOMLEFT", box, "TOPLEFT", x, 2)
+    end
     for _, row in ipairs(S.Children(box)) do
         if row.CheckButton or row.ColorSwatch or (row.GetName and row:GetName() and row:GetName():find("Swatch%d+$")) then
             CfgFlat(k, row)
@@ -4808,7 +4815,7 @@ P{
         local cs = _G.ChatConfigCombatSettings
         local filters = cs and cs.Filters
         local cbg = _G.ChatConfigBackgroundFrame
-        local tabTop = CFG.filters + CFG.gap + CFG.button + CFG.gap + CFG.tab
+        local tabTop = CFG.gap + CFG.filters + CFG.gap + CFG.button + CFG.gap + CFG.tab
         if filters then
             CfgFlat(k, filters)
             k:Anchors(filters, {
@@ -4858,14 +4865,17 @@ P{
                 T.Watch(d.cfgRule, Paint)
             end
         end
-        local function CombatTabs(selected)
+        -- The chosen tab is the one whose page is showing; Blizzard says so
+        -- only through the pages' visibility and the labels' colour.
+        local function CombatTabs()
             local prev
-            for i = 1, #(_G.COMBAT_CONFIG_TABS or {}) do
+            for i, info in ipairs(_G.COMBAT_CONFIG_TABS or {}) do
                 local tab = _G["CombatConfigTab" .. i]
                 if tab then
                     CfgTab(k, tab)
                     tab:SetAlpha(1)
-                    if selected then S.D(tab).cfgOn = (i == selected) end
+                    local page = info.frame and _G[info.frame]
+                    S.D(tab).cfgOn = page and page:IsShown() and true or false
                     CfgTabState(tab)
                     tab:ClearAllPoints()
                     if prev then
@@ -4897,7 +4907,7 @@ P{
                 hooksecurefunc("ChatConfigCombat_OnHide", function() Ground(false) end)
             end
             if type(_G.ChatConfig_UpdateCombatTabs) == "function" then
-                hooksecurefunc("ChatConfig_UpdateCombatTabs", function(id) CombatTabs(id) end)
+                hooksecurefunc("ChatConfig_UpdateCombatTabs", function() CombatTabs() end)
             end
             if type(_G.ChatConfigCombat_InitButton) == "function" then
                 hooksecurefunc("ChatConfigCombat_InitButton", function(b) CfgCategory(b, true) end)
