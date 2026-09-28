@@ -579,11 +579,29 @@ P{
                 })
             end
         end
+        -- Every row we can see, in the state Blizzard has just set. The
+        -- window's opening pick (OnShow: Update, then
+        -- ClassTrainer_SelectNearestLearnableSkill -> ClassTrainer_SetSelection)
+        -- all happens before our discovery sees the window, so the rows' own
+        -- hooks can miss it: repaint after Blizzard's selection and refresh,
+        -- and once more the frame after the window opens.
+        local function Rows()
+            local sync = S.TrainerRowSync
+            if not sync then return end
+            local box = f.ScrollBox
+            if box and box.ForEachFrame then pcall(box.ForEachFrame, box, sync) end
+            if f.skillStepButton then sync(f.skillStepButton) end
+        end
         SeatList()
+        Rows()
         k:Once(f, "trainerList", function()
             if type(_G.ClassTrainerFrame_Update) == "function" then
-                hooksecurefunc("ClassTrainerFrame_Update", SeatList)
+                hooksecurefunc("ClassTrainerFrame_Update", function() SeatList(); Rows() end)
             end
+            if type(_G.ClassTrainer_SetSelection) == "function" then
+                hooksecurefunc("ClassTrainer_SetSelection", Rows)
+            end
+            f:HookScript("OnShow", function() C_Timer.After(0, Rows) end)
         end)
     end,
 }

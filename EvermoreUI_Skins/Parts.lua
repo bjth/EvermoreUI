@@ -463,6 +463,17 @@ R{
 --      source, the grey wash muted (the desaturated icon and grey name say
 --      "unavailable" already). The icon is ours.
 --------------------------------------------------------------------------------
+-- Blizzard says "can't afford" only by turning the row's price red
+-- (SetMoneyFrameColorByFrame, InitServiceButton), which it does while the
+-- price is shown; our edge says it too, from the same comparison.
+local function CantAfford(b)
+    if not (b.money and b.money:IsShown()) or type(GetTrainerServiceCost) ~= "function" then return false end
+    local okI, id = pcall(b.GetID, b)
+    if not okI or not id or id == 0 then return false end
+    local ok, cost = pcall(GetTrainerServiceCost, id)
+    return ok and type(cost) == "number" and cost > (GetMoney() or 0) or false
+end
+
 local function TrainerRowSync(b)
     local d = S.D(b)
     local card = d.trainerCard
@@ -471,8 +482,9 @@ local function TrainerRowSync(b)
     local st = { on = sel and sel:IsShown() or false, hover = b:IsMouseOver() or false }
     local r = T.Resolve(LOOK.tile, st)
     card.fill:SetColorTexture(T.C4(r.fill))
-    T.SetEdge(card, r.edge)
+    T.SetEdge(card, CantAfford(b) and "danger" or r.edge)
 end
+S.TrainerRowSync = TrainerRowSync   -- the trainer pack repaints after Blizzard selects
 
 R{
     name = "trainerRow",
@@ -500,6 +512,8 @@ R{
             T.Watch(card.fill, Sync)
             b:HookScript("OnEnter", Sync)
             b:HookScript("OnLeave", Sync)
+            -- InitServiceButton ends Hide(); Show(): after every refresh.
+            b:HookScript("OnShow", Sync)
             hooksecurefunc(b.selectedTex, "Show", Sync)
             hooksecurefunc(b.selectedTex, "Hide", Sync)
         end
@@ -2442,6 +2456,10 @@ R{
             d.chev:SetPoint("RIGHT", dd, "RIGHT", -6, 0)
             d.chev:Point("down")
         end
+        -- Blizzard hangs the label from the TOP (y -2, 20 tall), centred only
+        -- at its own 22px height; packs put these on 24 and 30px bars. On the
+        -- middle instead, and centred in the room left of the chevron.
+        p:Reseat(dd.Text, { { "CENTER", -math.floor((6 + LOOK.dropdown.chevron) / 2), 0 } })
         p:States(LOOK.dropdown, {
             label = dd.Text, chev = d.chev,
             on = function() return type(dd.IsMenuOpen) == "function" and dd:IsMenuOpen() end,
