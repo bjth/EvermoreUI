@@ -526,6 +526,107 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  0a2. Loot row          LootFrameElementTemplate (Mainline LootFrame.xml):
+--      the item and money entries of the loot window. Pooled rows, rebuilt by
+--      Init for every loot: NameFrame (looting_itemcard_bg, tinted to the
+--      item's quality), BorderFrame (the stroke), HighlightNameFrame and
+--      PushedNameFrame (ADD strokes, shown on the item's enter and mouse
+--      down), a 37px Item at TOPLEFT 5,-4, the name 8 right of it hung from
+--      its top, and on items a QualityStripe tag with the quality's name.
+--      A locked slot (someone is rolling on it) gets a red tint on the icon.
+--
+--      Ours (Ben: no borders, no padding, a row per item): a full-width row
+--      with no edge, filled on hover and deeper on press (read from
+--      Blizzard's own two strokes, their art cleared), a hairline between
+--      rows, the icon centred on the row's height at the left, the name
+--      centred beside it, the quality tag gone (the name's colour and the
+--      icon's edge say it). A locked slot's red tint is undone; a 2px red
+--      bar down the row's left edge says it instead. The loot window pack
+--      takes the view's padding and spacing away and sets the row height.
+--------------------------------------------------------------------------------
+local LOOT_ROW = { icon = 37, left = 6, text = 8, bar = 2 }
+
+local function LootRowSync(f)
+    local d = S.D(f)
+    if not d.lootFill then return end
+    local st = { hover = f.HighlightNameFrame:IsShown() or false,
+                 on = f.PushedNameFrame:IsShown() or false }
+    local r = T.Resolve(LOOK.listItem, st)
+    d.lootFill:SetColorTexture(T.C4(r.fill))
+    d.lootBar:SetShown(d.lootLocked and true or false)
+    -- The rule sits on each row's top; the first row's would double the
+    -- title rule, so it goes.
+    local okI, i = pcall(f.GetElementDataIndex, f)
+    d.lootRule:SetShown(not (okI and i == 1))
+end
+
+local function LootRowInit(f)
+    local d = S.D(f)
+    local okS, slot = pcall(f.GetSlotIndex, f)
+    local locked = false
+    if okS and slot and type(GetLootSlotInfo) == "function" then
+        local ok, _, _, _, _, _, lk = pcall(GetLootSlotInfo, slot)
+        locked = ok and lk and true or false
+    end
+    d.lootLocked = locked
+    local item = f.Item
+    if item then
+        item:ClearAllPoints()
+        item:SetPoint("LEFT", f, "LEFT", LOOT_ROW.left, 0)
+        local icon = item.icon or item.Icon
+        if icon and icon.SetVertexColor then icon:SetVertexColor(1, 1, 1) end
+    end
+    local text = f.Text
+    if text and item then
+        text:ClearAllPoints()
+        text:SetPoint("LEFT", item, "RIGHT", LOOT_ROW.text, 0)
+        text:SetPoint("RIGHT", f, "RIGHT", -LOOT_ROW.text, 0)
+        text:SetHeight(30)
+        text:SetJustifyV("MIDDLE")
+    end
+    if f.QualityText then f.QualityText:SetAlpha(0) end
+    LootRowSync(f)
+end
+
+R{
+    name = "lootRow",
+    keys = { "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame", "Item" },
+    paint = function(f, p)
+        local d = S.D(f)
+        for _, key in ipairs({ "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame", "QualityStripe" }) do
+            if f[key] then S.StripArt(f[key]) end
+        end
+        if not d.lootFill then
+            d.lootFill = S.Ours(EV.Pixel:Fill(f, "BACKGROUND", -7))
+            d.lootRule = S.Ours(f:CreateTexture(nil, "BORDER", nil, 1))
+            EV.Pixel.NoSnap(d.lootRule)
+            d.lootRule:SetPoint("TOPLEFT"); d.lootRule:SetPoint("TOPRIGHT")
+            d.lootBar = S.Ours(f:CreateTexture(nil, "BORDER", nil, 2))
+            EV.Pixel.NoSnap(d.lootBar)
+            d.lootBar:SetPoint("TOPLEFT"); d.lootBar:SetPoint("BOTTOMLEFT")
+            d.lootBar:SetWidth(LOOT_ROW.bar)
+            local function Paint()
+                d.lootRule:SetColorTexture(S.Colour("divider"))
+                d.lootRule:SetHeight(EV.Pixel:Line(f))
+                d.lootBar:SetColorTexture(S.Colour("danger"))
+                LootRowSync(f)
+            end
+            Paint()
+            T.Watch(d.lootFill, Paint)
+            local function Sync() LootRowSync(f) end
+            for _, key in ipairs({ "HighlightNameFrame", "PushedNameFrame" }) do
+                hooksecurefunc(f[key], "Show", Sync)
+                hooksecurefunc(f[key], "Hide", Sync)
+            end
+            if type(f.Init) == "function" then
+                hooksecurefunc(f, "Init", function() LootRowInit(f) end)
+            end
+        end
+        LootRowInit(f)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  0b. Slider             UISliderTemplate and friends
 --      Also claimed before `window` could have it. A slider has a NineSlice
 --      (its track is one), so the old fingerprint painted sliders as windows:

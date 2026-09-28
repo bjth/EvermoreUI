@@ -970,6 +970,65 @@ P{
     end,
 }
 
+--------------------------------------------------------------------------------
+--  LootFrame (Mainline LootFrame.xml, ScrollingFlatPanel.xml/.lua).
+--
+--  Blizzard's geometry: a ScrollingFlatPanelTemplate 220 wide (+16 while its
+--  scroll bar shows), ScrollBox at TOPLEFT 4,-22 and BOTTOM 0,4, a linear view
+--  padded 6 all round with 2 between 46px rows, and a height Resize works out
+--  on every open as rows + gaps + 26 + 20, capped at 290. Shown through
+--  ShowUIPanel only when loot isn't under the mouse, so Discover takes it by
+--  name. The rows are the lootRow part.
+--
+--  Ours (Ben: a row per item, no borders, no padding): the view's padding and
+--  gaps taken to nothing, the list from our title rule to the window's bottom
+--  edge and side to side (less a gutter for the scroll bar while it shows),
+--  and the height, after Blizzard's Resize, exactly the title and the rows.
+--------------------------------------------------------------------------------
+local LOOT = { row = 46, gutter = 16 }
+
+P{
+    name  = "LootFrame",
+    apply = function(f, k)
+        local box, bar = f.ScrollBox, f.ScrollBar
+        if not box then return end
+        if f.Bg then k:Strip(f.Bg, 1) end
+        for _, get in ipairs({ "GetUpperShadowTexture", "GetLowerShadowTexture" }) do
+            local ok, t = pcall(box[get], box)
+            if ok and t then S.StripArt(t) end
+        end
+        local top = (S.TITLE_BAND or 24) + 2
+
+        local function Seat()
+            local gutter = (bar and bar:IsShown()) and LOOT.gutter or 0
+            k:Anchors(box, {
+                { "TOPLEFT",     f, "TOPLEFT",     1, -top },
+                { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -(1 + gutter), 1 },
+            })
+            if bar and gutter > 0 then
+                local w = S.Num(bar:GetWidth()) or 8
+                local x = -(1 + gutter) + math.floor((gutter - w) / 2 + 0.5)
+                k:Anchors(bar, {
+                    { "TOPLEFT",    f, "TOPRIGHT",    x, -(top + 4) },
+                    { "BOTTOMLEFT", f, "BOTTOMRIGHT", x, 5 },
+                })
+            end
+            if f.isInEditMode then return end
+            local okN, n = pcall(box.GetDataProviderSize, box)
+            if okN and type(n) == "number" and n > 0 then
+                f:SetHeight(math.min(top + n * LOOT.row + 1, f.panelMaxHeight or 290))
+            end
+        end
+
+        k:Once(f, "lootView", function()
+            local okV, view = pcall(box.GetView, box)
+            if okV and view and view.SetPadding then pcall(view.SetPadding, view, 0, 0, 0, 0, 0) end
+            if type(f.Resize) == "function" then hooksecurefunc(f, "Resize", Seat) end
+        end)
+        Seat()
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",
