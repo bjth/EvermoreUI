@@ -523,7 +523,7 @@ local function StyleMenuRows()
                 local h = r:GetHeight()
                 if h and not (issecretvalue and issecretvalue(h)) and h >= 8 then
                     r:SetColorTexture(TH.RGBA("divider"))
-                    r:SetHeight(EV.Pixel:One(frame))
+                    r:SetHeight(EV.Pixel:Line(frame))
                 end
             end
         end

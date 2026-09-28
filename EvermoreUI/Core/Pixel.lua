@@ -43,6 +43,15 @@ function Pixel:One(frame)
     return perfect / es
 end
 
+--- The thickness of a hairline n physical pixels wide (n defaults to 1), in
+--- this frame's coordinate space: exactly n pixels. For a border use Edges,
+--- which also seats a strip that lands on a pixel centre (see Snap4); a rule
+--- drawn on its own takes the plain size.
+local LINE = 1.0
+function Pixel:Line(frame, n)
+    return self:One(frame) * (n or 1) * LINE
+end
+
 --- Round v to the nearest whole physical pixel (min 1px when v > 0).
 function Pixel:Snap(frame, v)
     local one = self:One(frame)
@@ -222,10 +231,56 @@ local fills = setmetatable({}, { __mode = "k" })    -- object -> fill texture
 
 --- Snap against the frame the strips actually LIVE on, which is not always
 --- the frame the border belongs to. See the decoupled case below.
+--- How far a coordinate (in physical pixels) is from the nearest pixel centre.
+local function OffCentre(v)
+    local f = v - floor(v)
+    return math.abs(f - 0.5)
+end
+
+--- Size the four strips, and seat any that sits on a pixel centre.
+---
+--- An unsnapped strip lights the pixels whose centres it covers, its near
+--- edge inclusive and its far edge not. A strip exactly one pixel wide lights
+--- exactly one pixel wherever it lands, EXCEPT when the frame's edge sits on a
+--- pixel centre: then the strip's far end sits on the next centre too, and a
+--- thickness a millionth over or under one pixel (it is always a float) decides
+--- between two pixels on one side and none on the other. That is a centred
+--- frame of odd width, which is every static pop-up: its right side vanished,
+--- and making the strips a hair thicker only moved the fault to a doubled
+--- left side. So a strip whose edge is on (or within a fiftieth of) a centre
+--- is moved a tenth of a pixel inwards, clear of both centres, and lights the
+--- one pixel inside the frame. Anywhere else the edge stays where it is.
+---
+--- Measured on show, on resize and on a scale change. A frame dragged to a new
+--- phase keeps the seat it had until one of those; the worst that does is the
+--- original one-pixel wobble, for the length of the drag.
+local SEAT, NEAR = 0.1, 0.02
 local function Snap4(obj, border)
-    local px = Pixel:One(border.host or obj) * (border.size or 1)
+    local host = border.host or obj
+    local one = Pixel:One(host)
+    local px = one * (border.size or 1)
     local e = border.edges
     e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
+    local okL, l, b, w, h = pcall(host.GetRect, host)
+    if not (okL and l and b and w and h) then return end
+    if issecretvalue and (issecretvalue(l) or issecretvalue(b) or issecretvalue(w) or issecretvalue(h)) then return end
+    local r, t = l + w, b + h
+    local dl = OffCentre(l / one) < NEAR and SEAT * one or 0
+    local dr = OffCentre(r / one) < NEAR and SEAT * one or 0
+    local dt = OffCentre(t / one) < NEAR and SEAT * one or 0
+    local db = OffCentre(b / one) < NEAR and SEAT * one or 0
+    if dl == border.dl and dr == border.dr and dt == border.dt and db == border.db then return end
+    border.dl, border.dr, border.dt, border.db = dl, dr, dt, db
+    -- Every strip is trimmed by the seats of the sides it meets, not only
+    -- moved by its own. A seated top line lights the row inside the frame,
+    -- but the side strips still ran to the frame's top, which is on a pixel
+    -- centre too, so they lit the row above it and stood a pixel proud of
+    -- the corner (Ben's page button, 28 Sep). Trimmed alike, all four end on
+    -- the same rows and columns and the corners meet.
+    e[1]:ClearAllPoints(); e[1]:SetPoint("TOPLEFT", host, "TOPLEFT", dl, -dt);      e[1]:SetPoint("TOPRIGHT", host, "TOPRIGHT", -dr, -dt)
+    e[2]:ClearAllPoints(); e[2]:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", dl, db); e[2]:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -dr, db)
+    e[3]:ClearAllPoints(); e[3]:SetPoint("TOPLEFT", host, "TOPLEFT", dl, -dt);      e[3]:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", dl, db)
+    e[4]:ClearAllPoints(); e[4]:SetPoint("TOPRIGHT", host, "TOPRIGHT", -dr, -dt);   e[4]:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -dr, db)
 end
 
 --- A one-pixel border.
@@ -264,6 +319,7 @@ function Pixel:Edges(obj, opts)
         local decouple = opts.decouple
         if decouple then
             local c = CreateFrame("Frame", nil, obj)
+            c.ignoreInLayout = true
             c:SetAllPoints(obj)
             c:SetFrameLevel((obj:GetFrameLevel() or 0) + 1)
             if c.SetIgnoreParentScale then
@@ -279,6 +335,9 @@ function Pixel:Edges(obj, opts)
             -- one-pixel strip rounding to zero width; with the container
             -- decoupled the geometry is already exact.
             NoSnap(t)
+            -- Ours, and not content: a LayoutFrame measures every region it
+            -- has (LayoutFrame.lua, GetLayoutChildren) unless told not to.
+            t.ignoreInLayout = true
             border.edges[i] = t
         end
         local e = border.edges
@@ -287,6 +346,21 @@ function Pixel:Edges(obj, opts)
         e[3]:SetPoint("TOPLEFT");    e[3]:SetPoint("BOTTOMLEFT")
         e[4]:SetPoint("TOPRIGHT");   e[4]:SetPoint("BOTTOMRIGHT")
         borders[obj] = border
+        -- The thickness is baked in at the scale the frame has NOW, and a
+        -- frame's scale can change afterwards without any event we hear: the
+        -- static pop-ups were painted at one scale and shown at another, and
+        -- their "one pixel" edges came out 0.55 of a pixel, so whichever side
+        -- landed between pixel centres was not drawn (/evui skin edges
+        -- measured it). Re-measure every time the frame is shown, after
+        -- Blizzard's own OnShow has set it up, and on every resize (which moves
+        -- the right and bottom edges to a new place on the pixel grid). A
+        -- global scale change is ResnapAll's.
+        local watch = border.host or obj
+        if watch.HookScript then
+            local function Again() Snap4(obj, border) end
+            pcall(watch.HookScript, watch, "OnShow", Again)
+            pcall(watch.HookScript, watch, "OnSizeChanged", Again)
+        end
     end
     if opts.size then border.size = opts.size end
     Snap4(obj, border)
@@ -324,6 +398,7 @@ function Pixel:Fill(obj, layer, sub)
     local t = fills[obj]
     if not t then
         t = obj:CreateTexture(nil, layer or "BACKGROUND", nil, sub or -7)
+        t.ignoreInLayout = true
         t:SetAllPoints(obj)
         NoSnap(t)
         fills[obj] = t

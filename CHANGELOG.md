@@ -1,5 +1,95 @@
 # EvermoreUI
 
+## 0.13.5
+
+A pass over the windows you open most, to the standard the spellbook and
+character window set: no boxes inside boxes, controls on a tool bar or a
+footer, and cards and rows in our look.
+
+### New
+- **Tracked recipes in the objective tracker**: a Professions section of
+  its own beside Quests, folding the same way, with a heading for each
+  profession and each recipe as a row.
+
+### Changed
+- **Settings**, Blizzard's options window: a title band, the search on a
+  tool bar, Close and Apply on a footer, rows in body text and thin
+  sliders. The Graphics page's quality box and advanced rows are tidied.
+- **Talents**: the spec tabs, search, options and unspent points on a tool
+  bar under the title, the points in green while you have some to spend.
+  Apply and reset sit on a footer, and the tree headings are flat.
+- **World map and quest log**: the search, quest count and options on one
+  line, the map's corner controls clear of its edges, and quest details
+  that fit the window, with Back on the tool bar and the buttons on a
+  footer. Rewards are cards, each icon edged in the item's quality.
+- **Quest givers, gossip and guild charters** share one layout: the text
+  straight under the title with no box round it and the buttons on a
+  footer. Gossip options get a flat highlight, and the reward you pick
+  shows in copper.
+- **Inspect** is laid out like the character window, with the level and
+  class in the title bar.
+- **Character window**: Character, Equipment Manager and Pet are text tabs
+  on a short band, the lists beside the model share one inset, and your
+  level and class are in the title bar.
+- **Class trainer**: the filter on a tool bar, your money, Train and Train
+  all on a footer, and each spell a card with our icons. The one you've
+  picked is copper, and anything you can't learn yet has a red edge.
+- **Merchant**: items are cards with the icon in its own colours, and a
+  red edge on what you can't use or can't buy. Empty slots are ours, the
+  repair and sell junk buttons are in the icon style, and your money sits
+  on the footer.
+- **Loot**: one row per item with no boxes, the icon and name side by
+  side, and a red bar on anything being rolled for.
+- **Mail**: letters are rows you can click anywhere along, with the pager
+  and Open All on a footer. Send Mail has a box round the message and its
+  buttons on a footer. Letters and invoices lose the stationery, and
+  attachments sit clear of the buttons.
+- **Zone map** (Shift+M): no border, just our backdrop, which follows the
+  map's opacity setting, with a flat tab. The opacity pop-up is in our
+  style too.
+- **Red is redder**, so warnings and things you can't do read apart from
+  the copper.
+- **No shadows round windows.** The edge does the job, without the points
+  the shadow drew in each corner.
+- Blizzard's older sliders use our slider.
+
+### Fixes
+- A border could lose a side, draw one a pixel too thick, or have a corner
+  stand a pixel proud, depending on where its window sat on screen.
+- A dropdown's label sat high on a taller button.
+- Opening the Equipment Manager moved the character window's tabs and
+  left a gap under them.
+
+## 0.13.1
+
+A swing timer that keeps up with what actually happens to your swing.
+
+### New
+- **Parry haste and haste mid-swing** on the swing timer. Forever doesn't
+  document either rule, so each one only moves the bar once your own
+  swings have confirmed it twice in a row; until then, and after any swing
+  that goes against it, the bar keeps Blizzard's timing. The Swing Timer
+  page shows where each rule stands, and either can be switched off.
+- **Global cooldown shading**: the part of the swing your global cooldown
+  still covers, so you can see whether there's time for another ability
+  before the swing lands. On by default.
+- **Latency zone**: the end of each swing tinted by your latency, the
+  stretch where anything you press arrives after the swing has gone. Off
+  by default.
+- **Auto attack off**: the main hand bar says so when you're in combat,
+  within reach of something hostile, and not attacking it.
+- **The swing timer stops when you do.** When your target dies or you stop
+  attacking, the bar goes at once instead of running out the swing. Attack
+  again before that swing would have landed and it comes back where the
+  swing really is. Ranged bars follow Shoot, Auto Shot and Throw. Can be
+  switched off on the Swing Timer page.
+
+### Fixes
+- Swapping weapons now restarts the swing at the new weapon's speed, as
+  the game does, even in combat when the speed can't be read.
+- The swing timer could stop dimming when your target was out of reach,
+  after hiding Blizzard's own timer switched the range check off.
+
 ## 0.13.0
 
 Built around how Forever plays: a setup that gets you going in a minute,

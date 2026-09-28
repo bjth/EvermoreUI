@@ -97,7 +97,7 @@ function U.ShowPasteText(title, note, actionLabel, onAction)
     f.onAction = function(text)
         local problem = onAction and onAction(text)
         if type(problem) == "string" then
-            f.note:SetText("|cffe46a55" .. problem .. "|r")
+            f.note:SetText("|cffe8524a" .. problem .. "|r")
         else
             f:Hide()
         end

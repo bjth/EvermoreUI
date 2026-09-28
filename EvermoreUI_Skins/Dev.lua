@@ -127,10 +127,78 @@ local function Find(text)
     if found == 0 then Say("Nothing on screen shows " .. text .. ".") end
 end
 
+--------------------------------------------------------------------------------
+--  /evui skin edges <frame|this>: why a side of a border is not on screen.
+--  Every edge of ours on the frame, in physical pixels (where it is, whether
+--  it's shown and at what alpha, its layer), and everything else that draws
+--  over the frame's right-hand column: child frames at or above its level
+--  and their visible textures. The numbers are what the screenshot can't say.
+--------------------------------------------------------------------------------
+local function Px(v)
+    return v and ("%.2f"):format(v / EV.Pixel:One(UIParent)) or "nil"
+end
+
+local function ScreenRect(obj)
+    local ok, l, b, w, h = pcall(obj.GetRect, obj)
+    if not (ok and l) then return nil end
+    local k = obj:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    return l * k, b * k, w * k, h * k
+end
+
+local function Edges(frame)
+    local l, b, w, h = ScreenRect(frame)
+    if not l then Say("That frame has no rect."); return end
+    Say(("|cffe3b464%s|r px: left %s right %s bottom %s top %s, scale %.4f"):format(
+        NameOf(frame), Px(l), Px(l + w), Px(b), Px(b + h), frame:GetEffectiveScale()))
+    local rec = EV.Pixel:EdgesOf(frame)
+    if not rec then Say("   no edges of ours on it") else
+        Say(("   edges on %s, size %s"):format(rec.host and "a decoupled container" or "the frame", tostring(rec.size)))
+        for i, e in ipairs(rec.edges) do
+            local el, eb, ew, eh = ScreenRect(e)
+            local layer, sub = e:GetDrawLayer()
+            Say(("   [%d] shown %s visible %s alpha %.2f  x %s w %s  y %s h %s  %s %s"):format(i,
+                tostring(e:IsShown()), tostring(e:IsVisible()), e:GetAlpha(),
+                Px(el), Px(ew), Px(eb), Px(eh), tostring(layer), tostring(sub)))
+        end
+    end
+    local right = l + w
+    local level = frame:GetFrameLevel()
+    local function Visit(obj, depth)
+        if depth > 6 or not S.Alive(obj) then return end
+        for _, c in ipairs(S.Children(obj)) do
+            local cl, cb, cw, ch = ScreenRect(c)
+            if cl and c:IsVisible() and cl < right and cl + cw >= right - 1 then
+                local tex = {}
+                for _, r in ipairs(S.Regions(c)) do
+                    if r.GetObjectType and r:GetObjectType() == "Texture" and r:IsVisible() and r:GetAlpha() > 0.05 then
+                        local rl, _, rw = ScreenRect(r)
+                        if rl and rl < right and rl + rw >= right - 1 then
+                            tex[#tex + 1] = tostring((r.GetAtlas and r:GetAtlas()) or r:GetTexture() or "colour")
+                        end
+                    end
+                end
+                Say(("   over the right column: %s level %d (frame %d) %s%s%s"):format(NameOf(c),
+                    c:GetFrameLevel(), level, S.ours[c] and "ours " or "",
+                    S.claimed[c] and ("part " .. S.claimed[c] .. " ") or "",
+                    #tex > 0 and ("textures " .. table.concat(tex, ", ")) or "no textures there"))
+            end
+            Visit(c, depth + 1)
+        end
+    end
+    Visit(frame, 0)
+end
+
 EV:RegisterSlash("skin", function(rest)
     rest = (rest or ""):lower()
 
     if rest == "profile" then Profile(); return end
+    local target = rest:match("^edges%s*(.*)$")
+    if target then
+        local frame = (target == "" or target == "this") and Focus() or _G[target] or _G[(target:gsub("^%l", string.upper))]
+        if not frame then Say("Point at a frame, or name one: /evui skin edges StaticPopup1"); return end
+        Edges(frame)
+        return
+    end
     local text = rest:match("^find%s+(.+)$")
     if text then Find(text); return end
 

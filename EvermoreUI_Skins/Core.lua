@@ -119,7 +119,17 @@ S.Children = Children
 local Painter = {}
 Painter.__index = Painter
 
-local function Ours(obj) S.ours[obj] = true; return obj end
+-- Everything we add to a Blizzard frame is ours, and none of it is layout.
+-- A LayoutFrame (ResizeLayoutFrame: the static pop-ups, their button row)
+-- sizes itself to every child frame and region it has, GetChildren and
+-- GetRegions alike (LayoutFrame.lua, GetLayoutChildren), so our fills, edges
+-- and shadows were being measured as content. `ignoreInLayout` is the key
+-- Blizzard's own layout reads to skip one, and the objects are our own.
+local function Ours(obj)
+    S.ours[obj] = true
+    if type(obj) == "table" then obj.ignoreInLayout = true end
+    return obj
+end
 S.Ours = Ours
 
 --- Hide art without hiding the object: SetAlpha(0), never Hide(), because

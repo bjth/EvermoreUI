@@ -3,6 +3,53 @@ if EV_BLOCKED then return end
 -- changelog, not this file.
 EvermoreUI.CHANGELOG = {
     {
+        version = "0.13.5",
+        intro = { "A pass over the windows you open most, to the standard the spellbook and character window set: no boxes inside boxes, controls on a tool bar or a footer, and cards and rows in our look." },
+        sections = {
+            { title = "New", items = {
+                "**Tracked recipes in the objective tracker**: a Professions section of its own beside Quests, folding the same way, with a heading for each profession and each recipe as a row.",
+            } },
+            { title = "Changed", items = {
+                "**Settings**, Blizzard's options window: a title band, the search on a tool bar, Close and Apply on a footer, rows in body text and thin sliders. The Graphics page's quality box and advanced rows are tidied.",
+                "**Talents**: the spec tabs, search, options and unspent points on a tool bar under the title, the points in green while you have some to spend. Apply and reset sit on a footer, and the tree headings are flat.",
+                "**World map and quest log**: the search, quest count and options on one line, the map's corner controls clear of its edges, and quest details that fit the window, with Back on the tool bar and the buttons on a footer. Rewards are cards, each icon edged in the item's quality.",
+                "**Quest givers, gossip and guild charters** share one layout: the text straight under the title with no box round it and the buttons on a footer. Gossip options get a flat highlight, and the reward you pick shows in copper.",
+                "**Inspect** is laid out like the character window, with the level and class in the title bar.",
+                "**Character window**: Character, Equipment Manager and Pet are text tabs on a short band, the lists beside the model share one inset, and your level and class are in the title bar.",
+                "**Class trainer**: the filter on a tool bar, your money, Train and Train all on a footer, and each spell a card with our icons. The one you've picked is copper, and anything you can't learn yet has a red edge.",
+                "**Merchant**: items are cards with the icon in its own colours, and a red edge on what you can't use or can't buy. Empty slots are ours, the repair and sell junk buttons are in the icon style, and your money sits on the footer.",
+                "**Loot**: one row per item with no boxes, the icon and name side by side, and a red bar on anything being rolled for.",
+                "**Mail**: letters are rows you can click anywhere along, with the pager and Open All on a footer. Send Mail has a box round the message and its buttons on a footer. Letters and invoices lose the stationery, and attachments sit clear of the buttons.",
+                "**Zone map** (Shift+M): no border, just our backdrop, which follows the map's opacity setting, with a flat tab. The opacity pop-up is in our style too.",
+                "**Red is redder**, so warnings and things you can't do read apart from the copper.",
+                "**No shadows round windows.** The edge does the job, without the points the shadow drew in each corner.",
+                "Blizzard's older sliders use our slider.",
+            } },
+            { title = "Fixes", items = {
+                "A border could lose a side, draw one a pixel too thick, or have a corner stand a pixel proud, depending on where its window sat on screen.",
+                "A dropdown's label sat high on a taller button.",
+                "Opening the Equipment Manager moved the character window's tabs and left a gap under them.",
+            } },
+        },
+    },
+    {
+        version = "0.13.1",
+        intro = { "A swing timer that keeps up with what actually happens to your swing." },
+        sections = {
+            { title = "New", items = {
+                "**Parry haste and haste mid-swing** on the swing timer. Forever doesn't document either rule, so each one only moves the bar once your own swings have confirmed it twice in a row; until then, and after any swing that goes against it, the bar keeps Blizzard's timing. The Swing Timer page shows where each rule stands, and either can be switched off.",
+                "**Global cooldown shading**: the part of the swing your global cooldown still covers, so you can see whether there's time for another ability before the swing lands. On by default.",
+                "**Latency zone**: the end of each swing tinted by your latency, the stretch where anything you press arrives after the swing has gone. Off by default.",
+                "**Auto attack off**: the main hand bar says so when you're in combat, within reach of something hostile, and not attacking it.",
+                "**The swing timer stops when you do.** When your target dies or you stop attacking, the bar goes at once instead of running out the swing. Attack again before that swing would have landed and it comes back where the swing really is. Ranged bars follow Shoot, Auto Shot and Throw. Can be switched off on the Swing Timer page.",
+            } },
+            { title = "Fixes", items = {
+                "Swapping weapons now restarts the swing at the new weapon's speed, as the game does, even in combat when the speed can't be read.",
+                "The swing timer could stop dimming when your target was out of reach, after hiding Blizzard's own timer switched the range check off.",
+            } },
+        },
+    },
+    {
         version = "0.13.0",
         intro = { "Built around how Forever plays: a setup that gets you going in a minute, every character's bags, bank and gold from any of them, the built-in damage meter in our style, and cooldown icons that tell you more." },
         sections = {
@@ -98,49 +145,6 @@ EvermoreUI.CHANGELOG = {
             } },
             { title = "Fixes", items = {
                 "The minimap clock's tooltip shows realm and local time in your theme's text colour, not red.",
-            } },
-        },
-    },
-    {
-        version = "0.11.0",
-        intro = { "Party and raid frames, just in time for dungeons." },
-        sections = {
-            { title = "New", items = {
-                "**Party and raid frames**: in the same style as your unit frames, sorted and kept up to date by the game's own group headers, so they follow roster changes in combat. Role, leader and ready check icons, a fade when someone is out of range, an aggro glow, incoming heals, and the debuffs you can remove. Healers can add their own buffs and heals over time too. Combat > Party & Raid.",
-                "**Order and layout**: party frames can run in any direction and sort by group, role or name; raid frames sit in groups side by side or stacked, by group, role or class. Use the raid frames for your party too if you like.",
-                "**Preview**: stand-in frames to place and size them before you have a group.",
-                "**Click casting** works on party and raid frames.",
-                "**Cooldowns**: your cooldowns and the buffs they leave, in EvermoreUI bars. Built on the game's own Cooldown Manager, so it keeps working in combat: square icons, your fonts, size, spacing, rows and direction per bar, and show always, faded, or only in combat. Keybinds and spell ranks on the icons, found from your action bars and macros. Move them with /evui edit. Combat > Cooldowns.",
-                "**Linked timers**: a countdown over a cooldown's icon for a set time after you cast it. Priests start with Power Word: Shield counting down Weakened Soul's 15 seconds; add your own on the Cooldowns page.",
-            } },
-            { title = "Changed", items = {
-                "**Aura trackers are gone**, replaced by Cooldowns. Choose the buffs you want to watch in the game's Cooldown Manager settings (there's a button on the Cooldowns page) and they appear in the Tracked buffs bar. Your movable buffs and debuffs, and Reminders, are unchanged; their page is now called Buffs & Debuffs.",
-            } },
-        },
-    },
-    {
-        version = "0.10.1",
-        intro = { "The little things that make a classic evening smoother: bags that stay stocked, a nudge when a buff drops, and tidier group windows." },
-        sections = {
-            { title = "New", items = {
-                "**Restock**: keep reagents, ammo, food and water topped up. Alt + click an item at a vendor to add it to this character's list, set how many you want to carry, and we buy the difference every time. Extras > Quality of Life.",
-                "**Reminders**: icons for the class buffs you're missing, a poison or imbue that has worn off, and food in dungeons. Click one to cast the buff, apply the poison or eat. Hidden in combat. The list is yours to edit: reorder it, switch things off, or add your own flasks, elixirs and anything you're wearing right now. Combat > Reminders.",
-                "**Loot rolls**: need, greed and pass rows in the EvermoreUI style, movable with `/evui edit`. Interface > Group has a test roll for placing them.",
-                "**Ready check**: a prompt that matches the rest of the UI, with a sound and a taskbar flash, and a line in chat afterwards saying who wasn't ready.",
-                "**Loot luck**: every need, greed and pass is counted, by quality, for each of your characters, and `/evui luck` ranks them by how often they win. Find out which of your alts the dice love.",
-            } },
-            { title = "Fixes", items = {
-                "The action bar editor's spell list now shows spells you haven't learnt yet, greyed out with the level they arrive at.",
-                "Repairs no longer claim guild funds paid when you aren't in a guild.",
-                "The spell count on the micro menu works again. Forever no longer lists unlearnt spells in the spellbook, so the count now comes from what your class trainer lists; visit one once and every character of that class benefits. Hover the spellbook button to see what's ready, with prices, and what arrives at your next level.",
-                "Train All sits neatly between the money and Train buttons.",
-                "Alt + clicking an item to restock now asks how many to carry, with a full stack filled in. Alt + click it again to change the amount or stop.",
-                "The restock list on the Quality of Life page shows each item with its icon and how many you have, and each can be paused without losing its amount.",
-                "Nameplate cast targets and class-coloured player health no longer error.",
-                "Swing timer rows no longer throw \"Font not set\" errors.",
-                "Hovering durability on the data bar no longer errors.",
-                "The Well Fed reminder only shows when you have food that gives it, and clicking it eats that food. Any reminder can do the same with \"Only when I carry something for it\".",
-                "Unit frames no longer error on class colours in dungeons.",
             } },
         },
     },

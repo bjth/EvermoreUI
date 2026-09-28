@@ -40,7 +40,7 @@ local STRIP_H = 22
 local GAP = 8             -- between our list and Blizzard's sections
 local SCROLLBAR = 12
 
-local holder, panel, strip, scroll, sheet, list
+local holder, panel, strip, scroll, sheet, list, pstrip, plist
 local hidden = CreateFrame("Frame", nil, UIParent)
 hidden:Hide()
 ns.hiddenParent = hidden
@@ -48,7 +48,7 @@ ns.hiddenParent = hidden
 local function Tracker() return ObjectiveTrackerFrame end
 
 -- Blizzard's sections that our list replaces.
-local OURS = { "QuestObjectiveTracker", "CampaignQuestObjectiveTracker" }
+local OURS = { "QuestObjectiveTracker", "CampaignQuestObjectiveTracker", "ProfessionsRecipeTracker" }
 local suppressed = {}
 local function IsSuppressed(module) return suppressed[module] == true end
 local function RefreshSuppressed()
@@ -204,13 +204,39 @@ local function Build()
     collapse.chev = chev
     collapse:SetScript("OnClick", function()
         M.db.collapsed = not M.db.collapsed
-        ns.Layout()
+        ns.RefreshList(true)
     end)
     strip.collapse = collapse
 
     scroll = U.Scroll(panel, { step = 48, reserve = true })
     scroll:SetPoint("TOPLEFT", strip, "BOTTOMLEFT", 0, -2)
-    scroll:SetPoint("BOTTOMRIGHT", -1, 4)
+    scroll:SetPoint("TOPRIGHT", strip, "BOTTOMRIGHT", 0, -2)
+    scroll:SetHeight(1)
+
+    -- The professions group: a strip of its own, the quests' twin, with its
+    -- own fold, and its sections and recipes under it (List.lua). It sits
+    -- after the quests, or straight under their strip when they're folded.
+    pstrip = CreateFrame("Button", nil, panel)
+    pstrip:SetHeight(STRIP_H)
+    pstrip.rule = T.Solid(pstrip, "BORDER", 0, 0, 0, 0)   -- T.LOOK.window divider, in Paint
+    pstrip.rule:SetPoint("TOPLEFT"); pstrip.rule:SetPoint("TOPRIGHT")
+    pstrip.rule:SetHeight(EV.Pixel:Line(pstrip))
+    pstrip.left = U.Label(pstrip, "", "textMuted", "small")
+    pstrip.left:SetPoint("TOPLEFT", 8, -5)
+    local pcollapse = U.IconButton(pstrip, { size = 18, style = "ghost", tooltip = L["Collapse"] })
+    pcollapse:SetPoint("TOPRIGHT", -3, -2)
+    pcollapse.chev = T.Chevron(pcollapse, 4, 1)
+    pcollapse.chev:SetPoint("CENTER")
+    pcollapse:SetScript("OnClick", function() ns.FoldRecipes() end)
+    pstrip:SetScript("OnClick", function() ns.FoldRecipes() end)
+    pstrip.collapse = pcollapse
+    function pstrip:Paint()
+        self.rule:SetColorTexture(T.C4(T.Resolve(T.LOOK.window).divider))
+    end
+    T.Watch(pstrip)
+    pstrip:Paint()
+    plist = ns.CreateRecipeList(panel)
+    plist:SetPoint("TOPLEFT", pstrip, "BOTTOMLEFT", 2, -2)
 
     list = ns.CreateList(scroll.content)
     list:SetPoint("TOPLEFT", scroll.content, "TOPLEFT", 2, 0)
@@ -344,23 +370,49 @@ function ns.Layout()
     if tracker and tracker:GetParent() == sheet and tonumber(tracker.topModulePadding) ~= anchoredPad then
         ns.Safe("anchor", function() AnchorTracker(tracker) end)
     end
+    -- Folded, the strip hides the quests and Blizzard's sections under them;
+    -- the professions group has its own strip and its own fold.
+    local folded = M.db.collapsed and true or false
     local bh = BlizzardHeight()
-    sheet:SetShown(M.db.blizzard and true or false)
+    sheet:SetShown(M.db.blizzard and not folded)
     sheet:SetAlpha(bh > 0 and 1 or 0)
+
+    -- The professions group takes what it needs first (it doesn't scroll:
+    -- tracked recipes are few); the quests scroll in what's left.
+    local recipes = ns.RecipeCount and ns.RecipeCount() or 0
+    local profH = 0
+    if recipes > 0 then
+        local rh = (not ns.RecipesFolded()) and ns.RecipeHeight() or 0
+        profH = STRIP_H + (rh > 0 and (rh + 4) or 0)
+        pstrip.left:SetText(format("%s %d", (type(TRADE_SKILLS) == "string" and TRADE_SKILLS) or L["Professions"], recipes))
+        pstrip.collapse.chev:Flip(not ns.RecipesFolded())
+        plist:SetShown(rh > 0)
+    end
+    pstrip:SetShown(recipes > 0)
+    if recipes == 0 then plist:Hide() end
 
     local content = ContentHeight()
     scroll:SetContentHeight(max(content, 1))
-    local maxView = max(40, M.db.height - stripH - 8)
+    local maxView = max(40, M.db.height - stripH - 8 - profH)
     local view = M.db.fitContent and min(maxView, content) or maxView
-    if M.db.collapsed then view = 0 end
+    if folded then view = 0 end
     scroll:SetShown(view > 0)
-    local h = stripH + (view > 0 and (view + 8) or 2)
+    scroll:SetHeight(max(view, 1))
+    pstrip:ClearAllPoints()
+    pstrip:SetPoint("LEFT", panel, "LEFT", 1, 0)
+    pstrip:SetPoint("RIGHT", panel, "RIGHT", -1, 0)
+    if view > 0 then
+        pstrip:SetPoint("TOP", scroll, "BOTTOM", 0, -4)
+    else
+        pstrip:SetPoint("TOP", strip, "BOTTOM", 0, 0)
+    end
+    local h = stripH + (view > 0 and (view + 6) or 0) + profH + 2
     panel:SetSize(M.db.width, max(h, 4))
     if holder:GetWidth() ~= M.db.width or holder:GetHeight() ~= M.db.height then
         holder:SetSize(M.db.width, M.db.height)
     end
     -- Nothing to show at all: no quests, no timers, not collapsed.
-    ns.empty = content <= 0 and not M.db.collapsed and not ((ns.TimerCount and ns.TimerCount() or 0) > 0)
+    ns.empty = content <= 0 and recipes == 0 and not M.db.collapsed and not ((ns.TimerCount and ns.TimerCount() or 0) > 0)
     panel:Paint()
     EV.Movers:Apply("OBJ_tracker")
 end

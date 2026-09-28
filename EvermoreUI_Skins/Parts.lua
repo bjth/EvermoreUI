@@ -450,6 +450,183 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  0a. Trainer row        ClassTrainerSkillButtonTemplate (Blizzard_TrainerUI)
+--      298x47 rows stacked with no spacing: the TrainerTextures sheet as the
+--      normal, highlight and selected (ADD) art, a grey MOD wash (disabledBG)
+--      on what you can't learn yet, a 36px icon at LEFT 6. Its keys are
+--      unique to the template, and it goes first so nothing generic gets it.
+--
+--      A tile card like a spell in the spellbook, drawn on a frame of ours a
+--      pixel inside the row top and bottom so stacked cards keep a hairline
+--      of window between them. On while Blizzard shows selectedTex (its own
+--      record of the selected service); the sheet art is cleared at the
+--      source, the grey wash muted (the desaturated icon and grey name say
+--      "unavailable" already). The icon is ours.
+--------------------------------------------------------------------------------
+-- Not learnable yet: a level, skill or ability you lack, or a price you
+-- can't pay. InitServiceButton works that out as `isAvailable` (the service
+-- is "available" AND affordable, and a profession has a free slot) and sets
+-- it just before its Hide(); Show(). A spell you already know ("used") is
+-- not available either, but nothing is wrong with it, so it stays plain.
+local function Unlearnable(b)
+    if b.isAvailable ~= false or type(GetTrainerServiceInfo) ~= "function" then return false end
+    local okI, id = pcall(b.GetID, b)
+    if not okI or not id or id == 0 then return false end
+    local ok, _, kind = pcall(GetTrainerServiceInfo, id)
+    return ok and kind ~= "used"
+end
+
+local function TrainerRowSync(b)
+    local d = S.D(b)
+    local card = d.trainerCard
+    if not card then return end
+    local sel = b.selectedTex
+    local st = { on = sel and sel:IsShown() or false, hover = b:IsMouseOver() or false }
+    local r = T.Resolve(LOOK.tile, st)
+    card.fill:SetColorTexture(T.C4(r.fill))
+    -- SetEdge takes a colour, not a token: resolve it.
+    T.SetEdge(card, Unlearnable(b) and { S.Colour("danger") } or r.edge)
+end
+S.TrainerRowSync = TrainerRowSync   -- the trainer pack repaints after Blizzard selects
+
+R{
+    name = "trainerRow",
+    type = "Button",
+    keys = { "icon", "subText", "nameSubText", "selectedTex", "disabledBG" },
+    paint = function(b, p)
+        local d = S.D(b)
+        for _, get in ipairs({ "GetNormalTexture", "GetHighlightTexture", "GetPushedTexture" }) do
+            local ok, t = pcall(b[get], b)
+            if ok and t then S.StripArt(t) end
+        end
+        S.StripArt(b.selectedTex)
+        S.Mute(b.disabledBG)
+        if not d.trainerCard then
+            local card = S.Ours(CreateFrame("Frame", nil, b))
+            card:EnableMouse(false)
+            card:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
+            local one = EV.Pixel:One(b)
+            card:SetPoint("TOPLEFT", b, "TOPLEFT", 0, -one)
+            card:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 0, one)
+            card.fill = S.Ours(EV.Pixel:Fill(card, "BACKGROUND", -7))
+            EV.Pixel:Edges(card, { size = 1 })
+            d.trainerCard = card
+            local function Sync() TrainerRowSync(b) end
+            T.Watch(card.fill, Sync)
+            b:HookScript("OnEnter", Sync)
+            b:HookScript("OnLeave", Sync)
+            -- InitServiceButton ends Hide(); Show(): after every refresh.
+            b:HookScript("OnShow", Sync)
+            hooksecurefunc(b.selectedTex, "Show", Sync)
+            hooksecurefunc(b.selectedTex, "Hide", Sync)
+        end
+        EV.Icons:Style(b.icon, { host = b })
+        TrainerRowSync(b)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  0a2. Loot row          LootFrameElementTemplate (Mainline LootFrame.xml):
+--      the item and money entries of the loot window. Pooled rows, rebuilt by
+--      Init for every loot: NameFrame (looting_itemcard_bg, tinted to the
+--      item's quality), BorderFrame (the stroke), HighlightNameFrame and
+--      PushedNameFrame (ADD strokes, shown on the item's enter and mouse
+--      down), a 37px Item at TOPLEFT 5,-4, the name 8 right of it hung from
+--      its top, and on items a QualityStripe tag with the quality's name.
+--      A locked slot (someone is rolling on it) gets a red tint on the icon.
+--
+--      Ours (Ben: no borders, no padding, a row per item): a full-width row
+--      with no edge, filled on hover and deeper on press (read from
+--      Blizzard's own two strokes, their art cleared), a hairline between
+--      rows, the icon centred on the row's height at the left, the name
+--      centred beside it, the quality tag gone (the name's colour and the
+--      icon's edge say it). A locked slot's red tint is undone; a 2px red
+--      bar down the row's left edge says it instead. The loot window pack
+--      takes the view's padding and spacing away and sets the row height.
+--------------------------------------------------------------------------------
+local LOOT_ROW = { icon = 37, left = 6, text = 8, bar = 2 }
+
+local function LootRowSync(f)
+    local d = S.D(f)
+    if not d.lootFill then return end
+    local st = { hover = f.HighlightNameFrame:IsShown() or false,
+                 on = f.PushedNameFrame:IsShown() or false }
+    local r = T.Resolve(LOOK.listItem, st)
+    d.lootFill:SetColorTexture(T.C4(r.fill))
+    d.lootBar:SetShown(d.lootLocked and true or false)
+    -- The rule sits on each row's top; the first row's would double the
+    -- title rule, so it goes.
+    local okI, i = pcall(f.GetElementDataIndex, f)
+    d.lootRule:SetShown(not (okI and i == 1))
+end
+
+local function LootRowInit(f)
+    local d = S.D(f)
+    local okS, slot = pcall(f.GetSlotIndex, f)
+    local locked = false
+    if okS and slot and type(GetLootSlotInfo) == "function" then
+        local ok, _, _, _, _, _, lk = pcall(GetLootSlotInfo, slot)
+        locked = ok and lk and true or false
+    end
+    d.lootLocked = locked
+    local item = f.Item
+    if item then
+        item:ClearAllPoints()
+        item:SetPoint("LEFT", f, "LEFT", LOOT_ROW.left, 0)
+        local icon = item.icon or item.Icon
+        if icon and icon.SetVertexColor then icon:SetVertexColor(1, 1, 1) end
+    end
+    local text = f.Text
+    if text and item then
+        text:ClearAllPoints()
+        text:SetPoint("LEFT", item, "RIGHT", LOOT_ROW.text, 0)
+        text:SetPoint("RIGHT", f, "RIGHT", -LOOT_ROW.text, 0)
+        text:SetHeight(30)
+        text:SetJustifyV("MIDDLE")
+    end
+    if f.QualityText then f.QualityText:SetAlpha(0) end
+    LootRowSync(f)
+end
+
+R{
+    name = "lootRow",
+    keys = { "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame", "Item" },
+    paint = function(f, p)
+        local d = S.D(f)
+        for _, key in ipairs({ "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame", "QualityStripe" }) do
+            if f[key] then S.StripArt(f[key]) end
+        end
+        if not d.lootFill then
+            d.lootFill = S.Ours(EV.Pixel:Fill(f, "BACKGROUND", -7))
+            d.lootRule = S.Ours(f:CreateTexture(nil, "BORDER", nil, 1))
+            EV.Pixel.NoSnap(d.lootRule)
+            d.lootRule:SetPoint("TOPLEFT"); d.lootRule:SetPoint("TOPRIGHT")
+            d.lootBar = S.Ours(f:CreateTexture(nil, "BORDER", nil, 2))
+            EV.Pixel.NoSnap(d.lootBar)
+            d.lootBar:SetPoint("TOPLEFT"); d.lootBar:SetPoint("BOTTOMLEFT")
+            d.lootBar:SetWidth(LOOT_ROW.bar)
+            local function Paint()
+                d.lootRule:SetColorTexture(S.Colour("divider"))
+                d.lootRule:SetHeight(EV.Pixel:Line(f))
+                d.lootBar:SetColorTexture(S.Colour("danger"))
+                LootRowSync(f)
+            end
+            Paint()
+            T.Watch(d.lootFill, Paint)
+            local function Sync() LootRowSync(f) end
+            for _, key in ipairs({ "HighlightNameFrame", "PushedNameFrame" }) do
+                hooksecurefunc(f[key], "Show", Sync)
+                hooksecurefunc(f[key], "Hide", Sync)
+            end
+            if type(f.Init) == "function" then
+                hooksecurefunc(f, "Init", function() LootRowInit(f) end)
+            end
+        end
+        LootRowInit(f)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  0b. Slider             UISliderTemplate and friends
 --      Also claimed before `window` could have it. A slider has a NineSlice
 --      (its track is one), so the old fingerprint painted sliders as windows:
@@ -468,19 +645,103 @@ R{
     -- attaches its thumb as `Thumb`, a scroll bar as `ThumbTexture` or
     -- `thumbTexture`, and never both. The legacy scroll bars are picked up
     -- by scrollBarLegacy below.
-    keys = { "Thumb" },
+    --
+    -- The older sliders (OptionsSliderTemplate's family, the opacity
+    -- slider) declare their thumb as a ThumbTexture element too, and are
+    -- told apart from scroll bars by its file: a slider's is
+    -- UI-SliderBar-Button-Horizontal or -Vertical, a scroll bar's
+    -- UI-ScrollBar-Knob. Nothing else draws with those two files.
+    test = function(sl)
+        if type(rawget(sl, "Thumb") or sl.Thumb) == "table" then return true end
+        if not sl.GetThumbTexture then return false end
+        local ok, t = pcall(sl.GetThumbTexture, sl)
+        if not (ok and t) then return false end
+        return S.ArtIsFile(t, "Interface\\Buttons\\UI-SliderBar-Button-Vertical")
+            or S.ArtIsFile(t, "Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    end,
+    -- Ours is the slider our own options draw (UI/Inputs.lua, U.Slider): a
+    -- thin track across the middle of the slider's rect, the accent filled
+    -- up to the thumb, a square thumb on a halo that grows under the mouse.
+    -- The rect keeps Blizzard's size (it is the hit area, and the settings
+    -- list stretches it to the row's height), so a groove filling it read as
+    -- a black box the height of the row with a block in it.
+    --
+    -- The fill runs to the thumb's centre by anchor, so it follows the value
+    -- without a hook on SetValue. The thumb texture is Blizzard's own, set to
+    -- the Look's size: the slider places it by its size, and a square the
+    -- size of ours is all the thumb has to be.
+    --
+    -- A slider inside MinimalSliderWithSteppersTemplate (every slider in the
+    -- settings panel) has its Back and Forward buttons, the
+    -- Minimal_SliderBar_Button_Left/Right arrows, on its parent: our chevrons
+    -- in their place, and the value labels in body text.
     paint = function(sl, p)
         p:Fade()
         p:FadeSlice()
-        local groove = LOOK.slider.groove
-        p:Fill(groove.fill)
-        p:Border(groove.edge)
-        local thumb = sl.GetThumbTexture and select(2, pcall(sl.GetThumbTexture, sl))
-        if thumb and thumb.SetColorTexture then
+        local SL = LOOK.slider
+        local d = S.D(sl)
+        local vertical = false
+        if sl.GetOrientation then
+            local ok, o = pcall(sl.GetOrientation, sl)
+            vertical = ok and o == "VERTICAL"
+        end
+        local okT, thumb = pcall(sl.GetThumbTexture, sl)
+        thumb = okT and thumb or nil
+        if not d.bar then
+            d.bar = S.Ours(sl:CreateTexture(nil, "BACKGROUND", nil, 1))
+            d.fill = S.Ours(sl:CreateTexture(nil, "BORDER", nil, 1))
+            d.halo = S.Ours(sl:CreateTexture(nil, "ARTWORK", nil, 1))
+            for _, t in ipairs({ d.bar, d.fill, d.halo }) do EV.Pixel.NoSnap(t) end
+            if vertical then
+                d.bar:SetPoint("TOP"); d.bar:SetPoint("BOTTOM")
+                d.bar:SetWidth(SL.track)
+                d.fill:Hide()
+            else
+                d.bar:SetPoint("LEFT"); d.bar:SetPoint("RIGHT")
+                d.bar:SetHeight(SL.track)
+                d.fill:SetPoint("LEFT", d.bar, "LEFT")
+                d.fill:SetHeight(SL.track)
+                if thumb then d.fill:SetPoint("RIGHT", thumb, "CENTER") end
+            end
+            if thumb then d.halo:SetPoint("CENTER", thumb, "CENTER") else d.halo:Hide() end
+        end
+        if thumb then
             if thumb.SetAtlas then pcall(thumb.SetAtlas, thumb, nil) end
-            local function Paint(t) t:SetColorTexture(T.C4(T.Resolve(LOOK.slider).thumb)) end
-            Paint(thumb)
-            T.Watch(thumb, Paint)
+            if thumb.SetDrawLayer then thumb:SetDrawLayer("ARTWORK", 2) end
+        end
+        local function Paint(r)
+            local big = d.hover or d.pressed
+            local t, h = big and SL.thumbHover or SL.thumb, big and SL.haloHover or SL.halo
+            d.halo:SetSize(h, h)
+            d.halo:SetColorTexture(T.C4(r.halo))
+            d.bar:SetColorTexture(T.C4(r.bar))
+            d.fill:SetColorTexture(T.C4(r.fill))
+            if thumb then
+                thumb:SetSize(t, t)
+                thumb:SetColorTexture(T.C4(r.thumb))
+            end
+        end
+        p:States(SL, { after = Paint })
+
+        local okP, par = pcall(sl.GetParent, sl)
+        if not (okP and par) or rawget(par, "Slider") ~= sl then return end
+        for key, dir in pairs({ Back = "left", Forward = "right" }) do
+            local step = rawget(par, key)
+            if type(step) == "table" and step.CreateTexture then
+                S.Blank(step)
+                S.PainterFor(step):Fade()
+                local sd = S.D(step)
+                if not sd.chev then
+                    sd.chev = S.Ours(T.Chevron(step, LOOK.pager.chevron))
+                    sd.chev:SetPoint("CENTER")
+                    sd.chev:Point(dir)
+                end
+                S.PainterFor(step):States(LOOK.stepper, { chev = sd.chev })
+            end
+        end
+        for _, key in ipairs({ "LeftText", "RightText", "TopText", "MinText", "MaxText" }) do
+            local fs = rawget(par, key)
+            if type(fs) == "table" and fs.SetTextColor then S.PainterFor(par):Label(fs, "text") end
         end
     end,
 }
@@ -754,6 +1015,88 @@ R{
         p:Border("borderStrong")
         p:Label(b.Text)
         p:States(LOOK.button, { label = b.Text })
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  3c. Minimal tab        MinimalTabTemplate: the settings panel's Game and
+--     AddOns tabs and the graphics page's Base / Raid and Battleground tabs.
+--     Left/Middle/Right take Options_Tab_* atlases, swapped in UpdateAtlas on
+--     every hover, select and enable; the label's font object is swapped with
+--     them and dropped two pixels when selected (MinimalTabMixin:OnSelected).
+--     It shares Left/Middle/Right/Text with a panel button, which claimed it
+--     and drew a button with no selected state. Ours: the window tab face,
+--     open at the bottom, standing on the rule under it; the label centred,
+--     body text when chosen and muted otherwise.
+--------------------------------------------------------------------------------
+R{
+    name = "minimalTab",
+    type = "Button",
+    keys = { "Left", "Middle", "Right", "Text" },
+    test = function(b) return rawget(b, "upMiddleTexture") ~= nil and rawget(b, "selectedMiddleTexture") ~= nil end,
+    paint = function(tab, p)
+        S.StripArt(tab.Left); S.StripArt(tab.Middle); S.StripArt(tab.Right)
+        local d = S.D(tab)
+        local Face = S.TabFace(tab, "bottom")
+        -- The face's black ring is for an icon; a text tab is the face alone.
+        if d.tabInset then d.tabInset:Hide() end
+        p:Label(tab.Text, false)
+        local function Sync()
+            local on = type(tab.IsSelected) == "function" and tab:IsSelected() or false
+            Face(on, d.hover)
+            if tab.Text then
+                p:Reseat(tab.Text, { { "CENTER", 0, 0 } })
+                tab.Text:SetTextColor(T.C4(T.Resolve(LOOK.tab, { on = on, hover = d.hover }).text))
+            end
+        end
+        p:After("OnSelected", Sync)
+        p:After("UpdateAtlas", Sync)
+        p:Hook("OnEnter", function() d.hover = true; Sync() end)
+        p:Hook("OnLeave", function() d.hover = false; Sync() end)
+        S.Own(Sync, tab, tab.Text)
+        Sync()
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  3d. Icon button, style 2  WowStyle2IconButtonTemplate (Blizzard_Menu): the
+--     square beside a dropdown, the steppers of DropdownWithSteppersTemplate
+--     above all (every graphics setting has a pair). Its Background takes a
+--     common-dropdown-c-button-* atlas per state and its Icon the KeyValue
+--     normalAtlas or disabledAtlas, both in OnButtonStateChanged. Ours: the
+--     button Look; a stepper's arrow (common-dropdown-icon-next / -back) is
+--     our chevron, any other icon is kept and coloured as a glyph.
+--------------------------------------------------------------------------------
+local STEP_DIR = { ["common%-dropdown%-icon%-next"] = "right", ["common%-dropdown%-icon%-back"] = "left" }
+
+R{
+    name = "iconButton2",
+    type = "Button",
+    keys = { "Background", "Icon" },
+    test = function(b) return type(rawget(b, "normalAtlas")) == "string" end,
+    paint = function(b, p)
+        S.StripArt(b.Background)
+        local atlas = rawget(b, "normalAtlas"):lower()
+        local dir
+        for pat, d in pairs(STEP_DIR) do if atlas:find(pat) then dir = d end end
+        p:Fill(LOOK.button.rest.fill)
+        p:Border(LOOK.button.rest.edge)
+        if dir then
+            S.StripArt(b.Icon)
+            local d = S.D(b)
+            if not d.chev then
+                d.chev = S.Ours(T.Chevron(b, LOOK.pager.chevron))
+                d.chev:SetPoint("CENTER")
+                d.chev:Point(dir)
+            end
+            p:States(LOOK.button, { chev = d.chev })
+        else
+            p:States(LOOK.button, { glyph = b.Icon })
+        end
+        p:After("OnButtonStateChanged", function()
+            local d = S.D(b)
+            if d.Repaint then d.Repaint() end
+        end)
     end,
 }
 
@@ -1461,6 +1804,145 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  8z. Reward item        SmallItemButtonTemplate (134x30, the quest log's
+--     rewards: a 30px icon and a QuestItemBorder box for the name) and
+--     LargeItemButtonTemplate (the quest window's: UI-QuestItemNameFrame).
+--     Items, money, experience and reputation all use one or the other. The
+--     name box was a dark, gold-edged plate per reward. Ours: the spellbook's
+--     card (the tile Look, lit under the mouse) for the whole reward, the
+--     icon in the suite's style, the name beside it; the icon's edge in the
+--     item's quality colour from uncommon up (SetItemButtonQuality, which
+--     Blizzard calls for every reward), resting for poor and common. Tried before itemButton: at runtime these carry an
+--     IconBorder, and itemButton filled the whole 134x30 button as a slot.
+--------------------------------------------------------------------------------
+-- The item's quality, as Blizzard's SetItemButtonQuality is told it (the
+-- reward code calls it by its global name for every item and currency
+-- reward). Kept per button, because a button is made and given its quality
+-- before our walk reaches it.
+local rewardQuality = setmetatable({}, { __mode = "k" })
+local rewardHooked = false
+
+local function RewardEdge(b)
+    local icon = b and b.Icon
+    if not (icon and EV.Icons:IsStyled(icon)) then return end
+    local q = rewardQuality[b]
+    -- Poor and common rest in the style's own colour, as bag slots do.
+    if type(q) == "number" and q >= 2 then
+        local r, g, bl
+        if C_Item and C_Item.GetItemQualityColor then
+            r, g, bl = C_Item.GetItemQualityColor(q)
+        elseif ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q] then
+            local c = ITEM_QUALITY_COLORS[q]
+            r, g, bl = c.r, c.g, c.b
+        end
+        if r then EV.Icons:SetState(icon, r, g, bl, 1); return end
+    end
+    EV.Icons:SetState(icon, nil)
+end
+
+-- The reward you have picked. Blizzard marks it with QuestInfoItemHighlight
+-- (QuestInfo.xml): one frame of UI-QuestItemHighlight in ADD, moved onto the
+-- clicked button and shown by QuestInfoItem_OnClick, hidden again by
+-- QuestInfo_ShowRewards when the rewards are rebuilt. Its art goes; the card
+-- is the tile Look's "on" while it is the choice QuestInfoFrame records
+-- (QuestInfoItem_IsSelected's own test). Every card repaints after a
+-- reward's own OnClick has run (a HookScript runs after it), because
+-- QuestInfoItem_OnClick shows the highlight BEFORE it sets itemChoice: a
+-- repaint on Show still saw the old choice and left it lit. The highlight's
+-- Hide covers the rewards being rebuilt, which clears the choice.
+-- Not a hook on QuestInfoItem_OnClick itself, which the buttons' XML binds
+-- by reference.
+local rewardButtons = setmetatable({}, { __mode = "k" })
+
+local function RepaintRewards()
+    for b in pairs(rewardButtons) do
+        local d = S.D(b)
+        if d.Repaint then d.Repaint() end
+    end
+end
+
+local function RewardChosen(b)
+    local info = _G.QuestInfoFrame
+    if not (info and b.type == "choice") then return false end
+    local ok, id = pcall(b.GetID, b)
+    return ok and id ~= 0 and info.itemChoice == id
+end
+
+local function HookRewardHighlight()
+    local hl = _G.QuestInfoItemHighlight
+    if not hl or S.D(hl).rewardHooked then return end
+    S.D(hl).rewardHooked = true
+    for _, r in ipairs(S.Regions(hl)) do
+        if r.GetObjectType and r:GetObjectType() == "Texture" then S.StripArt(r) end
+    end
+    hooksecurefunc(hl, "Hide", RepaintRewards)
+end
+
+R{
+    name = "rewardItem",
+    type = "Button",
+    keys = { "Icon", "NameFrame", "Name" },
+    paint = function(b, p)
+        if not rewardButtons[b] then
+            rewardButtons[b] = true
+            b:HookScript("OnClick", RepaintRewards)
+        end
+        HookRewardHighlight()
+        if not rewardHooked and type(SetItemButtonQuality) == "function" then
+            rewardHooked = true
+            hooksecurefunc("SetItemButtonQuality", function(button, quality)
+                if type(button) ~= "table" or not rawget(button, "NameFrame") then return end
+                rewardQuality[button] = quality
+                RewardEdge(button)
+            end)
+        end
+        S.StripArt(b.NameFrame)
+        if b.IconBorder then S.StripArt(b.IconBorder) end
+        -- A card, as a spell is in the spellbook: the kit's tile over the
+        -- button's whole rect, the icon on its left inside the edge.
+        p:Fill(LOOK.tile.rest.fill)
+        p:Border(LOOK.tile.rest.edge)
+        p:States(LOOK.tile, { on = function() return RewardChosen(b) end })
+        -- The icon filled the button's full height (30 of 30, 39 of 41),
+        -- over the card's own edge. Inside it, with room for the icon's edge.
+        local icon = b.Icon
+        local okH, h = pcall(b.GetHeight, b)
+        h = okH and S.Num(h) or nil
+        if h and h > 12 then
+            local inset = 3
+            p:Reseat(icon, { { "LEFT", inset, 0 } })
+            icon:SetSize(h - 2 * inset, h - 2 * inset)
+        end
+        EV.Icons:Style(icon, { host = b })
+        RewardEdge(b)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9f2. Talk rows         GossipTitleButtonArtTemplate (gossip options, and the
+--     quest giver's greeting list): a 300x16 line of QuestFontLeft with its
+--     icon on the left and UI-QuestTitleHighlight in ADD as the hover. That
+--     file is their fingerprint; nothing else uses it. The glow goes and the
+--     row takes the list item Look's hover, a flat fill; the text is
+--     Blizzard's, which the fonts pass already handles.
+--------------------------------------------------------------------------------
+R{
+    name = "talkRow",
+    type = "Button",
+    test = function(b)
+        if not b.GetHighlightTexture then return false end
+        local ok, h = pcall(b.GetHighlightTexture, b)
+        return ok and h and S.ArtIsFile(h, "Interface\\QuestFrame\\UI-QuestTitleHighlight") or false
+    end,
+    paint = function(b, p)
+        local ok, h = pcall(b.GetHighlightTexture, b)
+        if ok and h then S.StripArt(h) end
+        p:Fill("surface2")     -- the Look repaints it: clear at rest
+        p:States(LOOK.listItem)
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  9g. Item button        anything built on ItemButtonTemplate
 --     The paper doll's slots, inspect, loot, the merchant, mail, quest
 --     rewards. Blizzard's slot frame (the normal texture, and the paper
@@ -1576,6 +2058,7 @@ local function StripArt(t)
     pcall(hooksecurefunc, t, "SetAtlas", Clear)
     pcall(hooksecurefunc, t, "SetTexture", Clear)
 end
+S.StripArt = StripArt
 
 local function Passive(item)
     local ok, v = pcall(function() return item.spellBookItemInfo and item.spellBookItemInfo.isPassive end)
@@ -1704,7 +2187,7 @@ R{
             if EV.Pixel and EV.Pixel.NoSnap then EV.Pixel.NoSnap(d.rule) end
             local function Paint()
                 d.rule:SetColorTexture(S.Colour("border"))
-                d.rule:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1)
+                d.rule:SetHeight(EV.Pixel:Line(f))
             end
             Paint()
             T.Watch(d.rule, Paint)
@@ -1749,7 +2232,7 @@ R{
             -- On the name's own centre line, not the frame's: Blizzard sets
             -- the name 1px high (CENTER y=1).
             local function Paint()
-                local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1
+                local px = EV.Pixel:Line(f)
                 for _, t in ipairs(d.rules) do
                     t:SetHeight(px)
                     t:SetColorTexture(T.C4(T.Resolve(SL).rule))
@@ -1942,7 +2425,7 @@ R{
             e[3]:SetPoint("TOPRIGHT", tr, "TOPLEFT");     e[3]:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
             e[4]:SetPoint("TOPLEFT", tr, "TOPRIGHT");     e[4]:SetPoint("BOTTOMLEFT", tr, "BOTTOMRIGHT")
             local function Paint()
-                local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1
+                local px = EV.Pixel:Line(f)
                 e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
                 tr:SetColorTexture(S.Colour("surfaceSunk"))
                 for _, t in ipairs(e) do t:SetColorTexture(S.Colour("border")) end
@@ -1966,7 +2449,7 @@ R{
         if div and div.SetColorTexture then
             local function Paint()
                 div:SetColorTexture(S.Colour("border"))
-                div:SetHeight((EV.Pixel and EV.Pixel.One and EV.Pixel:One(f)) or 1)
+                div:SetHeight(EV.Pixel:Line(f))
             end
             Paint()
             T.Watch(div, Paint)
@@ -2016,7 +2499,7 @@ local function Well(host, around, sub)
     e[3]:SetPoint("TOPRIGHT", tr, "TOPLEFT");     e[3]:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
     e[4]:SetPoint("TOPLEFT", tr, "TOPRIGHT");     e[4]:SetPoint("BOTTOMLEFT", tr, "BOTTOMRIGHT")
     local function Paint()
-        local px = (EV.Pixel and EV.Pixel.One and EV.Pixel:One(host)) or 1
+        local px = EV.Pixel:Line(host)
         e[1]:SetHeight(px); e[2]:SetHeight(px); e[3]:SetWidth(px); e[4]:SetWidth(px)
         tr:SetColorTexture(S.Colour("surfaceSunk"))
         for _, t in ipairs(e) do t:SetColorTexture(S.Colour("border")) end
@@ -2077,6 +2560,10 @@ R{
             d.chev:SetPoint("RIGHT", dd, "RIGHT", -6, 0)
             d.chev:Point("down")
         end
+        -- Blizzard hangs the label from the TOP (y -2, 20 tall), centred only
+        -- at its own 22px height; packs put these on 24 and 30px bars. On the
+        -- middle instead, and centred in the room left of the chevron.
+        p:Reseat(dd.Text, { { "CENTER", -math.floor((6 + LOOK.dropdown.chevron) / 2), 0 } })
         p:States(LOOK.dropdown, {
             label = dd.Text, chev = d.chev,
             on = function() return type(dd.IsMenuOpen) == "function" and dd:IsMenuOpen() end,
@@ -2208,7 +2695,134 @@ R{
 }
 
 --------------------------------------------------------------------------------
---  9i2. Popout button     EquipmentFlyoutPopoutButtonTemplate: the tab beside
+--  9r. Crafting results and the crafter's details
+--
+--     itemCard       the loot card: an item button beside its name on a
+--                    looting_itemcard_bg plate with a stroke round it, lit by
+--                    HighlightNameFrame / PushedNameFrame (both shown and hidden
+--                    by Blizzard's scripts). The crafting output log's entries
+--                    (ProfessionsCraftingOutputLogElementTemplate.ItemContainer)
+--                    and the loot window's (LootFrameElementTemplate) both wear
+--                    it. Ours: the kit's tile, hover and press from Blizzard's
+--                    own highlight textures, and a proc (CritFrame, the
+--                    Professions-Results-InspiredCreation border) as the tile's
+--                    chosen state. The quality stripe goes; the quality text
+--                    and the name keep their quality colour.
+--     outputLogRow   a bonus line under a result (multicraft, resources back,
+--                    first-craft rewards): a Professions-Results-Bracket hook
+--                    in front of it. Ours: a hairline in its place.
+--     crafterDetails ProfessionsRecipeCrafterDetailsTemplate: the stats pane
+--                    beside a recipe (difficulty, skill, the quality meter),
+--                    on Professions-QualityPane-bg art with a divider under its
+--                    title. Ours: a raised panel, the title in gold over a rule,
+--                    labels muted and values plain, the meter in a well.
+--------------------------------------------------------------------------------
+local CARD_ART = { "NameFrame", "BorderFrame", "HighlightNameFrame", "PushedNameFrame",
+                   "CritFrame", "QualityStripe" }
+
+R{
+    name = "itemCard",
+    keys = { "NameFrame", "BorderFrame" },
+    art  = { NameFrame = "looting_itemcard_bg" },
+    paint = function(f, p)
+        for _, key in ipairs(CARD_ART) do StripArt(f[key]) end
+        local hi, down, crit = f.HighlightNameFrame, f.PushedNameFrame, f.CritFrame
+        p:Fill(LOOK.tile.rest.fill)
+        p:Border("border")
+        local d = S.D(f)
+        p:States(LOOK.tile, { on = function() return crit ~= nil and crit:IsShown() end })
+        -- The card is a plain frame under its item button, so the mouse never
+        -- reaches it: Blizzard's own highlight textures say when it is lit.
+        local function Follow(tex, field)
+            if not tex then return end
+            for _, m in ipairs({ "Show", "Hide", "SetShown" }) do
+                pcall(hooksecurefunc, tex, m, function(t)
+                    d[field] = t:IsShown() and true or false
+                    if d.Repaint then d.Repaint() end
+                end)
+            end
+        end
+        Follow(hi, "hover")
+        Follow(down, "pressed")
+        if crit then
+            for _, m in ipairs({ "Show", "Hide", "SetShown" }) do
+                pcall(hooksecurefunc, crit, m, function() if d.Repaint then d.Repaint() end end)
+            end
+        end
+        if f.CritText then p:Label(f.CritText, "title") end
+    end,
+}
+
+R{
+    name = "outputLogRow",
+    keys = { "Bracket", "Text" },
+    art  = { Bracket = "professions%-results%-bracket" },
+    paint = function(f, p)
+        local bracket = f.Bracket
+        StripArt(bracket)
+        local d = S.D(f)
+        if not d.rule then
+            d.rule = S.Ours(f:CreateTexture(nil, "BORDER"))
+            EV.Pixel.NoSnap(d.rule)
+            d.rule:SetPoint("TOP", bracket, "TOP")
+            d.rule:SetPoint("BOTTOM", bracket, "BOTTOM")
+            local function Paint()
+                d.rule:SetWidth(EV.Pixel:Line(f))
+                d.rule:SetColorTexture(S.Colour("border"))
+            end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
+        p:Label(f.Text, "textMuted")
+    end,
+}
+
+R{
+    name = "crafterDetails",
+    keys = { "BackgroundTop", "BackgroundMiddle", "BackgroundBottom", "StatLines", "QualityMeter" },
+    paint = function(f, p)
+        for _, key in ipairs({ "BackgroundTop", "BackgroundMiddle", "BackgroundBottom",
+                               "BackgroundMinimized", "Line" }) do
+            StripArt(f[key])
+        end
+        local R0 = LOOK.raised.rest
+        p:Fill(R0.fill)
+        p:Border(R0.edge)
+        if f.Label then p:Label(f.Label, "title", true) end
+        -- The divider keeps its place in the layout (it is a layout child,
+        -- sized by its atlas); our rule is drawn across it.
+        local d = S.D(f)
+        if f.Line and not d.rule then
+            d.rule = S.Ours(f:CreateTexture(nil, "ARTWORK"))
+            EV.Pixel.NoSnap(d.rule)
+            d.rule:SetPoint("LEFT", f.Line, "LEFT")
+            d.rule:SetPoint("RIGHT", f.Line, "RIGHT")
+            local function Paint()
+                d.rule:SetHeight(EV.Pixel:Line(f))
+                d.rule:SetColorTexture(T.C4(T.Resolve(LOOK.section).rule))
+            end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
+        local lines = f.StatLines and f.StatLines.StatLines
+        for _, line in ipairs(lines or {}) do
+            if line.LeftLabel then p:Label(line.LeftLabel, "textMuted") end
+            if line.RightLabel then p:Label(line.RightLabel, "text") end
+        end
+        local meter = f.QualityMeter
+        if meter then
+            if meter.Border then p:Fade(meter.Border) end
+            local center = meter.Center
+            if center then
+                if center.Background then StripArt(center.Background) end
+                Well(meter, center, -1)
+            end
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9i2. Popout button    EquipmentFlyoutPopoutButtonTemplate: the tab beside
 --     an equipment slot that opens the list of what else fits it
 --     (Blizzard_FrameXML/Camelot/EquipmentFlyout.lua). A 20x43 gold pull
 --     tab, or 43x20 under the weapons. Blizzard re-sets its atlases, size and
@@ -2629,6 +3243,133 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  9o. Settings row       SettingsListElementTemplate and everything built on
+--     it (check box, slider, dropdown, button, swatch rows): a label, the
+--     control, and a HoverBackground (HoverBackgroundTemplate, white at 10%)
+--     shown across the row under the mouse. Blizzard colours the label on
+--     every DisplayEnabled (NORMAL_FONT_COLOR, the gold, or grey) and resets
+--     its font object on every Init. Ours: body text, or disabled text, put
+--     back after both; the hover in our list colour, on the row's own
+--     texture and on every control's in it (each carries its own copy).
+--
+--  9p. Settings section   SettingsListSectionHeaderTemplate: a heading inside
+--     a page ("Mouse", "Camera"). Ours: the section Look, the name in gold
+--     with a rule running from it to the row's right edge.
+--------------------------------------------------------------------------------
+local function HoverTint(t)
+    if not (t and t.SetColorTexture) then return end
+    local function Paint(tex) tex:SetColorTexture(T.C4(T.Resolve(LOOK.listItem, { hover = true }).fill)) end
+    Paint(t)
+    T.Watch(t, Paint)
+end
+
+R{
+    name = "settingsRow",
+    keys = { "Text", "Tooltip", "NewFeature" },
+    paint = function(f, p)
+        local d = S.D(f)
+        d.enabled = true
+        local function Colour()
+            f.Text:SetTextColor(S.Colour(d.enabled and "text" or "textDisabled"))
+        end
+        p:Label(f.Text, false)
+        Colour()
+        T.Watch(f.Text, Colour)
+        p:After("DisplayEnabled", function(_, enabled)
+            d.enabled = enabled and true or false
+            Colour()
+        end)
+        p:After("Init", Colour)
+        if f.Tooltip then HoverTint(f.Tooltip.HoverBackground) end
+        local ok, kids = pcall(function() return { f:GetChildren() } end)
+        for _, kid in ipairs(ok and kids or {}) do
+            if type(kid) == "table" then HoverTint(rawget(kid, "HoverBackground")) end
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9q. Graphics quality   SettingsAdvancedQualitySectionTemplate (Graphics.xml):
+--     the graphics page's quality block. A "Graphics Quality" heading at its
+--     top left (an unnamed font string), Base and Raid and Battleground tabs
+--     (minimalTab) hanging from its top right at y=+10, 37 tall, and an
+--     OptionsFrame UniqueCorners nine-slice from x=-12 y=-14: the box started
+--     halfway down the tabs and its top line ran through the heading. Ours:
+--     the heading in gold; the nine-slice's art gone and a box of ours whose
+--     top is the tabs' bottom, so the tabs stand on it and the chosen one
+--     opens into it, down to where Blizzard's box ended. Nothing of
+--     Blizzard's moves: the box is ours, anchored to what is there.
+--------------------------------------------------------------------------------
+R{
+    name = "qualitySection",
+    keys = { "NineSlice", "BaseTab", "RaidTab", "BaseQualityControls" },
+    paint = function(f, p)
+        p:FadeSlice(f.NineSlice)
+        for _, r in ipairs(S.Regions(f)) do
+            if not S.ours[r] and r.GetObjectType and r:GetObjectType() == "FontString" then
+                p:Label(r, "title", true)
+            end
+        end
+        local d = S.D(f)
+        local tab = f.RaidTab or f.BaseTab
+        if not d.box then
+            d.box = S.Ours(CreateFrame("Frame", nil, f))
+            d.box:EnableMouse(false)
+            d.box:SetFrameLevel(f:GetFrameLevel())
+            local one = EV.Pixel:One(f)
+            d.box:SetPoint("LEFT", f.NineSlice, "LEFT")
+            d.box:SetPoint("RIGHT", f.NineSlice, "RIGHT")
+            d.box:SetPoint("BOTTOM", f.NineSlice, "BOTTOM")
+            -- A pixel up into the tabs: the chosen tab's face covers the line
+            -- under it, and opens into the box.
+            d.box:SetPoint("TOP", tab, "BOTTOM", 0, one)
+        end
+        p:Border(LOOK.inset.rest.edge, nil, d.box)
+    end,
+}
+
+--------------------------------------------------------------------------------
+--  9r. Graphics row       SettingsAdvancedDropdownTemplate, -SliderTemplate,
+--     -WideSliderTemplate, -WideCheckboxSliderTemplate: the rows inside the
+--     graphics quality box. Not list elements, so nothing reset their label,
+--     GameFontNormal's gold. Ours: body text, as every other settings row.
+--------------------------------------------------------------------------------
+R{
+    name = "settingsAdvancedRow",
+    keys = { "Text", "NewFeature" },
+    without = { "Tooltip", "Title" },
+    test = function(f)
+        return type(rawget(f, "Control")) == "table" or type(rawget(f, "SliderWithSteppers")) == "table"
+    end,
+    paint = function(f, p)
+        p:Label(f.Text, "text")
+    end,
+}
+
+R{
+    name = "settingsSection",
+    keys = { "Title", "NewFeature" },
+    without = { "Tooltip" },
+    paint = function(f, p)
+        local SC = LOOK.section
+        p:Label(f.Title, "title", true)
+        local d = S.D(f)
+        if not d.rule then
+            d.rule = S.Ours(f:CreateTexture(nil, "BORDER"))
+            EV.Pixel.NoSnap(d.rule)
+            d.rule:SetPoint("LEFT", f.Title, "RIGHT", SC.gap, 0)
+            d.rule:SetPoint("RIGHT", f, "RIGHT", -SC.pad, 0)
+            local function Paint()
+                d.rule:SetHeight(EV.Pixel:Line(f))
+                d.rule:SetColorTexture(T.C4(T.Resolve(SC).rule))
+            end
+            Paint()
+            T.Watch(d.rule, Paint)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  9b. Legacy scroll bar  Slider-based, 10 templates
 --      MinimalScrollBar (the modern one, an EventFrame with a Track) is part
 --      9. Everything older is a Slider with ScrollUpButton/ScrollDownButton
@@ -2986,6 +3727,10 @@ local function TitleBar(f, p, tc, title)
     p:After("SetTitleOffsets", Centre)
 end
 
+S.TitleBar = TitleBar
+
+S.TitleBar = TitleBar
+
 -- The portrait toggles are global functions, taking the window.
 local portraitHooked = false
 local function HookPortraitToggles()
@@ -3029,7 +3774,9 @@ local function PaintWindow(f, p)
         -- Blizzard anchors it TOPRIGHT x=-2 y=1 (Camelot's
         -- UIPanelCloseButtonDefaultAnchorsMixin), a pixel above the window;
         -- the maximise button hangs off its left, so it follows.
-        local close = rawget(f, "CloseButton")
+        -- CloseButton on most windows; ClosePanelButton on the flat panels
+        -- (ScrollingFlatPanelTemplate: the loot window).
+        local close = rawget(f, "CloseButton") or rawget(f, "ClosePanelButton")
         if type(close) == "table" and close.GetPoint then
             local ok, pt, rel = pcall(close.GetPoint, close, 1)
             if ok and pt == "TOPRIGHT" and (rel == f or rel == nil) then

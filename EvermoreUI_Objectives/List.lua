@@ -43,8 +43,11 @@ local ITEM_W = 34        -- the row's item button: this wide, the row's full hei
 local SCROLLBAR = 12     -- always reserved, so text never rewraps when the bar appears
 
 local list
-local pools = { header = {}, block = {}, popup = {} }
-local counts = { header = 0, block = 0, popup = 0 }
+local pools = { header = {}, block = {}, popup = {}, recipe = {}, pheader = {} }
+local counts = { header = 0, block = 0, popup = 0, recipe = 0, pheader = 0 }
+local plist                -- the professions group's rows, under its own strip (Panel.lua)
+local pheight = 0
+local recipeCount = 0
 local flashes = {}       -- questID -> time the flash started
 local height = 0
 
@@ -226,8 +229,8 @@ local function Collapsed(key)
     return c.sections[key] == true
 end
 
-local function NewHeader()
-    local h = CreateFrame("Button", nil, list)
+local function NewHeader(parent)
+    local h = CreateFrame("Button", nil, parent or list)
     h:SetHeight(HEADER_H)
     h.bg = T.Solid(h, "BACKGROUND", 0, 0, 0, 0)   -- T.LOOK.raised at 0.9, in Paint
     h.bg:SetAllPoints()
@@ -718,6 +721,256 @@ local function DrawQuest(q, y)
 end
 
 --------------------------------------------------------------------------------
+--  Tracked recipes
+--
+--  Their own group beside the quests, under a strip of their own like the
+--  quests' (Panel.lua), with a section per profession: the recipe's icon where a quest has
+--  its marker, its name, and a line per required reagent with what you have
+--  against what it needs, done in green once you have enough. The same data
+--  and rules as Blizzard's recipe tracker (Blizzard_ProfessionsRecipeTracker,
+--  AddRecipe): the required slots of the schematic, the modifying ones first,
+--  reagents counted the way the crafting form counts them. Blizzard's own
+--  section is parked with the quest ones (Panel.lua).
+--
+--  Clicks, as Blizzard's: click opens the recipe (or inspects one from a
+--  profession you haven't learned), shift-click untracks, a chat-link click
+--  links it, right-click offers both.
+--------------------------------------------------------------------------------
+local IS_RECRAFT = true
+local waitingItems = false
+
+local function RecipeID(b) return b.recipeID end
+
+local function ReagentName(reagent)
+    if reagent.itemID then
+        local name = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(reagent.itemID)
+        if not name then
+            waitingItems = true
+            if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(reagent.itemID) end
+        end
+        return name
+    elseif reagent.currencyID and C_CurrencyInfo then
+        local info = C_CurrencyInfo.GetCurrencyInfo(reagent.currencyID)
+        return info and info.name
+    end
+end
+
+local function Owned(slot)
+    local PU = ProfessionsUtil
+    if PU and PU.AccumulateReagentsInPossession then
+        local ok, n = pcall(PU.AccumulateReagentsInPossession, slot.reagents)
+        if ok and type(n) == "number" then return n end
+    end
+    local n = 0
+    for _, r in ipairs(slot.reagents or {}) do
+        if r.itemID then
+            n = n + (C_Item.GetItemCount(r.itemID, false, false, true) or 0)
+        elseif r.currencyID and C_CurrencyInfo then
+            local info = C_CurrencyInfo.GetCurrencyInfo(r.currencyID)
+            n = n + (info and info.quantity or 0)
+        end
+    end
+    return n
+end
+
+local function Required(slot)
+    local PU, E = ProfessionsUtil, Enum and Enum.CraftingReagentType
+    if PU and PU.IsReagentSlotRequired then
+        local ok, yes = pcall(PU.IsReagentSlotRequired, slot)
+        if ok then return yes end
+    end
+    return slot.required and (not E or slot.reagentType == E.Basic or slot.reagentType == E.Modifying)
+end
+
+local function Modifying(slot)
+    local E = Enum and Enum.CraftingReagentType
+    return E and E.Modifying and slot.reagentType == E.Modifying or false
+end
+
+--- The recipes to show: { id, recraft, name, icon, lines = { text, done } }.
+local function CollectRecipes()
+    local out = {}
+    if not (C_TradeSkillUI and C_TradeSkillUI.GetRecipesTracked) then return out end
+    waitingItems = false
+    for _, recraft in ipairs({ not IS_RECRAFT, IS_RECRAFT }) do
+        for _, id in ipairs(C_TradeSkillUI.GetRecipesTracked(recraft) or {}) do
+            local ok, sch = pcall(C_TradeSkillUI.GetRecipeSchematic, id, recraft)
+            if ok and type(sch) == "table" then
+                local info = C_TradeSkillUI.GetRecipeInfo and C_TradeSkillUI.GetRecipeInfo(id)
+                local prof
+                if C_TradeSkillUI.GetTradeSkillLineForRecipe then
+                    local okL, _, lineName, _, parentName = pcall(C_TradeSkillUI.GetTradeSkillLineForRecipe, id)
+                    if okL then prof = Str(parentName, Str(lineName, nil)) end
+                end
+                local r = {
+                    id = id, recraft = recraft, lines = {}, done = true,
+                    profession = prof or L["Other"],
+                    name = recraft and PROFESSIONS_CRAFTING_FORM_RECRAFTING_HEADER
+                        and PROFESSIONS_CRAFTING_FORM_RECRAFTING_HEADER:format(sch.name or "") or sch.name or "",
+                    icon = (info and info.icon) or sch.icon,
+                }
+                local slots = {}
+                for _, slot in ipairs(sch.reagentSlotSchematics or {}) do
+                    if Required(slot) then
+                        if Modifying(slot) then table.insert(slots, 1, slot) else slots[#slots + 1] = slot end
+                    end
+                end
+                for _, slot in ipairs(slots) do
+                    local name = Modifying(slot) and slot.slotInfo and slot.slotInfo.slotText
+                        or ReagentName(slot.reagents and slot.reagents[1] or {})
+                    if name then
+                        local need = slot.quantityRequired or 1
+                        local have = Owned(slot)
+                        local met = have >= need
+                        if not met then r.done = false end
+                        r.lines[#r.lines + 1] = {
+                            text = format("%d/%d %s", min(have, 9999), need, name),
+                            done = met, cur = have, total = need,
+                        }
+                    end
+                end
+                out[#out + 1] = r
+            end
+        end
+    end
+    return out
+end
+
+local function RecipeMenu(owner, b)
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(b.recipe and b.recipe.name or "")
+        if not b.recraft then
+            root:CreateButton(Str(PROFESSIONS_TRACKING_VIEW_RECIPE, L["View recipe"]), function()
+                if not ProfessionsFrame and ProfessionsFrame_LoadUI then ProfessionsFrame_LoadUI() end
+                C_TradeSkillUI.OpenRecipe(b.recipeID)
+            end)
+        end
+        root:CreateButton(Str(PROFESSIONS_UNTRACK_RECIPE, L["Untrack"]), function()
+            C_TradeSkillUI.SetRecipeTracked(b.recipeID, false, b.recraft)
+        end)
+    end)
+end
+
+local function OnRecipeClick(self, button)
+    local id = RecipeID(self)
+    if not id then return end
+    if IsModifiedClick("CHATLINK") and ChatFrameUtil and ChatFrameUtil.GetActiveWindow and ChatFrameUtil.GetActiveWindow() then
+        local link = C_TradeSkillUI.GetRecipeLink and C_TradeSkillUI.GetRecipeLink(id)
+        if link then ChatFrameUtil.InsertLink(link) end
+        return
+    end
+    if button == "RightButton" then return RecipeMenu(self, self) end
+    if not ProfessionsFrame and ProfessionsFrame_LoadUI then ProfessionsFrame_LoadUI() end
+    if IsModifiedClick("RECIPEWATCHTOGGLE") then
+        C_TradeSkillUI.SetRecipeTracked(id, false, self.recraft)
+    elseif not self.recraft then
+        if C_TradeSkillUI.IsRecipeProfessionLearned and C_TradeSkillUI.IsRecipeProfessionLearned(id) then
+            C_TradeSkillUI.OpenRecipe(id)
+        elseif Professions and Professions.InspectRecipe then
+            Professions.InspectRecipe(id)
+        end
+    end
+end
+
+local function NewRecipe()
+    local b = CreateFrame("Button", nil, plist)
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    b.hover = T.Solid(b, "BACKGROUND", 0, 0, 0, 0)   -- T.LOOK.listItem
+    b.hover:SetAllPoints()
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetSize(MARK + 2, MARK + 2)
+    b.icon:SetPoint("TOPLEFT", 5, -2)
+    EV.Icons:Style(b.icon, { host = b })
+    b.title = T.Text(b, "body", "title", true)
+    b.title:SetWordWrap(true)
+    b.title:SetJustifyH("LEFT")
+    b.lines = {}
+    b:SetScript("OnClick", OnRecipeClick)
+    b:SetScript("OnEnter", function(self)
+        self.hover:SetColorTexture(T.C4(T.Resolve(T.LOOK.listItem, { hover = true }).fill))
+        local left = (self:GetCenter() or 0) > (UIParent:GetWidth() / 2)
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        GameTooltip:ClearAllPoints()
+        if left then GameTooltip:SetPoint("TOPRIGHT", self, "TOPLEFT", -10, 0)
+        else GameTooltip:SetPoint("TOPLEFT", self, "TOPRIGHT", 10, 0) end
+        if not (C_TradeSkillUI.GetRecipeLink and pcall(GameTooltip.SetHyperlink, GameTooltip,
+                C_TradeSkillUI.GetRecipeLink(self.recipeID) or "")) then
+            GameTooltip:AddLine(self.recipe and self.recipe.name or "", T.RGBA("title"))
+        end
+        GameTooltip:AddLine(" ")
+        local hint = { T.RGBA("textDisabled") }
+        GameTooltip:AddLine(L["Click: open recipe   Shift-click: untrack"], hint[1], hint[2], hint[3])
+        GameTooltip:AddLine(L["Right-click: options"], hint[1], hint[2], hint[3])
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function(self)
+        self.hover:SetColorTexture(T.C4(T.Resolve(T.LOOK.listItem).fill))
+        GameTooltip:Hide()
+    end)
+    return b
+end
+
+--- Draw one recipe at y; returns its height.
+local function DrawRecipe(r, y, w)
+    local b = Acquire("recipe", NewRecipe)
+    b.recipeID, b.recraft, b.recipe = r.id, r.recraft, r
+    b:ClearAllPoints()
+    b:SetPoint("TOPLEFT", plist, "TOPLEFT", 0, -y)
+    b:SetWidth(w)
+    b.hover:SetColorTexture(T.C4(T.Resolve(T.LOOK.listItem, { hover = b:IsMouseOver() }).fill))
+    b.icon:SetTexture(r.icon or 134400)
+    b.title:ClearAllPoints()
+    b.title:SetPoint("TOPLEFT", TITLE_X, -3)
+    b.title:SetWidth(w - TITLE_X - 6)
+    b.title:SetText(r.name)
+    b.title:SetTextColor(T.RGBA((r.done and M.db.completeColour) and "success" or "title"))
+    local h = 3 + max(b.title:GetStringHeight() or 14, MARK)
+    for i, o in ipairs(r.lines) do
+        if not (o.done and M.db.finished == "hide") then
+            local ln = Line(b, i)
+            h = h + LINE_GAP
+            ln.dash:ClearAllPoints()
+            ln.dash:SetPoint("TOPLEFT", OBJ_X - 8, -h)
+            ln.text:ClearAllPoints()
+            ln.text:SetPoint("TOPLEFT", OBJ_X, -h)
+            ln.text:SetWidth(w - OBJ_X - 6)
+            ln.text:SetText(o.text)
+            local dim = o.done and M.db.finished == "dim"
+            ln.text:SetTextColor(T.RGBA(dim and "textMuted" or (o.done and "success") or "text"))
+            ln.text:SetAlpha(dim and 0.55 or 1)
+            ln.dash:SetAlpha(dim and 0.55 or 1)
+            ln.text:Show(); ln.dash:Show()
+            h = h + (ln.text:GetStringHeight() or 12)
+            if M.db.progressBars and o.total > 1 and not o.done then
+                h = h + 2
+                ln.bar:ClearAllPoints()
+                ln.bar:SetPoint("TOPLEFT", OBJ_X, -h)
+                ln.bar:SetWidth(max(20, w - OBJ_X - 14))
+                ln.bar:SetMinMaxValues(0, o.total)
+                ln.bar:SetValue(min(o.cur or 0, o.total))
+                ln.bar:SetStatusBarColor(T.RGBA("accent", 0.9))
+                ln.bar.bg:SetVertexColor(T.RGBA("surfaceSunk", 1))   -- content colour: the track under a count
+                ln.bar:Show()
+                h = h + BAR_H
+            else
+                ln.bar:Hide()
+            end
+        elseif b.lines[i] then
+            local ln = b.lines[i]
+            ln.text:Hide(); ln.dash:Hide(); ln.bar:Hide()
+        end
+    end
+    for i = #r.lines + 1, #b.lines do
+        local ln = b.lines[i]
+        ln.text:Hide(); ln.dash:Hide(); ln.bar:Hide()
+    end
+    h = h + 4
+    b:SetHeight(h)
+    return h
+end
+
+--------------------------------------------------------------------------------
 --  Auto quest pop-ups (quest offers and click-to-complete)
 --------------------------------------------------------------------------------
 local function NewPopup()
@@ -807,6 +1060,72 @@ local function UpdateInPlace()
     end
 end
 
+--- The professions group: a section per profession, as the quests have one
+--- per zone, each tracked recipe a row. Drawn into its own frame, under its
+--- own strip (Panel.lua), not into the quest list.
+local function DrawRecipes()
+    if not plist then return end
+    local recipes = CollectRecipes()
+    recipeCount = #recipes
+    local w = ns.RecipeWidth()
+    plist:SetWidth(w)
+    local y = 0
+    if #recipes > 0 and not ns.RecipesFolded() then
+        local profs, byName = {}, {}
+        for _, r in ipairs(recipes) do
+            local s = byName[r.profession]
+            if not s then
+                s = { name = r.profession, recipes = {} }
+                byName[r.profession] = s
+                profs[#profs + 1] = s
+            end
+            s.recipes[#s.recipes + 1] = r
+        end
+        table.sort(profs, function(a, b) return a.name < b.name end)
+        for _, s in ipairs(profs) do
+            local key = "prof:" .. s.name
+            local h = Acquire("pheader", function() return NewHeader(plist) end)
+            h.key = key
+            h:ClearAllPoints()
+            h:SetPoint("TOPLEFT", plist, "TOPLEFT", 0, -y)
+            h:SetWidth(w)
+            h.text:SetText(s.name)
+            h.count:SetText(#s.recipes)
+            local shut = Collapsed(key)
+            h.chev:Point(shut and "right" or "down")
+            y = y + HEADER_H + 3
+            if not shut then
+                for _, r in ipairs(s.recipes) do
+                    y = y + DrawRecipe(r, y, w) + BLOCK_GAP
+                end
+            end
+            y = y + 3
+        end
+    end
+    pheight = y
+    plist:SetHeight(max(y, 1))
+end
+
+function ns.RecipeCount() return recipeCount end
+function ns.RecipeHeight() return pheight end
+function ns.RecipeWidth() return M.db.width - 6 end
+function ns.RecipesFolded()
+    local c = ns.Char()
+    return type(c.sections) == "table" and c.sections.recipes == true
+end
+function ns.FoldRecipes()
+    local c = ns.Char()
+    if type(c.sections) ~= "table" then c.sections = {} end
+    c.sections.recipes = not c.sections.recipes or nil
+    ns.RefreshList(true)
+end
+function ns.CreateRecipeList(parent)
+    plist = CreateFrame("Frame", "EvermoreUIRecipeList", parent)
+    plist:SetSize(ns.RecipeWidth(), 1)
+    ns.plist = plist
+    return plist
+end
+
 local Draw
 local function AfterCombat()
     Draw()
@@ -821,7 +1140,7 @@ Draw = function()
         combatDraw = true -- not protected: draw, but leave the secure buttons for later
     end
     itemUsed = 0
-    counts.header, counts.block, counts.popup = 0, 0, 0
+    counts.header, counts.block, counts.popup, counts.recipe, counts.pheader = 0, 0, 0, 0, 0
     local w = Width()
     list:SetWidth(w)
     local y = DrawPopups(0)
@@ -845,6 +1164,7 @@ Draw = function()
         end
         y = y + 3
     end
+    DrawRecipes()
     if not combatDraw then ParkUnusedItems() end
     combatDraw = false
     ReleaseRest()
@@ -906,7 +1226,10 @@ function ns.ListHeight() return height end
 --  Lifecycle
 --------------------------------------------------------------------------------
 local events = CreateFrame("Frame")
-events:SetScript("OnEvent", function() ns.RefreshList() end)
+events:SetScript("OnEvent", function(_, event)
+    if event == "GET_ITEM_INFO_RECEIVED" and not waitingItems then return end
+    ns.RefreshList()
+end)
 
 -- Distance sort: re-sort now and then while moving.
 local ticker
@@ -941,7 +1264,9 @@ function ns.CreateList(parent)
     ns.list = list
     for _, e in ipairs({ "QUEST_LOG_UPDATE", "QUEST_WATCH_LIST_CHANGED", "SUPER_TRACKING_CHANGED",
                          "QUEST_AUTOCOMPLETE", "QUEST_ACCEPTED", "QUEST_REMOVED", "QUEST_TURNED_IN",
-                         "ZONE_CHANGED_NEW_AREA", "PLAYER_MONEY", "QUEST_POI_UPDATE", "PLAYER_ENTERING_WORLD" }) do
+                         "ZONE_CHANGED_NEW_AREA", "PLAYER_MONEY", "QUEST_POI_UPDATE", "PLAYER_ENTERING_WORLD",
+                         "TRACKED_RECIPE_UPDATE", "BAG_UPDATE_DELAYED", "CURRENCY_DISPLAY_UPDATE",
+                         "GET_ITEM_INFO_RECEIVED" }) do
         pcall(events.RegisterEvent, events, e)
     end
     UpdateTicker()

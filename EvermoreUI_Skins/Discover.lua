@@ -65,6 +65,11 @@ local function Sweep()
     Take("GameMenuFrame")
     Take("DropDownList1")
     Take("DropDownList2")
+    -- The zone map toggles itself with a bare Show and is in neither table.
+    Take("BattlefieldMapFrame")
+    Take("OpacityFrame")
+    -- Loot under the mouse shows the loot window with a bare Show.
+    Take("LootFrame")
 end
 S.Sweep = Sweep
 

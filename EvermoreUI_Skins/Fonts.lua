@@ -29,6 +29,7 @@ local ROLES = {
     ["GameFontWhite*"]        = "text",
     ["GameFontBlack*"]        = "text",
     ["QuestFont*"]            = "text",
+    ["QuestTitleFont*"]       = "title",       -- the quest log's and quest window's headings
     -- Parchment-era text, all of it near-black because it sat on paper:
     -- ItemTextFontNormal 0.18/0.12/0.06, SubSpellFont 0.35/0.2/0
     -- (Blizzard_Fonts_Shared/Shared/GameFontStyles.xml:94-108).
@@ -74,6 +75,16 @@ end
 -- core font module already leaves them alone.
 local DECORATIVE = { "morpheus", "skurri", "nim_____", "2002" }
 
+-- Headings inside our windows that Blizzard set in Morpheus: the quest title,
+-- "Description", "Objectives", "Rewards" (QuestTitleFont and its shadowed
+-- twin, QuestFont_Huge). On parchment they were a flourish; on our flat
+-- window they were the one thing in a different hand. Our bold face instead,
+-- at Blizzard's size. Other Morpheus text (zone names on screen, book pages)
+-- stays as it was.
+local REFACE = {
+    QuestTitleFont = true, QuestTitleFontBlackShadow = true, QuestFont_Huge = true,
+}
+
 local function IsDecorative(path)
     if type(path) ~= "string" then return false end
     path = path:lower()
@@ -91,7 +102,10 @@ local function Take(name, obj, token)
     -- A decorative face keeps its face. It does not keep its colour:
     -- QuestTitleFont is Morpheus AND pure black, and skipping the whole
     -- call left it unreadable the moment the parchment went.
-    if not IsDecorative(path) then
+    if REFACE[name] then
+        local bold = T.FontBoldPath and T.FontBoldPath() or T.FontPath()
+        if bold then pcall(obj.SetFont, obj, bold, size, flags or "") end
+    elseif not IsDecorative(path) then
         local ours = T.FontPath()
         if ours then pcall(obj.SetFont, obj, ours, size, flags or "") end
     end

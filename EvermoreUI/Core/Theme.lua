@@ -48,7 +48,7 @@ T.PALETTES = {
         title       = hex("e8c46a"),        -- headings: WoW gold
         accent      = hex("d4924e"),        -- burnished copper
         onAccent    = hex("1c1208"),        -- text on accent fills
-        danger      = hex("e46a55"),        -- brick
+        danger      = hex("e8524a"),        -- warm red (was e46a55, read orange beside the copper)
         success     = hex("93b75c"),        -- moss
         warning     = hex("e6a847"),        -- amber
         -- Data colours (experience bar and anything that charts progress).
@@ -82,7 +82,7 @@ T.PALETTES = {
         title       = hex("ffd772"),
         accent      = hex("eca867"),
         onAccent    = hex("000000"),
-        danger      = hex("ff7d68"),
+        danger      = hex("ff5a4d"),
         success     = hex("a9d070"),
         warning     = hex("ffc15e"),
         xp          = hex("c07d42"),
@@ -247,19 +247,14 @@ function T.ShowBorder(frame, shown) EV.Pixel:ShowEdges(frame, shown) end
 
 --- Soft drop shadow: stacked black rings outside the frame.
 function T.Shadow(frame, size, strength)
-    size = size or 10
-    strength = strength or T.C.shadow[4]
+    -- No shadow any more (Ben, 28 Sep): the stacked one-pixel rings overlapped
+    -- at every corner and drew a diagonal of darker points there, and the
+    -- frame edge already separates a window from the world. Callers keep
+    -- getting a frame (a few hold on to it), but it draws nothing.
     local holder = CreateFrame("Frame", nil, frame)
-    holder:SetFrameLevel(math.max(frame:GetFrameLevel() - 1, 0))
-    holder:SetPoint("TOPLEFT", -size, size)
-    holder:SetPoint("BOTTOMRIGHT", size, -size)
+    holder.ignoreInLayout = true   -- never content to a LayoutFrame (see Pixel:Edges)
     holder:EnableMouse(false)
-    for i = 1, size do
-        local ring = CreateFrame("Frame", nil, holder)
-        ring:SetPoint("TOPLEFT", i - 1, -(i - 1))
-        ring:SetPoint("BOTTOMRIGHT", -(i - 1), i - 1)
-        EV.Pixel:CreateBorder(ring, 1, 0, 0, 0, strength * (i / size) ^ 2 * 0.5)
-    end
+    holder:Hide()
     return holder
 end
 
