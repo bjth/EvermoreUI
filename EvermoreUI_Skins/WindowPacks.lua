@@ -5609,6 +5609,15 @@ P{
         local box = entry and entry.EditBoxContainer
         DialogPrimary((box and box.AcceptButton) or (entry and entry.AcceptButton) or _G.AddFriendEntryFrameAcceptButton)
         if info then DialogPrimary(info.OkayButton) end
+        -- Our input box is drawn on the edit box's own rect, but Blizzard
+        -- keeps the text and its "Enter: ..." prompt on its old end caps,
+        -- which hung 5 outside it: bring both in to the input's padding.
+        local eb = _G.AddFriendNameEditBox
+        if eb then
+            eb:SetTextInsets(6, 6, 0, 0)
+            local fill = _G.AddFriendNameEditBoxFill
+            if fill then k:Move(fill, "LEFT", eb, "LEFT", 6, 0) end
+        end
         local ib = _G.AddFriendEntryFrameInfoButton
         local t = ib and ib.GetNormalTexture and ib:GetNormalTexture()
         if t and t.SetDesaturated then
