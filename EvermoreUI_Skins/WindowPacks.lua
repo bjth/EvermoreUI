@@ -619,7 +619,7 @@ end
 --                      round portrait on this tab; the window part fades the
 --                      portrait once, so it is faded again after each update.
 --------------------------------------------------------------------------------
-local TAL = { pad = 12, control = 30, gap = 8, footer = 40, button = 24, unspent = 30 }
+local TAL = { pad = 12, control = 30, gap = 8, footer = 40, button = 24, unspent = 30, unspentFont = 15 }
 
 local TALENT_ART = { "Background", "ClassBackground", "OverlayBackgroundRight", "OverlayBackgroundMid",
                      "BackgroundBorder", "DividerHorizontalLeft", "DividerHorizontalRight",
@@ -755,7 +755,24 @@ local function Talents(f, k)
         if box then
             k:Size(box, TAL.unspent + 10, TAL.unspent)
             S.Well(box, box, -1)
-            if box.CurrencyAmount then k:Label(box.CurrencyAmount, "title", true) end
+            local amount = box.CurrencyAmount
+            if amount then
+                -- Game32Font in the art's 48px box; body size in our well.
+                k:Label(amount, false, true)
+                local path = T.FontBoldPath and T.FontBoldPath()
+                if path then pcall(amount.SetFont, amount, path, TAL.unspentFont, "") end
+                -- SetAmount colours it on every change: green with points to
+                -- spend, grey with none. Ours, meaning the same.
+                local function Colour()
+                    local n = tonumber(amount:GetText() or "") or 0
+                    amount:SetTextColor(S.Colour(n > 0 and "success" or "textMuted"))
+                end
+                Colour()
+                k:Once(cur, "amountColour", function()
+                    k:After(cur, "SetAmount", Colour)
+                    T.Watch(amount, Colour)
+                end)
+            end
         end
         if cur.UnspentLabel then
             k:Label(cur.UnspentLabel, "textMuted")
