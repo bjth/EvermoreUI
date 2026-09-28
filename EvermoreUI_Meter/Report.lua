@@ -34,8 +34,8 @@ local function Send(text, channel, target)
     end
 end
 
-local function Plain(v)
-    local s = ns.Short(v)
+local function Plain(v, rate)
+    local s = ns.Short(v, rate)
     return EV.Usable(s) and tostring(s) or "?"
 end
 
@@ -79,8 +79,9 @@ function ns.Report(win, channel)
         local main, paren = src.totalAmount, src.amountPerSecond
         if ns.PER_SECOND_FIRST[mode] then main, paren = src.amountPerSecond, src.totalAmount end
         if ns.NO_PER_SECOND[mode] then paren = nil end
-        local line = ("%d. %s %s"):format(i, ns.Name(src.name), Plain(main))
-        if paren ~= nil then line = line .. (" (%s)"):format(Plain(paren)) end
+        local rate = ns.PER_SECOND_FIRST[mode] and true or false
+        local line = ("%d. %s %s"):format(i, ns.Name(src.name), Plain(main, rate))
+        if paren ~= nil then line = line .. (" (%s)"):format(Plain(paren, not rate)) end
         Send(line, channel, target)
     end
 end

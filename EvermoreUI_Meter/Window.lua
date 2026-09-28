@@ -90,6 +90,7 @@ function ns.CreateWindow(i)
     w.menuButton = U.IconButton(bar, { size = TITLE - 4, glyph = "chevron", tooltip = L["Report, reset and settings"] },
         function(self) w:MainMenu(self) end)
     w.menuButton:SetPoint("RIGHT", bar, "RIGHT", -2, 0)
+    w.menuButton.icon:SetRotation(-math.pi / 2) -- the glyph points right; a menu opens down
 
     w.clock = T.Text(bar, "small", "textMuted", false, "RIGHT")
     w.clock:SetPoint("RIGHT", w.menuButton, "LEFT", -6, 0)
@@ -164,6 +165,8 @@ function Window:StyleRow(row)
     local font = T.FontPath()
     row.name:SetFont(font, size, "")
     row.value:SetFont(font, size, "")
+    ns.BarText(row.name)
+    ns.BarText(row.value)
     row.icon:SetSize(h, h)
     row.track:SetColorTexture(T.RGBA("surfaceSunk", 0.6)) -- content colour: the track under a value
 end
@@ -240,7 +243,7 @@ function Window:SetRow(row, src, rank)
         local enemy = ns.TYPE.EnemyDamageTaken == mode
         r, g, b = T.RGBA(enemy and "danger" or "accent")
     end
-    row.bar:SetStatusBarColor(r, g, b, 0.85)
+    ns.BarColour(row.bar, r, g, b)
 
     -- Rank and name.
     local name = ns.Name(src.name)
@@ -258,7 +261,7 @@ function Window:SetRow(row, src, rank)
     local pct
     if db.numbers == "minimal" then paren = nil
     elseif db.numbers == "complete" then pct = ns.Share(total, self.total) end
-    ns.SetValueText(row.value, main, paren, pct)
+    ns.SetValueText(row.value, main, paren, pct, ns.PER_SECOND_FIRST[mode])
 end
 
 function Window:RowTooltip(row)
@@ -268,7 +271,7 @@ function Window:RowTooltip(row)
     pcall(GameTooltip.AddLine, GameTooltip, ns.Name(src.name), 1, 1, 1)
     pcall(GameTooltip.AddDoubleLine, GameTooltip, ns.TypeName(self.db.mode), ns.Short(src.totalAmount), 0.8, 0.8, 0.8, 1, 1, 1)
     if not ns.NO_PER_SECOND[self.db.mode] then
-        pcall(GameTooltip.AddDoubleLine, GameTooltip, L["Per second"], ns.Short(src.amountPerSecond), 0.8, 0.8, 0.8, 1, 1, 1)
+        pcall(GameTooltip.AddDoubleLine, GameTooltip, L["Per second"], ns.Short(src.amountPerSecond, true), 0.8, 0.8, 0.8, 1, 1, 1)
     end
     local pct = ns.Share(src.totalAmount, self.total)
     if pct then GameTooltip:AddDoubleLine(L["Share"], pct .. "%", 0.8, 0.8, 0.8, 1, 1, 1) end

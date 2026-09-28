@@ -179,13 +179,73 @@ end
 --------------------------------------------------------------------------------
 local Abbrev = AbbreviateNumbers or AbbreviateLargeNumbers
 
--- Nil checks go by type(): comparing a secret, even with nil, is an error.
-function ns.Short(v)
-    if type(v) == "nil" then return "0" end
-    if Abbrev then
-        local ok, s = pcall(Abbrev, v)
-        if ok and type(s) ~= "nil" then return s end
+-- One set of steps for both paths: two decimals below ten of a unit, one
+-- below a hundred, none above ("1.23K", "12.3K", "123K"). Under a thousand a
+-- whole number stays whole and anything else gets two decimals ("2.87").
+local UNITS = { { 1e9, "B" }, { 1e6, "M" }, { 1e3, "K" } }
+
+local function Readable(v)
+    local n = math.abs(v)
+    for _, u in ipairs(UNITS) do
+        if n >= u[1] then
+            local x = v / u[1]
+            local ax = math.abs(x)
+            local fmt = ax < 10 and "%.2f%s" or ax < 100 and "%.1f%s" or "%.0f%s"
+            return fmt:format(x, u[2])
+        end
     end
+    if v == math.floor(v) then return ("%d"):format(v) end
+    return ("%.2f"):format(v)
+end
+
+-- The same steps for a secret, which only the game can format: breakpoints
+-- for AbbreviateNumbers, in the pairs its documentation describes
+-- (significand x fraction = the unit). Rates get one more step below a
+-- thousand for the two decimals; totals are whole and need none.
+local function Steps(rate)
+    local data = {}
+    for _, u in ipairs(UNITS) do
+        local unit = u[1]
+        data[#data + 1] = { breakpoint = unit * 100, abbreviation = u[2], significandDivisor = unit, fractionDivisor = 1, abbreviationIsGlobal = false }
+        data[#data + 1] = { breakpoint = unit * 10, abbreviation = u[2], significandDivisor = unit / 10, fractionDivisor = 10, abbreviationIsGlobal = false }
+        data[#data + 1] = { breakpoint = unit, abbreviation = u[2], significandDivisor = unit / 100, fractionDivisor = 100, abbreviationIsGlobal = false }
+    end
+    if rate then
+        data[#data + 1] = { breakpoint = 0, abbreviation = "", significandDivisor = 0.01, fractionDivisor = 100, abbreviationIsGlobal = false }
+    end
+    local opts = { breakpointData = data }
+    if CreateAbbreviateConfig then
+        local ok, config = pcall(CreateAbbreviateConfig, data)
+        if ok and config then opts.config = config end
+    end
+    return opts
+end
+
+local STEPS, stepsRefused = {}, false
+
+local function Secret(v, rate)
+    if not stepsRefused then
+        local key = rate and "rate" or "whole"
+        STEPS[key] = STEPS[key] or Steps(rate)
+        local ok, s = pcall(Abbrev, v, STEPS[key])
+        if ok and type(s) ~= "nil" then return s end
+        stepsRefused = true -- the game won't take our steps: its own from now on
+    end
+    local ok, s = pcall(Abbrev, v)
+    if ok and type(s) ~= "nil" then return s end
+    return v
+end
+
+--- A number for display. `rate` marks a per second value, which keeps two
+--- decimals below a thousand.
+-- Nil checks go by type(): comparing a secret, even with nil, is an error.
+function ns.Short(v, rate)
+    if type(v) == "nil" then return "0" end
+    if EV.Usable(v) then
+        if type(v) == "number" then return Readable(v) end
+        return tostring(v)
+    end
+    if Abbrev then return Secret(v, rate) end
     return v
 end
 
@@ -205,16 +265,29 @@ end
 
 --- "main (paren, pct%)" into a font string. Formatting a secret happens in
 --- the widget, which may refuse; then the main value is shown on its own.
-function ns.SetValueText(fs, main, paren, pct)
-    local a = ns.Short(main)
+function ns.SetValueText(fs, main, paren, pct, mainIsRate)
+    local a = ns.Short(main, mainIsRate)
     local hasParen = type(paren) ~= "nil"
-    local b = hasParen and ns.Short(paren) or nil
+    local b = hasParen and ns.Short(paren, not mainIsRate) or nil
     local ok
     if hasParen and pct then ok = pcall(fs.SetFormattedText, fs, "%s (%s, %d%%)", a, b, pct)
     elseif hasParen then ok = pcall(fs.SetFormattedText, fs, "%s (%s)", a, b)
     elseif pct then ok = pcall(fs.SetFormattedText, fs, "%s (%d%%)", a, pct)
     else ok = pcall(fs.SetText, fs, a) end
     if not ok then pcall(fs.SetText, fs, a) end
+end
+
+--- A bar's colour: the class colour taken down, so white text reads on
+--- the bright ones (rogue, priest, shaman) as well as the dark.
+local BAR_SHADE = 0.6
+function ns.BarColour(bar, r, g, b)
+    bar:SetStatusBarColor(r * BAR_SHADE, g * BAR_SHADE, b * BAR_SHADE, 1)
+end
+
+--- Text on a bar: a solid shadow rather than the suite's soft one.
+function ns.BarText(fs)
+    fs:SetShadowOffset(1, -1)
+    fs:SetShadowColor(0, 0, 0, 1)
 end
 
 --- A source's name: without its realm when we can read it.

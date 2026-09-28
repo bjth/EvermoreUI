@@ -106,6 +106,8 @@ function B:Row(n)
     row.value = T.Text(text, "small", "text", false, "RIGHT")
     row.value:SetPoint("RIGHT", text, "RIGHT", -4, 0)
     row.name:SetPoint("RIGHT", row.value, "LEFT", -6, 0)
+    ns.BarText(row.name)
+    ns.BarText(row.value)
     self.rows[n] = row
     return row
 end
@@ -193,7 +195,7 @@ function B:Refresh()
             row:SetPoint("TOPLEFT", f.body, "TOPLEFT", 0, -(slot - 1) * (ROW + 1))
             row:SetPoint("TOPRIGHT", f.body, "TOPRIGHT", 0, -(slot - 1) * (ROW + 1))
             row.bar:SetStatusBarTexture(texture)
-            row.bar:SetStatusBarColor(cr, cg, cb, 0.7)
+            ns.BarColour(row.bar, cr, cg, cb)
             local amount = spell.totalAmount
             pcall(row.bar.SetMinMaxValues, row.bar, 0, type(maxAmount) == "nil" and 1 or maxAmount)
             pcall(row.bar.SetValue, row.bar, type(amount) == "nil" and 0 or amount)
@@ -212,7 +214,7 @@ function B:Refresh()
             local main, paren = spell.totalAmount, spell.amountPerSecond
             if ns.PER_SECOND_FIRST[mode] then main, paren = spell.amountPerSecond, spell.totalAmount end
             if ns.NO_PER_SECOND[mode] then paren = nil end
-            ns.SetValueText(row.value, main, paren, ns.Share(spell.totalAmount, total))
+            ns.SetValueText(row.value, main, paren, ns.Share(spell.totalAmount, total), ns.PER_SECOND_FIRST[mode])
             row:Show()
         elseif row then
             row:Hide()
