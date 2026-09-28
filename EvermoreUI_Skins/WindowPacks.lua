@@ -1921,6 +1921,73 @@ local function CalDay(b)
     CalCell(b)
 end
 
+--------------------------------------------------------------------------------
+--  The calendar's read-only side panels: CalendarViewHolidayFrame and
+--  CalendarViewRaidFrame. Each is a DialogBorderDarkTemplate with a
+--  DialogHeaderTemplate plate standing over its top edge, a ScrollingFont of
+--  fixed size for the description and, on the holiday one, the holiday's
+--  ornate INFO sheet at 40% behind the text. Blizzard hangs them from the
+--  calendar's top right, 24 down, at a fixed 320 or 150 tall.
+--
+--  Ours: our window with its title band, the name on the band, the close
+--  in its corner, the ornament gone, the text inset by the pad, and the
+--  panel as tall as its text (up to Blizzard's height, past which the text
+--  scrolls as before). It sits a gap clear of the calendar, level with its
+--  top.
+--------------------------------------------------------------------------------
+local CALSIDE = { gap = 6, pad = 10, min = 60 }
+
+local function CalSide(name, closeName)
+    P{
+        name  = name,
+        addon = "Blizzard_Calendar",
+        apply = function(f, k)
+            local W = T.LOOK.window.rest
+            if f.Border then k:Mute(f.Border) end
+            if f.Texture then k:Mute(f.Texture) end
+            k:Fill(f, W.fill)
+            k:Border(f, W.edge)
+            local cal = _G.CalendarFrame
+            if cal then k:Move(f, "TOPLEFT", cal, "TOPRIGHT", CALSIDE.gap, 0) end
+
+            S.TitleBar(f, S.PainterFor(f))
+            local band = S.D(f).titleBar
+            local header = f.Header
+            if header and band then
+                k:Fade(header)
+                k:Move(header, "CENTER", band, "CENTER", 0, 0)
+                if header.Text then k:Label(header.Text, W.title, true) end
+            end
+            local close = _G[closeName]
+            if close then k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1) end
+
+            local sf = f.ScrollingFont
+            if not sf then return end
+            local top = (S.TITLE_BAND or 24) + 1
+            k:Anchors(sf, {
+                { "TOPLEFT",     f, "TOPLEFT",     CALSIDE.pad, -(top + CALSIDE.pad) },
+                { "BOTTOMRIGHT", f, "BOTTOMRIGHT", -CALSIDE.pad, CALSIDE.pad },
+            })
+            local fs = sf.GetFontString and sf:GetFontString()
+            if fs then k:Label(fs, "text") end
+            -- Blizzard's height is the most the panel grows to.
+            local d = S.D(f)
+            d.calMax = d.calMax or f:GetHeight()
+            local function Fit()
+                local str = sf.GetFontString and sf:GetFontString()
+                local h = str and S.Num(str:GetStringHeight())
+                if not h then return end
+                h = math.max(CALSIDE.min, math.min(d.calMax, top + 2 * CALSIDE.pad + math.ceil(h)))
+                if math.abs(f:GetHeight() - h) > 0.5 then k:Size(f, nil, h) end
+            end
+            Fit()
+            k:After(sf, "SetText", function() Fit() end)
+        end,
+    }
+end
+CalSide("CalendarViewHolidayFrame", "CalendarViewHolidayCloseButton")
+CalSide("CalendarViewRaidFrame", "CalendarViewRaidCloseButton")
+
 P{
     name  = "CalendarFrame",
     addon = "Blizzard_Calendar",
@@ -1960,6 +2027,12 @@ P{
         end
 
         for i = 1, 42 do CalDay(_G["CalendarDayButton" .. i]) end
+        -- The side panels are the calendar's children, shown with a bare
+        -- Show: adopt them so their own packs run on every opening.
+        if S.Take then
+            S.Take("CalendarViewHolidayFrame")
+            S.Take("CalendarViewRaidFrame")
+        end
 
         -- The grid runs to within a pixel or two of the bottom edge, while
         -- the sides get about ten. Grow the frame by the difference so the
