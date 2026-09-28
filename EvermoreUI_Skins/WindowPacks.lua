@@ -679,6 +679,28 @@ local function MerchantCard(item)
     S.StripArt(item.SlotTexture or (name and _G[name .. "SlotTexture"]))
     local plate = name and _G[name .. "NameFrame"]
     if plate then S.StripArt(plate) end
+    -- The text beside the icon, inside the card. Blizzard hangs the price
+    -- (and UpdateMerchantInfo the alternative currency, on every update)
+    -- from the plate's BOTTOMLEFT +31 (+25 for the buyback item), and the
+    -- plate from the slot art: the price landed about 45 down a 44px card.
+    -- The plate is invisible now but still the anchor, so it is moved to
+    -- where those offsets put the price 5 above the card's bottom.
+    local x = MERCH.icon + 37 + 6
+    local back = item == _G.MerchantBuyBackItem
+    local lift, nudge = back and 25 or 31, back and 0 or 2      -- the XML's own offsets
+    if plate then
+        plate:ClearAllPoints()
+        plate:SetPoint("BOTTOMLEFT", item, "BOTTOMLEFT", x - nudge, 5 - lift)
+    end
+    local label = item.Name or (name and _G[name .. "Name"])
+    if label then
+        label:ClearAllPoints()
+        label:SetPoint("TOPLEFT", item, "TOPLEFT", x, -5)
+        label:SetPoint("RIGHT", item, "RIGHT", -4, 0)
+        label:SetHeight(16)
+        label:SetJustifyV("TOP")
+        label:SetWordWrap(false)
+    end
     d.merchFill = S.Ours(EV.Pixel:Fill(item, "BACKGROUND", -7))
     EV.Pixel:Edges(item, { size = 1 })
     local b = item.ItemButton
