@@ -1314,7 +1314,10 @@ local SET_BUTTON = { w = 97, h = 28, gap = 4, bottom = 20, above = 6 }
 -- The right pane's tab row: the header band's height, the tabs' height, the
 -- first tab in from the pane's edge and the gap between tabs.
 local SIDEBAR = { band = 34, tab = 28, pad = 8, gap = 2, textPad = 12 }
-local SIDEBAR_LABELS = { [1] = "CHARACTER", [2] = "EQUIPMENT_MANAGER", [3] = "PET" }
+-- The side pane's lists: the equipment manager's own inset (ScrollBox TOPLEFT
+-- 5,-8, BOTTOMRIGHT x=-20), given to the stats lists too.
+local SIDE_LIST = { left = 5, top = 8, gutter = 20 }
+local SIDEBAR_LABELS ={ [1] = "CHARACTER", [2] = "EQUIPMENT_MANAGER", [3] = "PET" }
 
 --- One of the pane's tabs as a text tab: its icon, frame and checked art go,
 --- a window tab face (open at the bottom) and a label take their place, on
@@ -1530,21 +1533,35 @@ P{
             end)
         end
 
-        -- The sets list's scroll bar: Blizzard hangs it 5 INSIDE the list's
-        -- right edge and 12 below its top (ScrollBar TOPLEFT on the box's
-        -- TOPRIGHT -5,-12), over rows that run the list's full width. Ours
-        -- stands in the 20px gutter Blizzard left beside the list (box
-        -- BOTTOMRIGHT x=-20), centred in it, top and bottom with the rows.
-        local em2 = _G.PaperDollFrame and PaperDollFrame.EquipmentManagerPane
-        local box, bar = em2 and em2.ScrollBox, em2 and em2.ScrollBar
-        if box and bar then
+        -- The side pane's lists, all on the equipment manager's geometry.
+        -- Blizzard insets them differently: the sets list 5 in, 8 down and a
+        -- 20px gutter (PaperDollFrame.xml), the stats and pet stats lists 10
+        -- in, 8 down, a 30px gutter and 30 off the bottom
+        -- (CharacterStatsPaneScrollBoxTemplate), with each scroll bar hung
+        -- INSIDE its gutter's edge (-5 and +5) and 12 below the rows' top.
+        -- One inset for all three, the scroll bar centred in the gutter, top
+        -- and bottom with the rows; the stats lists end as far off the
+        -- bottom as they start off the top. The sets list keeps its bottom,
+        -- which makes room for its buttons.
+        local function PaneList(pane, bottom)
+            local box, bar = pane and pane.ScrollBox, pane and pane.ScrollBar
+            if not (box and bar) then return end
+            if bottom then
+                k:Anchors(box, {
+                    { "TOPLEFT",     pane, "TOPLEFT",     SIDE_LIST.left, -SIDE_LIST.top },
+                    { "BOTTOMRIGHT", pane, "BOTTOMRIGHT", -SIDE_LIST.gutter, bottom },
+                })
+            end
             local w = S.Num(bar:GetWidth()) or 8
-            local x = math.floor((20 - w) / 2 + 0.5)
+            local x = math.floor((SIDE_LIST.gutter - w) / 2 + 0.5)
             k:Anchors(bar, {
                 { "TOPLEFT",    box, "TOPRIGHT",    x, 0 },
                 { "BOTTOMLEFT", box, "BOTTOMRIGHT", x, 0 },
             })
         end
+        PaneList(_G.PaperDollFrame and PaperDollFrame.EquipmentManagerPane)
+        PaneList(_G.CharacterStatsPaneScrollBox, SIDE_LIST.top)
+        PaneList(_G.CharacterStatsPanePetScrollBox, SIDE_LIST.top)
         -- "Level N Class" in the title bar, as the inspect window has it.
         local level = _G.CharacterLevelText
         if level and S.TitleInfo then S.TitleInfo(k, f, level) end
