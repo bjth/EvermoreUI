@@ -606,6 +606,321 @@ P{
     end,
 }
 
+--------------------------------------------------------------------------------
+--  MerchantFrame (Mainline MerchantFrame.xml / .lua, which this client loads).
+--
+--  Blizzard's geometry:
+--
+--    Window            336x444, ButtonFrameTemplate. FilterDropdown at
+--                      TOPRIGHT -11,-30 (hidden where the MerchantFilterDisabled
+--                      game rule is on, as it is on Forever).
+--    Items             MerchantItem1-12 (MerchantItemTemplate, 153x44): the
+--                      UI-EmptySlot square (SlotTexture, 64x64 at -13,13) and
+--                      the UI-Merchant-LabelSlots plate ($parentNameFrame)
+--                      behind a 37px ItemButton at TOPLEFT. Two columns 12
+--                      apart from TOPLEFT 11,-69; rows 8 apart on the merchant
+--                      tab and 15 on buyback, re-set on every update.
+--    Can't use/buy     UpdateMerchantInfo tints the icon, slot and plate red
+--                      (vertex colours) when `not isPurchasable or (not
+--                      isUsable and not heirloom)`, grey when out of stock.
+--                      Can't afford only reds the price.
+--    Bottom            MerchantFrameBottomLeftBorder (UI-Merchant-BotFrame)
+--                      holding the repair, repair all, guild repair and sell
+--                      junk buttons (36x36 on UI-EmptySlot, placed by
+--                      UpdateRepairButtons) and MerchantBuyBackItem (115x37);
+--                      the pager (32px page buttons, page text) above it;
+--                      the money in a ThinGoldEdge box on an inset at the
+--                      bottom right, extra currencies to its left (both placed
+--                      by UpdateCurrencies).
+--
+--  Ours, re-seated after each of Blizzard's update functions:
+--
+--    * a tool bar under the title only while the filter is shown;
+--    * the grid 12 in, 6 apart both ways, on both tabs;
+--    * each item a tile card with our empty well where the slot art was, the
+--      icon in its own colours (Blizzard's tint undone), and the card's edge
+--      red for what you can't use or can't buy (Blizzard's test, and the
+--      price you can't pay), dimmed for out of stock and empty slots;
+--    * an actions band over the footer: the repair and junk buttons on the
+--      left in our icon style, the last item sold as a card on the right;
+--      the pager on the band's top;
+--    * the footer: money on the right (on the left when extra currencies
+--      take the right), no gold box, no insets, no inner box.
+--------------------------------------------------------------------------------
+local MERCH = { pad = 12, gap = 6, tool = 40, control = 30, footer = 36, actions = 52,
+                button = 36, icon = 4, buyback = 140, pager = 32 }
+local MERCH_ACTIONS = { "MerchantRepairItemButton", "MerchantRepairAllButton",
+                        "MerchantGuildBankRepairButton", "MerchantSellAllJunkButton" }
+local MERCH_HIDE = { "MerchantMoneyInset", "MerchantMoneyBg",
+                     "MerchantExtraCurrencyInset", "MerchantExtraCurrencyBg" }
+
+local function MerchIcon(b)
+    return b and (rawget(b, "Icon") or rawget(b, "icon") or b.icon)
+end
+
+--- One item's card: state is "ok", "no" (can't use or buy), "out" (out of
+--- stock) or "empty".
+local function MerchantCardSync(item)
+    local d = S.D(item)
+    if not d.merchFill then return end
+    local b = item.ItemButton
+    local st = { hover = b and b:IsShown() and b:IsMouseOver() or false,
+                 disabled = d.merchState == "empty" or d.merchState == "out" }
+    local r = T.Resolve(T.LOOK.tile, st)
+    d.merchFill:SetColorTexture(T.C4(r.fill))
+    T.SetEdge(item, d.merchState == "no" and { S.Colour("danger") } or r.edge)
+end
+
+local function MerchantCard(item)
+    if not S.Alive(item) then return end
+    local d = S.D(item)
+    if d.merchFill then return end
+    local name = item:GetName()
+    S.StripArt(item.SlotTexture or (name and _G[name .. "SlotTexture"]))
+    local plate = name and _G[name .. "NameFrame"]
+    if plate then S.StripArt(plate) end
+    d.merchFill = S.Ours(EV.Pixel:Fill(item, "BACKGROUND", -7))
+    EV.Pixel:Edges(item, { size = 1 })
+    local b = item.ItemButton
+    if b then
+        -- The empty slot, ours: a well where the button sits, under it, so it
+        -- shows only when the button is hidden or has nothing in it.
+        b:ClearAllPoints()
+        b:SetPoint("LEFT", item, "LEFT", MERCH.icon, 0)
+        S.Well(item, b, 1)
+        b:HookScript("OnEnter", function() MerchantCardSync(item) end)
+        b:HookScript("OnLeave", function() MerchantCardSync(item) end)
+    end
+    T.Watch(d.merchFill, function() MerchantCardSync(item) end)
+end
+
+local function SetMerchantState(item, state)
+    MerchantCard(item)
+    S.D(item).merchState = state
+    local icon = MerchIcon(item.ItemButton)
+    if icon and icon.SetVertexColor and state ~= "empty" then
+        -- Blizzard's red (or grey) tint on the art goes: the card says it.
+        local v = state == "out" and 0.5 or 1
+        icon:SetVertexColor(v, v, v)
+    end
+    MerchantCardSync(item)
+end
+
+local function MerchantStates()
+    local money = GetMoney() or 0
+    if MerchantFrame.selectedTab == 1 then
+        local per = MERCHANT_ITEMS_PER_PAGE or 10
+        local count = GetMerchantNumItems() or 0
+        for i = 1, per do
+            local item = _G["MerchantItem" .. i]
+            local index = ((MerchantFrame.page or 1) - 1) * per + i
+            local state = "empty"
+            local ok, info = false, nil
+            if index <= count and C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+                ok, info = pcall(C_MerchantFrame.GetItemInfo, index)
+            end
+            if ok and type(info) == "table" then
+                local id = GetMerchantItemID and GetMerchantItemID(index)
+                local heir = id and C_Heirloom and C_Heirloom.IsItemHeirloom(id)
+                local red = not info.isPurchasable or (not info.isUsable and not heir)
+                local okA, afford = pcall(CanAffordMerchantItem, index)
+                if red or (okA and afford == false) then state = "no"
+                elseif info.numAvailable == 0 then state = "out"
+                else state = "ok" end
+            end
+            if item then SetMerchantState(item, state) end
+        end
+        -- The last thing sold, on the actions band.
+        local last = GetNumBuybackItems and GetNumBuybackItems() or 0
+        local state = "empty"
+        if last > 0 then
+            local name, _, price, _, _, usable = GetBuybackItemInfo(last)
+            if name then state = (not usable or (price or 0) > money) and "no" or "ok" end
+        end
+        if _G.MerchantBuyBackItem then SetMerchantState(_G.MerchantBuyBackItem, state) end
+    else
+        for i = 1, BUYBACK_ITEMS_PER_PAGE or 12 do
+            local item = _G["MerchantItem" .. i]
+            local name, _, price, _, _, usable = GetBuybackItemInfo(i)
+            local state = "empty"
+            if name then state = (not usable or (price or 0) > money) and "no" or "ok" end
+            if item then SetMerchantState(item, state) end
+        end
+    end
+end
+
+--- A repair or junk button in our icon style: the slot and Blizzard's
+--- pushed and highlight art cleared, the icon ours, its edge lifting under
+--- the mouse. Blizzard's desaturate-when-unavailable stays.
+local function MerchantActionButton(b)
+    if not S.Alive(b) then return end
+    local d = S.D(b)
+    if d.merchAction then return end
+    d.merchAction = true
+    local icon = b.Icon
+    for _, r in ipairs(S.Regions(b)) do
+        if r ~= icon and r.GetObjectType and r:GetObjectType() == "Texture" and not S.ours[r] then
+            S.StripArt(r)
+        end
+    end
+    for _, get in ipairs({ "GetPushedTexture", "GetHighlightTexture", "GetNormalTexture" }) do
+        local ok, t = pcall(b[get], b)
+        if ok and t then S.StripArt(t) end
+    end
+    if not icon then return end
+    icon:ClearAllPoints()
+    icon:SetAllPoints(b)
+    EV.Icons:Style(icon, { host = b })
+    local function Sync()
+        if b:IsMouseOver() then
+            local e = T.Resolve(T.LOOK.slot, { hover = true }).edge
+            EV.Icons:SetState(icon, e[1], e[2], e[3], e[4])
+        else
+            EV.Icons:SetState(icon, nil)
+        end
+    end
+    b:HookScript("OnEnter", Sync)
+    b:HookScript("OnLeave", Sync)
+end
+
+P{
+    name  = "MerchantFrame",
+    apply = function(f, k)
+        local title = (S.TITLE_BAND or 24) + 2
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -title)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -title)
+            b:SetHeight(MERCH.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(MERCH.footer)
+        end)
+        local acts = Band(f, "actions", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 0, 1)
+            b:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", 0, 1)
+            b:SetHeight(MERCH.actions)
+        end)
+
+        -- Chrome that goes.
+        for _, n in ipairs({ "BuybackBG", "MerchantFrameBottomLeftBorder" }) do
+            if _G[n] then S.StripArt(_G[n]) end
+        end
+        for _, n in ipairs(MERCH_HIDE) do
+            if _G[n] then k:Mute(_G[n]) end
+        end
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        for _, n in ipairs(MERCH_ACTIONS) do MerchantActionButton(_G[n]) end
+
+        local function SeatGrid()
+            local dd = f.FilterDropdown
+            local tool = dd and dd:IsShown()
+            bar:SetShown(tool and true or false)
+            if tool then
+                k:Size(dd, nil, MERCH.control)
+                k:Move(dd, "RIGHT", bar, "RIGHT", -(MERCH.pad - 1), 0)
+            end
+            local top = title + (tool and MERCH.tool or 0) + MERCH.gap
+            local per = (MerchantFrame.selectedTab == 1) and (MERCHANT_ITEMS_PER_PAGE or 10) or (BUYBACK_ITEMS_PER_PAGE or 12)
+            for i = 1, math.max(per, 12) do
+                local item = _G["MerchantItem" .. i]
+                if item then
+                    MerchantCard(item)
+                    item:ClearAllPoints()
+                    if i == 1 then
+                        item:SetPoint("TOPLEFT", f, "TOPLEFT", MERCH.pad, -top)
+                    elseif i % 2 == 0 then
+                        item:SetPoint("TOPLEFT", _G["MerchantItem" .. (i - 1)], "TOPRIGHT", MERCH.gap, 0)
+                    else
+                        item:SetPoint("TOPLEFT", _G["MerchantItem" .. (i - 2)], "BOTTOMLEFT", 0, -MERCH.gap)
+                    end
+                end
+            end
+            -- The actions band and the pager are the merchant tab's.
+            local merchant = MerchantFrame.selectedTab == 1
+            acts:SetShown(merchant)
+            local back = _G.MerchantBuyBackItem
+            if back then
+                MerchantCard(back)
+                back:SetSize(MERCH.buyback, 44)
+                back:ClearAllPoints()
+                back:SetPoint("RIGHT", acts, "RIGHT", -(MERCH.pad - 1), 0)
+            end
+            local prev, nxt, page = _G.MerchantPrevPageButton, _G.MerchantNextPageButton, _G.MerchantPageText
+            if prev then prev:ClearAllPoints(); prev:SetPoint("BOTTOMLEFT", acts, "TOPLEFT", MERCH.pad - 1, MERCH.gap) end
+            if nxt then nxt:ClearAllPoints(); nxt:SetPoint("BOTTOMRIGHT", acts, "TOPRIGHT", -(MERCH.pad - 1), MERCH.gap) end
+            if page then page:ClearAllPoints(); page:SetPoint("CENTER", acts, "TOP", 0, MERCH.gap + MERCH.pager / 2) end
+        end
+
+        local function SeatActions()
+            local prev
+            for _, n in ipairs(MERCH_ACTIONS) do
+                local b = _G[n]
+                if b and b:IsShown() then
+                    MerchantActionButton(b)
+                    b:SetSize(MERCH.button, MERCH.button)
+                    b:ClearAllPoints()
+                    if prev then
+                        b:SetPoint("LEFT", prev, "RIGHT", MERCH.gap, 0)
+                    else
+                        b:SetPoint("LEFT", acts, "LEFT", MERCH.pad - 1, 0)
+                    end
+                    prev = b
+                end
+            end
+        end
+
+        local function SeatMoney()
+            local money = _G.MerchantMoneyFrame
+            local tokens = _G.MerchantExtraCurrencyInset and _G.MerchantExtraCurrencyInset:IsShown()
+            if money then
+                money:ClearAllPoints()
+                if tokens then
+                    money:SetPoint("LEFT", foot, "LEFT", MERCH.pad, 0)
+                else
+                    money:SetPoint("RIGHT", foot, "RIGHT", -(MERCH.pad - 4), 0)
+                end
+            end
+            local first = _G.MerchantToken1
+            if tokens and first then
+                first:ClearAllPoints()
+                first:SetPoint("RIGHT", foot, "RIGHT", -(MERCH.pad - 4), 0)
+            end
+            for _, n in ipairs(MERCH_HIDE) do
+                if _G[n] then _G[n]:SetAlpha(0) end
+            end
+        end
+
+        local function All()
+            SeatGrid()
+            SeatActions()
+            SeatMoney()
+            MerchantStates()
+        end
+        All()
+        k:Once(f, "merchantLayout", function()
+            for _, fn in ipairs({ "MerchantFrame_UpdateMerchantInfo", "MerchantFrame_UpdateBuybackInfo" }) do
+                if type(_G[fn]) == "function" then
+                    hooksecurefunc(fn, function() SeatGrid(); SeatActions(); MerchantStates() end)
+                end
+            end
+            if type(_G.MerchantFrame_UpdateRepairButtons) == "function" then
+                hooksecurefunc("MerchantFrame_UpdateRepairButtons", SeatActions)
+            end
+            if type(_G.MerchantFrame_UpdateCurrencies) == "function" then
+                hooksecurefunc("MerchantFrame_UpdateCurrencies", SeatMoney)
+            end
+        end)
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",
