@@ -1614,6 +1614,92 @@ P{
     end,
 }
 
+--------------------------------------------------------------------------------
+--  MacroFrame (Blizzard_MacroUI). 338x424 ButtonFrameTemplate; its title a
+--  loose font string (CREATE_MACROS) at TOP -5; General / Character tabs
+--  (PanelTopTabButtonTemplate) at TOPLEFT 51,-28 beside the portrait; the
+--  macro grid (MacroSelector, 319x146) at 12,-66; a trainer bar at -210;
+--  the selected macro on a UI-EmptySlot at 5,-218 with Change Name/Icon
+--  (170x22) and Save / Cancel (80x22) beside it; the commands in a
+--  TooltipBackdrop box (322x95 at 6,-289), the character count at BOTTOM
+--  -15,30; Delete / New / Exit (80x22) at the bottom, on nothing.
+--
+--  Ours: the window's own title; the tabs on a tool bar under it; the grid
+--  6 under the bar; the slots (selectorButton) as our wells; the bar and
+--  slot art gone; the commands in a sunk well, 6 clear of a footer, with the
+--  character count on the label's line at the well's right; Delete left and
+--  New / Exit right on the footer; every button 24 tall.
+--------------------------------------------------------------------------------
+local MACRO = { tool = 36, pad = 8, gap = 6, footer = 36, button = 24, short = 96 }
+
+P{
+    name  = "MacroFrame",
+    addon = "Blizzard_MacroUI",
+    apply = function(f, k)
+        local M = MACRO
+        local top = (S.TITLE_BAND or 24) + 2
+        local inset = f.Inset
+        if inset then
+            k:Fade(inset)
+            if inset.NineSlice then k:Fade(inset.NineSlice) end
+            k:NoFill(inset)
+            EV.Pixel:ShowEdges(inset, false)
+        end
+        -- The title: Blizzard's loose one goes, the window's own takes it.
+        for _, r in ipairs(S.Regions(f)) do
+            if r.GetObjectType and r:GetObjectType() == "FontString" then
+                local ok, t = pcall(r.GetText, r)
+                if ok and t == _G.CREATE_MACROS then r:SetAlpha(0) end
+            end
+        end
+        if f.SetTitle and _G.CREATE_MACROS then f:SetTitle(_G.CREATE_MACROS) end
+        k:Art(f, "Interface\\ClassTrainerFrame\\UI-ClassTrainer-HorizontalBar")
+        if _G.MacroFrameSelectedMacroBackground then S.StripArt(_G.MacroFrameSelectedMacroBackground) end
+
+        local bar = Band(f, "tool", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+            b:SetHeight(M.tool)
+        end)
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(M.footer)
+        end)
+
+        -- The tabs stand on the bar's rule; the second follows the first.
+        local tab1 = _G.MacroFrameTab1
+        if tab1 then k:Move(tab1, "BOTTOMLEFT", bar, "BOTTOMLEFT", M.pad, 0) end
+
+        local grid = f.MacroSelector
+        if grid then k:Move(grid, "TOPLEFT", f, "TOPLEFT", 12, -(top + M.tool + M.gap)) end
+
+        -- The commands: a sunk well, ending M.gap above the footer.
+        local box = _G.MacroFrameTextBackground
+        if box then
+            if box.NineSlice then k:Fade(box.NineSlice) end
+            k:Fade(box)
+            k:Fill(box, "surfaceSunk")
+            k:Border(box, "border")
+            k:Anchors(box, {
+                { "TOPLEFT",     f,    "TOPLEFT",  6, -289 },
+                { "BOTTOMRIGHT", foot, "TOPRIGHT", -(338 - 328), M.gap },
+            })
+            local count = _G.MacroFrameCharLimitText
+            if count then k:Move(count, "BOTTOMRIGHT", box, "TOPRIGHT", -4, 3) end
+        end
+
+        for _, n in ipairs({ "MacroEditButton", "MacroSaveButton", "MacroCancelButton" }) do
+            local b = _G[n]
+            if b then k:Size(b, nil, M.button) end
+        end
+        local del, new, exit = _G.MacroDeleteButton, _G.MacroNewButton, _G.MacroExitButton
+        if del then k:Size(del, M.short, M.button); k:Move(del, "LEFT", foot, "LEFT", M.pad - 1, 0) end
+        if exit then k:Size(exit, M.short, M.button); k:Move(exit, "RIGHT", foot, "RIGHT", -(M.pad - 1), 0) end
+        if new then k:Size(new, M.short, M.button); if exit then k:Move(new, "RIGHT", exit, "LEFT", -M.gap, 0) end end
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",

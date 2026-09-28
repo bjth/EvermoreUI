@@ -627,6 +627,54 @@ R{
 }
 
 --------------------------------------------------------------------------------
+--  0a3. Selector button   SelectorButtonTemplate (SharedXML Selector UI): the
+--      macro slots, the selected macro, and the icon pickers (macros,
+--      equipment sets). 36x36: a UI-EmptySlot-Disabled square behind, the
+--      icon as the NormalTexture (parentKey Icon) 1 low, CheckButtonHilight
+--      (ADD) as SelectedTexture while chosen, ButtonHilight-Square on hover.
+--
+--      Ours: the slot well on the button, the icon filling it in our style,
+--      the choice a copper edge and the hover a lighter one, read from
+--      Blizzard's SelectedTexture (art cleared).
+--------------------------------------------------------------------------------
+R{
+    name = "selectorButton",
+    type = "Button",
+    keys = { "Icon", "SelectedTexture", "Highlight" },
+    paint = function(b, p)
+        local icon, sel = b.Icon, b.SelectedTexture
+        for _, r in ipairs(S.Regions(b)) do
+            if r ~= icon and r.GetObjectType and r:GetObjectType() == "Texture" and not S.ours[r] then
+                S.StripArt(r)
+            end
+        end
+        S.StripArt(b.Highlight)
+        p:Fill(LOOK.slot.rest.fill)
+        p:Border(LOOK.slot.rest.edge)
+        p:Reseat(icon, { { "TOPLEFT", 0, 0 }, { "BOTTOMRIGHT", 0, 0 } })
+        EV.Icons:Style(icon, { host = b })
+        local d = S.D(b)
+        p:States(LOOK.slot, {
+            on = function() return sel:IsShown() end,
+            after = function(r)
+                if (d.on or d.hover) and r.edge then
+                    EV.Icons:SetState(icon, r.edge[1], r.edge[2], r.edge[3], r.edge[4])
+                else
+                    EV.Icons:SetState(icon, nil)
+                end
+            end,
+        })
+        if not d.selectorHooked then
+            d.selectorHooked = true
+            local function Sync() if d.Repaint then d.Repaint() end end
+            hooksecurefunc(sel, "Show", Sync)
+            hooksecurefunc(sel, "Hide", Sync)
+            hooksecurefunc(sel, "SetShown", Sync)
+        end
+    end,
+}
+
+--------------------------------------------------------------------------------
 --  0b. Slider             UISliderTemplate and friends
 --      Also claimed before `window` could have it. A slider has a NineSlice
 --      (its track is one), so the old fingerprint painted sliders as windows:
