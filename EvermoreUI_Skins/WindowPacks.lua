@@ -859,20 +859,21 @@ P{
             if page then page:ClearAllPoints(); page:SetPoint("CENTER", acts, "TOP", 0, MERCH.gap + MERCH.pager / 2) end
         end
 
+        -- Each button on the band by its own offset, never on another
+        -- button: UpdateRepairButtons adds points without clearing them
+        -- (Repair Item RIGHT on Repair All's LEFT, Sell Junk on Repair All),
+        -- and a chain of ours running the other way made a loop the client
+        -- refuses ("Cannot anchor to a region dependent on it").
         local function SeatActions()
-            local prev
+            local x = MERCH.pad - 1
             for _, n in ipairs(MERCH_ACTIONS) do
                 local b = _G[n]
                 if b and b:IsShown() then
                     MerchantActionButton(b)
                     b:SetSize(MERCH.button, MERCH.button)
                     b:ClearAllPoints()
-                    if prev then
-                        b:SetPoint("LEFT", prev, "RIGHT", MERCH.gap, 0)
-                    else
-                        b:SetPoint("LEFT", acts, "LEFT", MERCH.pad - 1, 0)
-                    end
-                    prev = b
+                    b:SetPoint("LEFT", acts, "LEFT", x, 0)
+                    x = x + MERCH.button + MERCH.gap
                 end
             end
         end
