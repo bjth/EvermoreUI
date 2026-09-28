@@ -277,11 +277,15 @@ function ns.SetValueText(fs, main, paren, pct, mainIsRate)
     if not ok then pcall(fs.SetText, fs, a) end
 end
 
---- A bar's colour: the class colour taken down, so white text reads on
---- the bright ones (rogue, priest, shaman) as well as the dark.
-local BAR_SHADE = 0.6
+--- A bar's colour: the class colour taken down until white text reads on
+--- it. A flat shade leaves the pale ones (priest, rogue) too light, so the
+--- shade goes by how bright the colour is: at most BAR_SHADE, and no
+--- brighter than BAR_LUMA.
+local BAR_SHADE, BAR_LUMA = 0.6, 0.36
 function ns.BarColour(bar, r, g, b)
-    bar:SetStatusBarColor(r * BAR_SHADE, g * BAR_SHADE, b * BAR_SHADE, 1)
+    local luma = 0.299 * r + 0.587 * g + 0.114 * b
+    local shade = luma > 0 and math.min(BAR_SHADE, BAR_LUMA / luma) or BAR_SHADE
+    bar:SetStatusBarColor(r * shade, g * shade, b * shade, 1)
 end
 
 --- Text on a bar: a solid shadow rather than the suite's soft one.
