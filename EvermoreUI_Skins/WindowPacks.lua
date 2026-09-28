@@ -581,10 +581,245 @@ local function DressPage(k, paged)
     end
 end
 
+--------------------------------------------------------------------------------
+--  Talents: PlayerSpellsFrame.TalentsFrame (Camelot ClassTalentsFrame.xml and
+--  .lua; the window is 1218x708 on this tab, the frame 1212x681 at BOTTOM y=4)
+--
+--  The trees are content and keep Blizzard's look: the talent buttons, their
+--  rank badges and the arrows between them. The chrome round them:
+--
+--    Background        Talents-Background-c60, 701 tall from the frame's
+--                      bottom; ClassBackground (the spec painting, y=-70 to
+--                      y=+36 inside it) and its overlays, clouds and particles
+--                      on top. All art: our window surface shows instead.
+--    BackgroundBorder  Talents-inner-frame-c60 round ClassBackground, with the
+--                      Talents-divider-* pieces on its top edge and between
+--                      the trees. Ours: nothing round it, a hairline where
+--                      each tree divider was.
+--    TabSystem         Primary / Secondary (TabSystemButtonTemplate), standing
+--                      on BackgroundBorder's top at x=70; SearchBox 4 above
+--                      its top right, SearchOptionsDropdown beside it. Ours: a
+--                      tool bar from our title band down to where the trees
+--                      start, the tabs standing on its rule, the search, its
+--                      options button and the unspent points on its right.
+--    ClassCurrencyDisplay  "Unspent Talents" and a Talents-Square-Box-c60 with
+--                      the number, at the tree area's top right. Ours: on the
+--                      tool bar, the number in a well.
+--    tree headers      ClassTalentTreeHeaderTemplate from treeHeaderPool, on
+--                      every RefreshTreeHeaders: a round-masked icon in
+--                      Talents-Main-Ring-c60, the points spent in a
+--                      talents-main-ring-box-c60, a Talents-small-divider
+--                      under. Ours: the suite's square icon, the name in gold,
+--                      the points plain under the icon's corner.
+--    ApplyButton       BOTTOM y=8 in the 36px under the trees, ResetButton and
+--                      UndoButton (IconButtonTemplate, talents-button-*) 14 to
+--                      its right. Ours: a footer across the window, Apply in
+--                      its middle, the two icon buttons in our button box.
+--    portrait          SetTalentPortrait puts the spec icon in the window's
+--                      round portrait on this tab; the window part fades the
+--                      portrait once, so it is faded again after each update.
+--------------------------------------------------------------------------------
+local TAL = { pad = 12, control = 30, gap = 8, footer = 40, button = 24, unspent = 30 }
+
+local TALENT_ART = { "Background", "ClassBackground", "OverlayBackgroundRight", "OverlayBackgroundMid",
+                     "BackgroundBorder", "DividerHorizontalLeft", "DividerHorizontalRight",
+                     "DividerVerticalLeft", "DividerVerticalRight" }
+
+local function TreeHeader(h)
+    if not S.Alive(h) then return end
+    local d = S.D(h)
+    if not d.dressed then
+        d.dressed = true
+        for _, key in ipairs({ "MainRing", "TextBackground", "Divider" }) do
+            if h[key] then S.StripArt(h[key]) end
+        end
+        local icon = h.Icon
+        if icon then
+            for _, r in ipairs(S.Regions(h)) do
+                if r.GetObjectType and r:GetObjectType() == "MaskTexture" and icon.RemoveMaskTexture then
+                    pcall(icon.RemoveMaskTexture, icon, r)
+                end
+            end
+            EV.Icons:Style(icon, { host = h })
+        end
+        local p = S.PainterFor(h)
+        if h.Name then p:Label(h.Name, "title", true) end
+        if h.Text then p:Label(h.Text, "text", true) end
+    end
+    -- The points spent, under the icon's bottom right corner, where the
+    -- ring's box was (Setup never moves it; the XML anchors it to the box).
+    if h.Text and h.Icon then
+        h.Text:ClearAllPoints()
+        h.Text:SetPoint("TOPRIGHT", h.Icon, "BOTTOMRIGHT", 0, -2)
+    end
+end
+
+--- A text tab on a tool bar, the way the spellbook's school tabs are icon
+--- tabs: panelTab's box goes, a window tab face (open at the bottom, a pixel
+--- over the rule) takes its place, and the label is the tab Look's text.
+local function TextTabState(tab)
+    local d = S.D(tab)
+    if not (d.textBox and d.textBox.Paint) then return end
+    local on = tab.isSelected and true or false
+    local hover = tab.IsMouseOver and tab:IsMouseOver() or false
+    d.textBox.Paint(on, hover)
+    local text = tab.Text
+    if text then
+        local okE, enabled = pcall(tab.IsEnabled, tab)
+        local st = { on = on, hover = hover, disabled = okE and enabled == false }
+        text:SetTextColor(T.C4(T.Resolve(T.LOOK.tab, st).text))
+    end
+end
+
+local function TextTab(k, tab)
+    if not S.Alive(tab) then return end
+    local d = S.D(tab)
+    if d.fill then d.fill:SetAlpha(0) end
+    d.edgeless = true
+    EV.Pixel:ShowEdges(tab, false)
+    if not d.textBox then
+        local box = CreateFrame("Frame", nil, tab)
+        S.Ours(box)
+        box:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, 0)
+        box:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, -EV.Pixel:One(tab))
+        box:SetFrameLevel(math.max(0, tab:GetFrameLevel() - 1))
+        box:EnableMouse(false)
+        box.Paint = S.TabFace(box, "bottom")
+        local bd = S.D(box)
+        if bd.tabInset then bd.tabInset:Hide() end
+        d.textBox = box
+        T.Watch(box, function() TextTabState(tab) end)
+        k:After(tab, "SetTabSelected", function() TextTabState(tab) end)
+        k:After(tab, "SetEnabled", function() TextTabState(tab) end)
+        k:Hook(tab, "OnEnter", function() TextTabState(tab) end)
+        k:Hook(tab, "OnLeave", function() TextTabState(tab) end)
+    end
+    TextTabState(tab)
+end
+
+local function Talents(f, k)
+    local tf = f.TalentsFrame
+    if not tf then return end
+    local top = (S.TITLE_BAND or 24) + 2
+
+    for _, key in ipairs(TALENT_ART) do
+        if tf[key] then S.StripArt(tf[key]) end
+    end
+    k:Fade(tf)
+
+    -- The window's portrait comes back on this tab.
+    if f.PortraitContainer then
+        k:Fade(f.PortraitContainer)
+        k:Once(f, "talentPortrait", function()
+            k:After(f, "UpdatePortrait", function() k:Fade(f.PortraitContainer) end)
+        end)
+    end
+
+    local art = tf.ClassBackground
+    if not art then return end
+
+    -- The tool bar: our title band down to where the trees start.
+    local bar = Band(tf, "toolbar", "bottom", function(b)
+        b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -top)
+        b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -top)
+        b:SetPoint("BOTTOM", art, "TOP", 0, 0)
+    end)
+    local ts = tf.TabSystem
+    if ts then
+        k:Move(ts, "BOTTOMLEFT", bar, "BOTTOMLEFT", TAL.pad, 0)
+        for _, tab in ipairs(ts.tabs or {}) do TextTab(k, tab) end
+    end
+    local dd, search = tf.SearchOptionsDropdown, tf.SearchBox
+    local rightmost = bar
+    if dd then
+        k:Size(dd, TAL.control, TAL.control)
+        k:Move(dd, "RIGHT", bar, "RIGHT", -TAL.pad, 0)
+        OverlayButton(k, dd, "down", nil, function()
+            return type(dd.IsMenuOpen) == "function" and dd:IsMenuOpen() or false
+        end)
+        rightmost = dd
+    end
+    if search then
+        k:Size(search, 220, TAL.control)
+        if rightmost == bar then
+            k:Move(search, "RIGHT", bar, "RIGHT", -TAL.pad, 0)
+        else
+            k:Move(search, "RIGHT", rightmost, "LEFT", -TAL.gap, 0)
+        end
+    end
+    local cur = tf.ClassCurrencyDisplay
+    if cur then
+        if cur.Border then S.StripArt(cur.Border) end
+        k:Move(cur, "RIGHT", search or bar, search and "LEFT" or "RIGHT", -(TAL.gap * 2), 0)
+        local box = cur.CurrentAmountContainer
+        if box then
+            k:Size(box, TAL.unspent + 10, TAL.unspent)
+            S.Well(box, box, -1)
+            if box.CurrencyAmount then k:Label(box.CurrencyAmount, "title", true) end
+        end
+        if cur.UnspentLabel then
+            k:Label(cur.UnspentLabel, "textMuted")
+            if box then
+                cur.UnspentLabel:ClearAllPoints()
+                cur.UnspentLabel:SetPoint("RIGHT", box, "LEFT", -TAL.gap, 0)
+            end
+        end
+    end
+
+    -- A hairline where each tree divider was.
+    for _, key in ipairs({ "DividerVerticalLeft", "DividerVerticalRight" }) do
+        local div = tf[key]
+        if div then
+            k:Once(div, "rule", function()
+                local rule = S.Ours(tf:CreateTexture(nil, "BORDER"))
+                EV.Pixel.NoSnap(rule)
+                rule:SetPoint("TOP", div, "TOP", 0, 0)
+                rule:SetPoint("BOTTOM", div, "BOTTOM", 0, 0)
+                local function Paint()
+                    rule:SetColorTexture(S.Colour("border"))
+                    rule:SetWidth(EV.Pixel:Line(tf))
+                end
+                Paint()
+                T.Watch(rule, Paint)
+            end)
+        end
+    end
+
+    -- The footer: Apply in its middle, reset and undo beside it.
+    local foot = Band(tf, "footer", "top", function(b)
+        b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+        b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+        b:SetPoint("TOP", art, "BOTTOM", 0, 0)
+    end)
+    local apply = tf.ApplyButton
+    if apply then
+        k:Size(apply, nil, TAL.button)
+        k:Move(apply, "CENTER", foot, "CENTER", 0, 0)
+        if apply.YellowGlow then k:Fade(apply.YellowGlow) end
+    end
+    for _, key in ipairs({ "ResetButton", "UndoButton" }) do
+        local b = tf[key]
+        if b then
+            k:Size(b, TAL.button, TAL.button)
+            local _, p = OverlayButton(k, b, nil, { b.Icon })
+            if p and b.Icon then p:States(T.LOOK.button, { glyph = b.Icon }) end
+        end
+    end
+    if tf.InspectCopyButton and foot then k:Move(tf.InspectCopyButton, "CENTER", foot, "CENTER", 0, 0) end
+
+    -- Tree headers are pooled and re-laid on every refresh.
+    local function Headers()
+        for _, h in ipairs(tf.treeHeaders or {}) do TreeHeader(h) end
+    end
+    Headers()
+    k:Once(tf, "treeHeaders", function() k:After(tf, "RefreshTreeHeaders", Headers) end)
+end
+
 P{
     name  = "PlayerSpellsFrame",
     addon = "Blizzard_PlayerSpells",
     apply = function(f, k)
+        Talents(f, k)
         local book = f.SpellBookFrame
         if not book then return end
 
