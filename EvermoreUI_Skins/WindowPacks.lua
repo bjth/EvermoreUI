@@ -4560,8 +4560,13 @@ P{
 --  the leave button our close glyph. Lists built after the walk are dressed
 --  as Blizzard builds them.
 --------------------------------------------------------------------------------
+-- list: the widest list's box (Blizzard's 550 rows plus the 8 it pads a
+-- box by), which sets the window's width; head: room above a box for its
+-- heading; inset: a box's own padding round its rows (4).
 local CFG = { tool = 40, footer = 36, button = 24, pad = 8, gap = 6, side = 136,
-              row = 22, tab = 28, short = 96, text = 10 }
+              row = 22, tab = 28, short = 96, text = 10, list = 558, head = 26, inset = 4 }
+
+local cfgBoxes = setmetatable({}, { __mode = "k" })
 
 local function CfgTabState(tab)
     local d = S.D(tab)
@@ -4640,14 +4645,13 @@ local function CfgFlat(k, box)
     EV.Pixel:ShowEdges(box, false)
 end
 
--- A list Blizzard has just built: the box a sunk well, each row unboxed with
+-- A list Blizzard has just built: the box plain, each row unboxed with
 -- a hairline under it, the leave buttons our close glyph, and the whole
 -- thing walked so its check boxes and swatches are dressed.
 local function CfgList(k, box)
     if not S.Alive(box) then return end
     CfgFlat(k, box)
-    k:Fill(box, "surfaceSunk")
-    k:Border(box, "border")
+    cfgBoxes[box] = true
     local title = box.header or _G[(box:GetName() or "") .. "Title"]
     if title then k:Label(title, "title", true) end
     for _, row in ipairs(S.Children(box)) do
@@ -4789,15 +4793,53 @@ P{
             k:Move(cancel, "RIGHT", okay, "LEFT", -CFG.gap, 0)
         end
 
+        -- As wide as the widest list with a pad each side of it.
+        k:Size(f, 1 + CFG.side + CFG.pad - CFG.inset + CFG.list + CFG.pad + 1, nil)
+
+        -- The first box of each page a pad in from the categories' hairline
+        -- (its rows start at the box's inset), its heading above it.
+        for _, name in ipairs({ "ChatConfigChatSettingsLeft", "ChatConfigChannelSettingsLeft",
+                                "ChatConfigOtherSettingsCombat", "ChatConfigTextToSpeechChannelSettingsLeft" }) do
+            local box = _G[name]
+            if box then k:Move(box, "TOPLEFT", box:GetParent(), "TOPLEFT", CFG.pad - CFG.inset, -CFG.head) end
+        end
+
+        -- Tall enough for the longest list we have seen: never cut a list
+        -- off at the footer. Grows only, so the window doesn't jump about
+        -- between pages.
+        local function Fit()
+            local low
+            for box in pairs(cfgBoxes) do
+                if box:IsVisible() then
+                    local b = S.Num(box:GetBottom())
+                    if b and (not low or b < low) then low = b end
+                end
+            end
+            local ft = S.Num(foot:GetTop())
+            if not (low and ft) then return end
+            local need = (ft + CFG.pad) - low
+            if need > 0.5 then k:Size(f, nil, f:GetHeight() + need) end
+        end
+        S.D(f).cfgFit = Fit
+
         -- Lists, as Blizzard builds them.
         k:Once(f, "cfgLists", function()
             for _, fn in ipairs({ "ChatConfig_CreateCheckboxes", "ChatConfig_CreateTieredCheckboxes",
                                   "ChatConfig_CreateColorSwatches" }) do
                 if type(_G[fn]) == "function" then
-                    hooksecurefunc(fn, function(box) CfgList(k, box) end)
+                    hooksecurefunc(fn, function(box)
+                        CfgList(k, box)
+                        C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                    end)
                 end
             end
+            if type(_G.ChatConfigCategory_OnClick) == "function" then
+                hooksecurefunc("ChatConfigCategory_OnClick", function()
+                    C_Timer.After(0, function() if S.D(f).cfgFit then S.D(f).cfgFit() end end)
+                end)
+            end
         end)
+        C_Timer.After(0, Fit)
         for _, name in ipairs({ "ChatConfigChatSettingsLeft", "ChatConfigChannelSettingsLeft",
                                 "ChatConfigOtherSettingsCombat", "ChatConfigOtherSettingsPVP",
                                 "ChatConfigOtherSettingsAdditionalColors", "ChatConfigOtherSettingsSystem",
