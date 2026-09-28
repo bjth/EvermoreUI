@@ -3881,3 +3881,116 @@ P{
         end
     end,
 }
+
+--------------------------------------------------------------------------------
+--  AutoCompleteBox (Blizzard_AutoComplete): the name list under a whisper,
+--  invite or mail recipient as you type. A TooltipBackdropTemplate box with
+--  up to five 120x14 AutoCompleteButtonTemplate rows (text 15 in, the
+--  UIPanelButtonHighlightTexture sheen, the chosen one held with
+--  LockHighlight) from 10 down, and "Press Tab" 15 in and 10 up from the
+--  bottom. AutoComplete_UpdateResults sizes it every keystroke: rows * row
+--  height + 35 tall, the widest name + 30 wide.
+--
+--  Ours: the menu Look (the list a dropdown opens). Rows run edge to edge
+--  from under the top border, 22 tall, the text 10 in; the chosen row is the
+--  list item's on (a copper wash), hover its hover. "Press Tab" sits on a
+--  footer band. The height is set again after Blizzard's, to the rows plus
+--  that band. Shown with a bare Show, so Discover.lua takes it by name.
+--------------------------------------------------------------------------------
+local AC = { row = 22, text = 10, foot = 22, max = 5 }
+
+local acState = setmetatable({}, { __mode = "k" })
+
+local function ACPaint(b)
+    local st = acState[b]
+    if not st then return end
+    local L = T.LOOK.listItem
+    local fill
+    if st.on then fill = L.on.fill
+    elseif st.hover then fill = L.hover.fill end
+    if fill then
+        st.fill:SetColorTexture(S.Colour(fill))
+        st.fill:Show()
+    else
+        st.fill:Hide()
+    end
+end
+
+local function ACRow(k, b)
+    if not S.Alive(b) then return end
+    local h = b.GetHighlightTexture and b:GetHighlightTexture()
+    if h then S.StripArt(h) end
+    local fs = b.GetFontString and b:GetFontString()
+    if fs then k:Move(fs, "LEFT", b, "LEFT", AC.text, 0) end
+    k:Size(b, nil, AC.row)
+    if acState[b] then return end
+    local st = { on = false, hover = false }
+    st.fill = S.Ours(b:CreateTexture(nil, "BACKGROUND", nil, -6))
+    st.fill:SetAllPoints(b)
+    acState[b] = st
+    T.Watch(st.fill, function() ACPaint(b) end)
+    hooksecurefunc(b, "LockHighlight", function() st.on = true; ACPaint(b) end)
+    hooksecurefunc(b, "UnlockHighlight", function() st.on = false; ACPaint(b) end)
+    b:HookScript("OnEnter", function() st.hover = true; ACPaint(b) end)
+    b:HookScript("OnLeave", function() st.hover = false; ACPaint(b) end)
+    ACPaint(b)
+end
+
+local function ACHeight(f)
+    local n = 0
+    for i = 1, AC.max do
+        local b = _G["AutoCompleteButton" .. i]
+        if b and b:IsShown() then n = n + 1 end
+    end
+    if n > 0 then f:SetHeight(n * AC.row + 2 + AC.foot) end
+end
+
+P{
+    name  = "AutoCompleteBox",
+    apply = function(f, k)
+        local slice = f.NineSlice
+        if slice then
+            S.PainterFor(slice):FadeSlice(slice)
+            k:NoFill(slice)
+            EV.Pixel:ShowEdges(slice, false)
+        end
+        local M = T.LOOK.menu.rest
+        k:Fill(f, M.fill)
+        k:Border(f, M.edge)
+
+        local prev
+        for i = 1, AC.max do
+            local b = _G["AutoCompleteButton" .. i]
+            if b then
+                ACRow(k, b)
+                if prev then
+                    k:Anchors(b, { { "TOPLEFT", prev, "BOTTOMLEFT" }, { "TOPRIGHT", prev, "BOTTOMRIGHT" } })
+                else
+                    k:Anchors(b, { { "TOPLEFT", f, "TOPLEFT", 1, -1 }, { "TOPRIGHT", f, "TOPRIGHT", -1, -1 } })
+                end
+                prev = b
+            end
+        end
+
+        local foot = Band(f, "footer", "top", function(b)
+            b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+            b:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+            b:SetHeight(AC.foot - 1)
+        end)
+        local tip = _G.AutoCompleteInstructions
+        if tip then
+            k:Move(tip, "LEFT", foot, "LEFT", AC.text - 1, 0)
+            -- Blizzard greys it with an inline colour code, which no text
+            -- colour overrides; set it plain so the muted token shows.
+            if _G.PRESS_TAB then tip:SetText(_G.PRESS_TAB) end
+            k:Label(tip, "textMuted")
+        end
+
+        k:Once(f, "autoCompleteHeight", function()
+            if type(_G.AutoComplete_UpdateResults) == "function" then
+                hooksecurefunc("AutoComplete_UpdateResults", function(self) ACHeight(self) end)
+            end
+        end)
+        ACHeight(f)
+    end,
+}

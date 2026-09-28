@@ -72,6 +72,8 @@ local function Sweep()
     Take("LootFrame")
     -- The clock toggles itself with a bare Show.
     Take("TimeManagerFrame")
+    -- Name completion under a whisper or recipient box, a bare Show.
+    Take("AutoCompleteBox")
 end
 S.Sweep = Sweep
 
