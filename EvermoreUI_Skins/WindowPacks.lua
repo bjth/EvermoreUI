@@ -1700,6 +1700,138 @@ P{
     end,
 }
 
+--------------------------------------------------------------------------------
+--  CalendarFrame (Blizzard_Calendar, Mainline). A plain 659x624 frame whose
+--  whole look is loose texture sheets on the frame itself: CalendarFrame_*
+--  edges (a 46px top, 12 and 10 px sides, a 9px bottom), a CalendarBackground
+--  banner per weekday, the month and year plates, the selected weekday's
+--  glow. Six rows of seven 91px day buttons hang from the first weekday
+--  banner (CalendarFrame_InitDay), each on a random tile of CalendarBackground
+--  (its NormalTexture) with an ADD highlight Blizzard locks for the selected
+--  day, a DarkFrame of CalendarShadows over other months' days, and
+--  CalendarTodayFrame (an animated glow) re-parented onto today.
+--  CalendarFrame_UpdateDay(index, day, monthOffset, isSelected, _, isToday,
+--  ...) runs for every cell on every update.
+--
+--  Ours: the window surface and edge; the top as a band with the month and
+--  its arrows centred and the filter and close on the right; the weekday
+--  names on a band; each day a flat cell on a frame of ours under its
+--  content, a pixel short on the right and bottom so the window shows
+--  through as the grid; other months dimmed, hover lighter, the selected
+--  day the tile Look's on, today edged in copper. Holiday art and event
+--  text stay: they are content. The grid is centred (Blizzard: 12 in on
+--  the left, 10 on the right).
+--------------------------------------------------------------------------------
+local CAL = { top = 46, pad = 8, filter = 30 }
+local calState = setmetatable({}, { __mode = "k" })   -- day button -> { other, selected, today, hover }
+
+local function CalCell(b)
+    local st = calState[b]
+    local cell = st and st.cell
+    if not cell then return end
+    local r = T.Resolve(T.LOOK.tile, { on = st.selected, hover = st.hover, disabled = st.other })
+    cell.fill:SetColorTexture(T.C4(r.fill))
+    if st.today then
+        T.SetEdge(cell, { S.Colour("accent") })
+    elseif st.selected then
+        T.SetEdge(cell, r.edge)
+    else
+        T.SetEdge(cell, nil)
+    end
+end
+
+local function CalDay(b)
+    if not S.Alive(b) or calState[b] then return end
+    local st = {}
+    calState[b] = st
+    local okN, n = pcall(b.GetNormalTexture, b)
+    if okN and n then S.StripArt(n) end
+    local okH, h = pcall(b.GetHighlightTexture, b)
+    if okH and h then S.StripArt(h) end
+    local name = b:GetName()
+    local dark = name and _G[name .. "DarkFrame"]
+    if dark then
+        for _, r in ipairs(S.Regions(dark)) do S.StripArt(r) end
+    end
+    local cell = S.Ours(CreateFrame("Frame", nil, b))
+    cell:EnableMouse(false)
+    cell:SetFrameLevel(math.max(0, b:GetFrameLevel() - 1))
+    cell:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+    cell:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -1, 1)
+    cell.fill = S.Ours(EV.Pixel:Fill(cell, "BACKGROUND", -7))
+    EV.Pixel:Edges(cell, { size = 1 })
+    st.cell = cell
+    b:HookScript("OnEnter", function() st.hover = true; CalCell(b) end)
+    b:HookScript("OnLeave", function() st.hover = false; CalCell(b) end)
+    T.Watch(cell.fill, function() CalCell(b) end)
+    CalCell(b)
+end
+
+P{
+    name  = "CalendarFrame",
+    addon = "Blizzard_Calendar",
+    apply = function(f, k)
+        -- The frame's own sheets: edges, banners, plates, the weekday glow.
+        k:Fade(f)
+        k:Fill(f, "surface0")
+        k:Border(f, "border")
+        local today = _G.CalendarTodayFrame
+        if today then
+            for _, r in ipairs(S.Regions(today)) do S.StripArt(r) end
+        end
+
+        -- The top: a band the height Blizzard gave it, the month centred.
+        Band(f, "title", "bottom", function(b)
+            b:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+            b:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+            b:SetHeight(CAL.top - 1)
+        end)
+        local close = _G.CalendarCloseButton
+        if close then k:Move(close, "TOPRIGHT", f, "TOPRIGHT", -1, -1) end
+        local filter = f.FilterButton
+        if filter then
+            k:Size(filter, nil, CAL.filter)
+            k:Move(filter, "RIGHT", f, "TOPRIGHT", -((S.TITLE_BAND or 24) + CAL.pad), -CAL.top / 2)
+        end
+
+        -- The grid hangs from the left side piece: centre it.
+        local side = _G.CalendarFrameLeftTopTexture
+        if side then k:Move(side, "TOPLEFT", f, "TOPLEFT", -1, -CAL.top) end
+        local w1, w7 = _G.CalendarWeekday1Background, _G.CalendarWeekday7Background
+        if w1 and w7 then
+            Band(f, "weekdays", "bottom", function(b)
+                b:SetPoint("TOPLEFT", w1, "TOPLEFT")
+                b:SetPoint("BOTTOMRIGHT", w7, "BOTTOMRIGHT", -1, 0)
+            end)
+        end
+
+        for i = 1, 42 do CalDay(_G["CalendarDayButton" .. i]) end
+
+        k:Once(f, "calendarDays", function()
+            if type(_G.CalendarFrame_UpdateDay) == "function" then
+                hooksecurefunc("CalendarFrame_UpdateDay", function(index, _, monthOffset, isSelected, _, isToday)
+                    local b = _G["CalendarDayButton" .. tostring(index)]
+                    if not b then return end
+                    CalDay(b)
+                    local st = calState[b]
+                    st.other = monthOffset ~= 0
+                    st.selected = isSelected and true or false
+                    st.today = isToday and true or false
+                    CalCell(b)
+                end)
+            end
+            if type(_G.CalendarFrame_SetSelectedDay) == "function" then
+                hooksecurefunc("CalendarFrame_SetSelectedDay", function(dayButton)
+                    for b, st in pairs(calState) do
+                        st.selected = (b == dayButton)
+                        CalCell(b)
+                    end
+                end)
+            end
+        end)
+    end,
+}
+
 P{
     name  = "WorldMapFrame",
     addon = "Blizzard_WorldMap",
